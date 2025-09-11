@@ -37,12 +37,14 @@ def fits_open_remote(filename, **kwargs):
 
     try:
         # This will work for local files and remote files with proper permissions
-        return fits.open(filename, **kwargs)
+        hdul = fits.open(filename, **kwargs)
     except (PermissionError, botocore.exceptions.NoCredentialsError) as e:
         if "://" in filename:
             logger.info(f"Permission denied for {filename}, trying with fsspec.")
-            return fits.open(filename, use_fsspec=True, fsspec_kwargs={"anon": True}, **kwargs)
-        raise e
+            hdul = fits.open(filename, use_fsspec=True, fsspec_kwargs={"anon": True}, **kwargs)
+
+    # print(hdul[1].data["TIME"])
+    return hdul
 
 
 def fits_open_including_remote(filename, **kwargs):
@@ -68,5 +70,6 @@ def fits_open_including_remote(filename, **kwargs):
 
     if "://" in filename:
         return fits_open_remote(filename, **kwargs)
-
-    return fits.open(filename, **kwargs)
+    hdul = fits.open(filename, **kwargs)
+    print(filename, hdul[1].data["TIME"][0], hdul[1].data["TIME"][-1])
+    return hdul

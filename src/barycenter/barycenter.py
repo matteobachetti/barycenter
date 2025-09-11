@@ -38,7 +38,7 @@ class OrbitalFunctions:
 def get_dummy_parfile_for_position(orbfile):
 
     # Construct model by hand
-    with fits.open(orbfile, memmap=True) as hdul:
+    with fits_open_including_remote(orbfile, memmap=True) as hdul:
         label = "_NOM"
         if "RA_OBJ" in hdul[1].header:
             label = "_OBJ"
@@ -67,7 +67,6 @@ def get_barycentric_correction(
     knots = no.X.get_knots()
     mjds = np.arange(knots[1], knots[-2], dt / 86400)
     mets = (mjds - mjdref) * 86400
-
     obs, scale = telescope.lower(), "tt"
     toalist = [None] * len(mjds)
 
@@ -195,7 +194,7 @@ def apply_clock_correction(
     overwrite=False,
 ):
     version = barycenter.__version__
-    with fits.open(fname, memmap=True) as hdul:
+    with fits_open_including_remote(fname, memmap=True) as hdul:
         if parfile is not None and os.path.exists(parfile):
             modelin = get_model(parfile)
         else:
@@ -213,10 +212,18 @@ def apply_clock_correction(
 
         bary_fun = get_barycentric_correction(orbfile, modelin)
 
-        times = hdul[1].data["TIME"]
-        unique_times = np.unique(times)
+        timezero = hdul[1].header.get("TIMEZERO", 0.0)
+        timepixr = hdul[1].header.get("TIMEPIXR", 0.5)
+        timedel = hdul[1].header.get("TIMEDEL", 0.0)
+
+        timezero += (0.5 - timepixr) * timedel
+
         clock_fun = None
         if clockfile is not None and os.path.exists(clockfile):
+            times = hdul[1].data["TIME"]
+            times = times + timezero + (0.5 - timepixr) * timedel
+
+            unique_times = np.unique(times)
             hduname = "NU_FINE_CLOCK"
             logger.info(f"Read extension {hduname}")
             clocktable = Table.read(clockfile, hdu=hduname)
@@ -236,10 +243,14 @@ def apply_clock_correction(
             for keyname in ["TIME", "START", "STOP", "TSTART", "TSTOP"]:
                 if hdu.data is not None and keyname in hdu.data.names:
                     logger.info(f"Updating column {keyname}")
-                    hdu.data[keyname] = correct_times(hdu.data[keyname], bary_fun, clock_fun)
+                    hdu.data[keyname] = correct_times(
+                        hdu.data[keyname] + timezero, bary_fun, clock_fun
+                    )
                 if keyname in hdu.header:
                     logger.info(f"Updating header keyword {keyname}")
-                    corrected_time = correct_times(hdu.header[keyname], bary_fun, clock_fun)
+                    corrected_time = correct_times(
+                        hdu.header[keyname] + timezero, bary_fun, clock_fun
+                    )
                     if not np.isfinite(corrected_time):
                         logger.error(
                             f"Bad value when updating header keyword {keyname}: "
