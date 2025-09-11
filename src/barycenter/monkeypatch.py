@@ -115,7 +115,7 @@ def load_FPorbit(orbit_filename):
         logger.debug("FPorbit TIMESYS {0}".format(timesys))
 
     if "TIMEREF" not in FPorbit_hdr:
-        logger.warning("Keyword TIMESYS is missing. Assuming TT")
+        logger.warning("Keyword TIMEREF is missing. Assuming LOCAL")
         timeref = "LOCAL"
     else:
         timeref = FPorbit_hdr["TIMEREF"]
@@ -156,6 +156,7 @@ def load_FPorbit(orbit_filename):
             "Dropping {0} zero entries from FPorbit table".format(len(FPorbit_table) - len(idx))
         )
         FPorbit_table = FPorbit_table[idx]
+
     return FPorbit_table
 
 
@@ -263,3 +264,36 @@ def load_orbit(obs_name, orb_filename):
 
 # Monkey-patch pint to use our improved load_orbit function
 pint.observatory.satellite_obs.load_orbit = load_orbit
+
+
+def _check_bounds(self, t):
+    """Ensure t is within maxextrap of the closest S/C measurement.
+
+    The purpose is to catch cases where there is missing S/C orbital
+    information.  A common case would be providing an "FT2" file that
+    is shorter than the photon data, or building an FT2 file that is
+    missing a chunk.
+
+    Parameters
+    ----------
+    t: an astropy.Time or array of astropy.Times
+        Times to ensure are valid relative to S/C information.
+    """
+    ft2_tt = self.FT2["MJD_TT"]
+    in_tt = np.atleast_1d(t.tt.mjd)
+    i0 = np.searchsorted(ft2_tt, in_tt)
+    i0 = np.clip(i0, 1, len(ft2_tt) - 1, out=i0)
+    dright = np.abs(ft2_tt[i0] - in_tt)
+    dleft = np.abs(ft2_tt[i0 - 1] - in_tt)
+    min_duration = np.minimum(dright, dleft)
+    bad = min_duration > (self._maxextrap / 1440.0)
+
+    if np.any(bad):
+        nbad = np.sum(bad)
+        logger.error(
+            f"Extrapolating S/C position by more than {self._maxextrap} minutes "
+            f"in {nbad} photons between MJDs{ft2_tt[i0 -1][bad].min()} and {ft2_tt[i0][bad].max()}."
+        )
+
+
+pint.observatory.satellite_obs.SatelliteObs._check_bounds = _check_bounds
