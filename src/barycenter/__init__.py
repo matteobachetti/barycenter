@@ -29,3 +29,5 @@ its purpose, and any important notes.
 """
 
 from .barycenter import main_barycenter
+
+from ._version import __version__

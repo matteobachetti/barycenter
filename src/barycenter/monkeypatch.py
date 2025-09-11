@@ -1,0 +1,265 @@
+import numpy as np
+from astropy.table import Table, vstack
+import astropy.units as u
+
+import pint
+import pint.observatory
+import pint.observatory.satellite_obs
+from pint.fits_utils import read_fits_event_mjds
+import logging as logger
+from .utils import fits_open_including_remote
+
+__all__ = ["load_orbit"]
+
+
+def load_Fermi_FT2(ft2_filename):
+    """Load data from a Fermi FT2 file
+
+    The contents of the FT2 file are described here:
+    https://fermi.gsfc.nasa.gov/ssc/data/analysis/documentation/Cicerone/Cicerone_Data/LAT_Data_Columns.html#SpacecraftFile
+    The coordinates are X, Y, Z in the ECI (Earth-Centered Inertial)
+    frame. I (@paulray) **believe** this is the same as astropy's GCRS
+    <http://docs.astropy.org/en/stable/api/astropy.coordinates.GCRS.html>,
+    but this should be confirmed.
+
+    Parameters
+    ----------
+    ft2_filename : str
+        Name of file to load
+
+    Returns
+    -------
+    astropy Table containing Time, x, y, z, v_x, v_y, v_z data
+
+    """
+    # Load photon times from FT1 file
+    hdulist = fits_open_including_remote(ft2_filename)
+    FT2_hdr = hdulist[1].header
+    FT2_dat = hdulist[1].data
+
+    logger.info("Opened FT2 FITS file {0}".format(ft2_filename))
+    # TIMESYS should be 'TT'
+    # TIMEREF should be 'LOCAL', since no delays are applied
+    timesys = FT2_hdr["TIMESYS"]
+    logger.info("FT2 TIMESYS {0}".format(timesys))
+    timeref = FT2_hdr["TIMEREF"]
+    logger.info("FT2 TIMEREF {0}".format(timeref))
+
+    # The X, Y, Z position are for the START time
+    mjds_TT = read_fits_event_mjds(hdulist[1], timecolumn="START")
+    mjds_TT = mjds_TT * u.d
+    # SC_POS is in meters in X,Y,Z Earth-centered Inertial (ECI) coordinates
+    SC_POS = FT2_dat.field("SC_POSITION")
+    X = SC_POS[:, 0] * u.m
+    Y = SC_POS[:, 1] * u.m
+    Z = SC_POS[:, 2] * u.m
+    try:
+        # If available, get the velocities from the FT2 file
+        SC_VEL = FT2_dat.field("SC_VELOCITY")
+        Vx = SC_VEL[:, 0] * u.m / u.s
+        Vy = SC_VEL[:, 1] * u.m / u.s
+        Vz = SC_VEL[:, 2] * u.m / u.s
+    except Exception:
+        # Otherwise, compute velocities by differentiation because FT2 does not have velocities
+        # This is not the best way. Should fit an orbit and determine velocity from that.
+        dt = mjds_TT[1] - mjds_TT[0]
+        logger.info(f"FT2 spacing is {str(dt.to(u.s))}")
+        # Use "spacing" argument for gradient to handle nonuniform entries
+        tt = mjds_TT.to(u.s).value
+        Vx = np.gradient(X.value, tt) * u.m / u.s
+        Vy = np.gradient(Y.value, tt) * u.m / u.s
+        Vz = np.gradient(Z.value, tt) * u.m / u.s
+    logger.info("Building FT2 table covering MJDs {0} to {1}".format(mjds_TT.min(), mjds_TT.max()))
+    return Table(
+        [mjds_TT, X, Y, Z, Vx, Vy, Vz],
+        names=("MJD_TT", "X", "Y", "Z", "Vx", "Vy", "Vz"),
+        meta={"name": "FT2"},
+    )
+
+
+def load_FPorbit(orbit_filename):
+    """Load data from an (RXTE or NICER) FPorbit file
+
+    Reads a FPorbit FITS file
+
+    Parameters
+    ----------
+    orbit_filename : str
+        Name of file to load
+
+    Returns
+    -------
+    astropy Table containing Time, x, y, z, v_x, v_y, v_z data
+
+    """
+    # Load orbit FITS file
+    hdulist = fits_open_including_remote(orbit_filename)
+    # logger.info('orb file HDU name is {0}'.format(hdulist[1].name))
+    if hdulist[1].name not in ("ORBIT", "XTE_PE"):
+        logger.error(
+            "NICER orb file first extension is {0}. It should be ORBIT".format(hdulist[1].name)
+        )
+    FPorbit_hdr = hdulist[1].header
+    FPorbit_dat = hdulist[1].data
+
+    logger.info("Opened FPorbit FITS file {0}".format(orbit_filename))
+    # TIMESYS should be 'TT'
+
+    # TIMEREF should be 'LOCAL', since no delays are applied
+
+    if "TIMESYS" not in FPorbit_hdr:
+        logger.warning("Keyword TIMESYS is missing. Assuming TT")
+        timesys = "TT"
+    else:
+        timesys = FPorbit_hdr["TIMESYS"]
+        logger.debug("FPorbit TIMESYS {0}".format(timesys))
+
+    if "TIMEREF" not in FPorbit_hdr:
+        logger.warning("Keyword TIMESYS is missing. Assuming TT")
+        timeref = "LOCAL"
+    else:
+        timeref = FPorbit_hdr["TIMEREF"]
+        logger.debug("FPorbit TIMEREF {0}".format(timeref))
+
+    mjds_TT = read_fits_event_mjds(hdulist[1])
+
+    mjds_TT = mjds_TT * u.d
+    logger.debug("FPorbit spacing is {0}".format((mjds_TT[1] - mjds_TT[0]).to(u.s)))
+    X = FPorbit_dat.field("X") * u.m
+    Y = FPorbit_dat.field("Y") * u.m
+    Z = FPorbit_dat.field("Z") * u.m
+    Vx = FPorbit_dat.field("Vx") * u.m / u.s
+    Vy = FPorbit_dat.field("Vy") * u.m / u.s
+    Vz = FPorbit_dat.field("Vz") * u.m / u.s
+    logger.info(
+        "Building FPorbit table covering MJDs {0} to {1}".format(mjds_TT.min(), mjds_TT.max())
+    )
+    FPorbit_table = Table(
+        [mjds_TT, X, Y, Z, Vx, Vy, Vz],
+        names=("MJD_TT", "X", "Y", "Z", "Vx", "Vy", "Vz"),
+        meta={"name": "FPorbit"},
+    )
+    # Make sure table is sorted by time
+    logger.debug("Sorting FPorbit table")
+    FPorbit_table.sort("MJD_TT")
+
+    good = np.diff(FPorbit_table["MJD_TT"]) > 0
+    if not np.all(good):
+        logger.warning("The orbit table has duplicate entries. Please check.")
+        good = np.concatenate((good, [True]))
+        FPorbit_table = FPorbit_table[good]
+
+    # Now delete any bad entries where the positions are 0.0
+    idx = np.where(np.logical_and(FPorbit_table["X"] != 0.0, FPorbit_table["Y"] != 0.0))[0]
+    if len(idx) != len(FPorbit_table):
+        logger.warning(
+            "Dropping {0} zero entries from FPorbit table".format(len(FPorbit_table) - len(idx))
+        )
+        FPorbit_table = FPorbit_table[idx]
+    return FPorbit_table
+
+
+def load_nustar_orbit(orb_filename):
+    """Load data from a NuSTAR orbit file
+
+    Parameters
+    ----------
+    orb_filename : str
+        Name of file to load
+
+    Returns
+    -------
+    astropy.table.Table
+        containing Time, x, y, z, v_x, v_y, v_z data
+
+    """
+    # Load photon times from FT1 file
+
+    if "_orb" in orb_filename:
+        logger.warning(
+            "The NuSTAR orbit file you are providing is known to give"
+            "a solution precise only to the ~0.5ms level. Use the "
+            "pipeline-produced attitude-orbit file ('*.attorb.gz') for"
+            "better precision."
+        )
+
+    hdulist = fits_open_including_remote(orb_filename)
+    orb_hdr = hdulist[1].header
+    orb_dat = hdulist[1].data
+
+    logger.info("Opened orb FITS file {0}".format(orb_filename))
+    # TIMESYS should be 'TT'
+    # TIMEREF should be 'LOCAL', since no delays are applied
+    timesys = orb_hdr["TIMESYS"]
+    logger.info("orb TIMESYS {0}".format(timesys))
+    try:
+        timeref = orb_hdr["TIMEREF"]
+    except KeyError:
+        timeref = "LOCAL"
+
+    logger.info("orb TIMEREF {0}".format(timeref))
+
+    # The X, Y, Z position are for the START time
+    mjds_TT = read_fits_event_mjds(hdulist[1])
+    mjds_TT = mjds_TT * u.d
+    # SC_POS is in meters in X,Y,Z Earth-centered Inertial (ECI) coordinates
+    SC_POS = orb_dat.field("POSITION")
+    X = SC_POS[:, 0] * u.km
+    Y = SC_POS[:, 1] * u.km
+    Z = SC_POS[:, 2] * u.km
+    SC_VEL = orb_dat.field("VELOCITY")
+    Vx = SC_VEL[:, 0] * u.km / u.s
+    Vy = SC_VEL[:, 1] * u.km / u.s
+    Vz = SC_VEL[:, 2] * u.km / u.s
+
+    logger.info("Building orb table covering MJDs {0} to {1}".format(mjds_TT.min(), mjds_TT.max()))
+    return Table(
+        [mjds_TT, X, Y, Z, Vx, Vy, Vz],
+        names=("MJD_TT", "X", "Y", "Z", "Vx", "Vy", "Vz"),
+        meta={"name": "orb"},
+    )
+
+
+def load_orbit(obs_name, orb_filename):
+    """Generalized function to load one or more orbit files.
+
+    Parameters
+    ----------
+    obs_name : str
+        Observatory name. (Fermi, NICER, RXTE, and NuSTAR are valid.)
+    orb_filename : str
+        An FT2-like file tabulating orbit position.  If the first character
+        is @, interpreted as a metafile listing multiple orbit files.
+
+    Returns
+    -------
+    orb_table: astropy.table.Table
+        A table containing entries MJD_TT, X, Y, Z, Vx, Vy, Vz
+    """
+    logger.info(f"Using monkeypatched load_orbit for {obs_name} with file {orb_filename}")
+    if str(orb_filename).startswith("@"):
+        # Read multiple orbit files names
+        fnames = [ll.strip() for ll in open(orb_filename[1:]).readlines()]
+        orb_list = [load_orbit(obs_name, fn) for fn in fnames]
+        full_orb = vstack(orb_list)
+        # Make sure full table is sorted
+        full_orb.sort("MJD_TT")
+        return full_orb
+
+    lower_name = obs_name.lower()
+    if "fermi" in lower_name:
+        return load_Fermi_FT2(orb_filename)
+    elif "nicer" in lower_name:
+        return load_FPorbit(orb_filename)
+    elif "ixpe" in lower_name:
+        return load_FPorbit(orb_filename)
+    elif "xte" in lower_name:
+        return load_FPorbit(orb_filename)
+    elif "nustar" in lower_name:
+        return load_nustar_orbit(orb_filename)
+    else:
+        raise ValueError(f"Unrecognized satellite observatory {obs_name}.")
+
+
+# Monkey-patch pint to use our improved load_orbit function
+pint.observatory.satellite_obs.load_orbit = load_orbit

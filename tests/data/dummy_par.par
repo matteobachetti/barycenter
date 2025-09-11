@@ -1,0 +1,22 @@
+PSR               B1937+21
+RAJ        19:39:38.560210
+DECJ        21:34:59.14166
+F0    641.9282333345544203  1  0.0000000000141080
+F1     -4.330901553450D-14  1  1.137298096353D-19
+PEPOCH        55321.000000
+START            53267.085
+FINISH           57376.799
+DM               71.090617
+EPHEM               DE436
+CLK                 TT(BIPM2015)
+UNITS               TDB
+TIMEEPH             FB90
+CORRECT_TROPOSPHERE N
+PLANET_SHAPIRO      N
+DILATEFREQ          N
+NTOA                 14217
+TRES                  0.85
+TZRMJD  55337.18180550381786
+TZRFRQ            1730.480
+TZRSITE                  1
+MODE                     1
