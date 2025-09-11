@@ -292,7 +292,7 @@ def _check_bounds(self, t):
         nbad = np.sum(bad)
         logger.error(
             f"Extrapolating S/C position by more than {self._maxextrap} minutes "
-            f"in {nbad} photons between MJDs{ft2_tt[i0 -1][bad].min()} and {ft2_tt[i0][bad].max()}."
+            f"in {nbad} photons between MJDs {ft2_tt[i0 -1][bad].min()} and {ft2_tt[i0][bad].max()}."
         )
 
 
