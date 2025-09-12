@@ -73,3 +73,26 @@ def fits_open_including_remote(filename, **kwargs):
     hdul = fits.open(filename, **kwargs)
     print(filename, hdul[1].data["TIME"][0], hdul[1].data["TIME"][-1])
     return hdul
+
+
+def slim_down_file(file, outfile, additional_cols=None):
+    """Reduce a FITS file size by only keeping a few columns
+
+    Parameters
+    ----------
+    file : str
+        Input FITS file path.
+    outfile : str
+        Output FITS file path.
+    additional_cols : list of str, optional
+        Additional column names to keep in the output file, in addition to the "TIME" column
+    """
+
+    with fits.open(file) as hdul:
+        data = hdul[1].data
+        cols = [data.columns["TIME"]]
+        for col in additional_cols or []:
+            if col in data.columns.names:
+                cols.append(data.columns[col])
+        hdul[1].data = fits.BinTableHDU.from_columns(cols).data
+        hdul.writeto(outfile)
