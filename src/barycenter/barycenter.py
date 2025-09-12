@@ -407,6 +407,20 @@ def apply_barycenter_correction(
             hdu.header["TIMEZERO"] = 0.0
             hdu.header["TREFDIR"] = "RA_OBJ,DEC_OBJ"
             hdu.header["TREFPOS"] = "BARYCENTER"
+            hdu.header["CLOCKAPP"] = True if clock_fun is not None else False
+            hdu.header.add_history(f"TOOL: barycenter v{version} applied")
+            hdu.header.add_history(f"Orbit file: {orbfile}")
+            if clockfile is not None:
+                hdu.header.add_history(f"Clock file: {clockfile}")
+            if parfile is not None and os.path.exists(parfile):
+                hdu.header.add_history(f"Par file: {parfile}")
+            else:
+                hdu.header.add_history(
+                    f"Position used: RA={modelin.RAJ.quantity.deg}, DEC={modelin.DECJ.quantity.deg}"
+                )
+            hdu.header.add_history(f"Ephemeris: JPL-{ephem}")
+            hdu.header.add_history(f"Coordinate system: {radecsys}")
+
         hdul.writeto(outfile, overwrite=overwrite)
 
 
