@@ -80,15 +80,22 @@ def slim_down_file(file, outfile, additional_cols=None):
 
     Parameters
     ----------
-    file : str
-        Input FITS file path.
+    file : str or astropy.io.fits.HDUList
+        Input FITS file path or HDUList.
     outfile : str
         Output FITS file path.
+
+    Other Parameters
+    ----------------
     additional_cols : list of str, optional
         Additional column names to keep in the output file, in addition to the "TIME" column
     """
+    if isinstance(file, str):
+        hdul = fits_open_including_remote(file)
+    else:
+        hdul = file
 
-    with fits.open(file) as hdul:
+    with hdul:
         data = hdul[1].data
         cols = [data.columns["TIME"]]
         for col in additional_cols or []:
