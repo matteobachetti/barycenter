@@ -28,22 +28,23 @@ from .utils import fits_open_including_remote, slim_down_hdu_list
 import barycenter.monkeypatch  # noqa: F401
 
 
-class OrbitalFunctions:
-    lat_fun = None
-    lon_fun = None
-    alt_fun = None
-    lst_fun = None
-
-
 def get_dummy_parfile_for_position(orbfile):
+    """Get a dummy parfile with RAJ and DECJ from the orbit file.
 
+    Parameters
+    ----------
+    orbfile : str
+        Orbit file.
+    Returns
+    -------
+    modelin : pint.models.TimingModel
+        Timing model with RAJ and DECJ defined.
+    """
     # Construct model by hand
     with fits_open_including_remote(orbfile, memmap=True) as hdul:
-        label = "_NOM"
-        if "RA_OBJ" in hdul[1].header:
-            label = "_OBJ"
-        ra = hdul[1].header[f"RA{label}"]
-        dec = hdul[1].header[f"DEC{label}"]
+        ra_label, dec_label = get_coordinates_from_fits_header(hdul[1].header)
+        ra = hdul[1].header[ra_label]
+        dec = hdul[1].header[dec_label]
 
     modelin = StandardTimingModel
     # Should check if 12:13:14.2 syntax is used and support that as well!
@@ -58,6 +59,22 @@ def get_barycentric_correction(
     modelin,
     dt=5,
 ):
+    """Get a function to compute barycentric correction from MET TT to MET TDB.
+
+    Parameters
+    ----------
+    orbfile : str
+        Orbit file.
+    modelin : pint.models.TimingModel
+        Timing model with RAJ, DECJ and EPHEM defined.
+    dt : float, optional
+        Time step in seconds for the interpolation grid. Default is 5.
+
+    Returns
+    -------
+    bary_fun : callable
+        Function to compute barycentric correction.
+    """
     with fits_open_including_remote(orbfile) as hdul:
         mjdref = high_precision_keyword_read(hdul[1].header, "MJDREF")
         telescope = hdul[1].header["TELESCOP"].lower()
@@ -90,6 +107,22 @@ def get_barycentric_correction(
 
 
 def correct_times(times, bary_fun, clock_fun=None):
+    """Apply barycentric and clock corrections to times.
+
+    Parameters
+    ----------
+    times : array-like
+        Array of times to correct.
+    bary_fun : callable
+        Function to compute barycentric correction.
+    clock_fun : callable, optional
+        Function to compute clock correction. If None, no clock correction is applied.
+
+    Returns
+    -------
+    corrected_times : array-like
+        Array of corrected times.
+    """
     cl_corr = 0
     if clock_fun is not None:
         cl_corr = clock_fun(times)
@@ -154,6 +187,22 @@ def cubic_interpolation(x, xtab, ytab, yptab):
 
 
 def interpolate_clock_function(new_clock_table, mets):
+    """Interpolate clock correction table to given MET times.
+
+    Parameters
+    ----------
+    new_clock_table : astropy.table.Table
+        Table with columns TIME, CLOCK_OFF_CORR, CLOCK_FREQ_CORR.
+    mets : array-like
+        Array of MET times to interpolate to.
+
+    Returns
+    -------
+    clock_off_corr : array-like
+        Interpolated clock offset corrections at the given MET times.
+    good_mets : array-like
+        Boolean array indicating which MET times are within the tabulated range.
+    """
     tab_times = new_clock_table["TIME"]
     good_mets = (mets > tab_times.min()) & (mets < tab_times.max())
     mets = mets[good_mets]
@@ -171,12 +220,28 @@ def interpolate_clock_function(new_clock_table, mets):
 
 
 def get_coordinates_from_fits_header(hdr):
+    """Get RA/Dec coordinate keywords from FITS header.
+
+    In order of priority, looks for RA_OBJ/DEC_OBJ, RA_NOM/DEC_NOM, RA_PNT/DEC_PNT.
+    Parameters
+    ----------
+    hdr : astropy.io.fits.Header
+        FITS header to read coordinates from.
+
+    Returns
+    -------
+    ra_key : str
+        Keyword name for Right Ascension.
+    dec_key : str
+        Keyword name for Declination.
+    """
+
     if "RA_OBJ" in hdr:
         return "RA_OBJ", "DEC_OBJ"
-    elif "RA_PNT" in hdr:
-        return "RA_PNT", "DEC_PNT"
     elif "RA_NOM" in hdr:
         return "RA_NOM", "DEC_NOM"
+    elif "RA_PNT" in hdr:
+        return "RA_PNT", "DEC_PNT"
     else:
         raise ValueError("No coordinates found in header")
 
@@ -194,6 +259,36 @@ def apply_clock_correction(
     overwrite=False,
     only_columns=None,
 ):
+    """Apply barycenter correction to a FITS event file.
+
+    Parameters
+    ----------
+    fname : str
+        Input FITS event file.
+    orbfile : str
+        Orbit file.
+
+    Other Parameters
+    ----------------
+    outfile : str, optional
+        Output FITS event file. Default is "bary.evt".
+    clockfile : str, optional
+        Clock file.
+    parfile : str, optional
+        Parameter file.
+    ephem : str, optional
+        Ephemeris model to use. Default is "DE440".
+    radecsys : str, optional
+        Coordinate system for RA/Dec. Default is "ICRS".
+    ra : float, optional
+        Right Ascension in degrees. If not provided, will be read from header.
+    dec : float, optional
+        Declination in degrees. If not provided, will be read from header.
+    overwrite : bool, optional
+        If True, will overwrite existing output file. Default is False.
+    only_columns : list of str, optional
+        List of column names to keep in the output file, in addition to the "TIME" column.
+    """
     version = barycenter.__version__
     with fits_open_including_remote(fname, memmap=True) as hdul:
         if parfile is not None and os.path.exists(parfile):
