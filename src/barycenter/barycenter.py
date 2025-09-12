@@ -316,7 +316,8 @@ def splitext_improved(path):
 
 def _default_out_file(args):
     outfile = "bary_" + os.path.basename(args.file).replace(".evt", "").replace(".evt", "")
-
+    if args.only_columns is not None:
+        outfile += "_slim"
     outfile += ".evt"
 
     return outfile
