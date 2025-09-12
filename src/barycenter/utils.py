@@ -134,3 +134,36 @@ def slim_down_file(file, outfile, additional_cols=None, ext=1):
     )
 
     hdul.writeto(outfile)
+
+
+def get_remote_directory_listing(url: str):
+    """Give the list of files in the remote directory."""
+    from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
+
+    from bs4 import BeautifulSoup
+
+    url = url.replace(" ", "%20")
+    req = Request(url)
+    try:
+        a = urlopen(req).read()
+    except HTTPError:
+        return None
+
+    soup = BeautifulSoup(a, "html.parser")
+    x = soup.find_all("a")
+    urls = []
+    for i in x:
+        file_name = i.extract().get_text()
+        url_new = url + file_name
+        url_new = url_new.replace(" ", "%20")
+        if file_name[-1] == "/" and file_name[0] != ".":
+            urls.append(url_new)
+            url_new = get_remote_directory_listing(url_new)
+            if url_new is None:
+                continue
+            urls.extend(url_new)
+        else:
+            urls.append(url_new)
+
+    return urls

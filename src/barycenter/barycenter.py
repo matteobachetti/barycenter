@@ -24,8 +24,27 @@ from astropy.time import Time
 from astropy.coordinates import Angle
 from scipy.interpolate import Akima1DInterpolator
 import barycenter
-from .utils import fits_open_including_remote, slim_down_hdu_list
+from .utils import fits_open_including_remote, slim_down_hdu_list, get_remote_directory_listing
 import barycenter.monkeypatch  # noqa: F401
+
+
+def get_latest_clock_file(mission):
+    """Get the latest NuSTAR clock correction file from HEASARC.
+
+    Returns
+    -------
+    clockfile : str
+        Path to the latest clock correction file.
+    """
+    if mission.lower() not in ["nustar"]:
+        raise ValueError(f"Mission {mission} not supported for automatic clock file retrieval")
+
+    listing = get_remote_directory_listing(
+        "https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/"
+    )
+
+    clckfiles = sorted([f for f in listing if "nuCclock" in f])
+    return clckfiles[-1]
 
 
 def get_dummy_parfile_for_position(orbfile):
@@ -246,7 +265,7 @@ def get_coordinates_from_fits_header(hdr):
         raise ValueError("No coordinates found in header")
 
 
-def apply_clock_correction(
+def apply_barycenter_correction(
     fname,
     orbfile,
     outfile="bary.evt",
@@ -311,6 +330,11 @@ def apply_clock_correction(
         timezero = hdul[1].header.get("TIMEZERO", 0.0)
         timepixr = hdul[1].header.get("TIMEPIXR", 0.5)
         timedel = hdul[1].header.get("TIMEDEL", 0.0)
+        mission = hdul[1].header.get("TELESCOP", "unknown").lower()
+
+        if clockfile is None and clockfile != "none" and mission == "nustar":
+            clockfile = get_latest_clock_file(mission)
+            logger.info(f"Using latest {mission} clock file: {clockfile}")
 
         timezero += (0.5 - timepixr) * timedel
 
@@ -413,6 +437,8 @@ def _default_out_file(args):
     outfile = "bary_" + os.path.basename(args.file).replace(".evt", "").replace(".evt", "")
     if args.only_columns is not None:
         outfile += "_slim"
+    if args.clockfile == "none":
+        outfile += "_noclk"
     outfile += ".evt"
 
     return outfile
@@ -450,7 +476,15 @@ def main_barycenter(args=None):
     parser.add_argument(
         "-o", "--outfile", default=None, help="Output file name (default bary_<opts>.evt)"
     )
-    parser.add_argument("-c", "--clockfile", default=None, help="Clock correction file")
+    parser.add_argument(
+        "-c",
+        "--clockfile",
+        default=None,
+        help=(
+            "Clock correction file. If not provided, the latest clock file will be used for NuSTAR."
+            " Specify 'none' to skip clock correction."
+        ),
+    )
     parser.add_argument(
         "--overwrite", help="Overwrite existing data", action="store_true", default=False
     )
@@ -474,7 +508,7 @@ def main_barycenter(args=None):
         else:
             args.radecsys = "ICRS"
 
-    apply_clock_correction(
+    apply_barycenter_correction(
         args.file,
         args.orbitfile,
         parfile=args.parfile,
