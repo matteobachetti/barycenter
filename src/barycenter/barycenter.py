@@ -36,6 +36,8 @@ def get_latest_clock_file(mission):
     clockfile : str
         Path to the latest clock correction file.
     """
+    from urllib.request import urlretrieve
+
     if mission.lower() not in ["nustar"]:
         raise ValueError(f"Mission {mission} not supported for automatic clock file retrieval")
 
@@ -43,8 +45,11 @@ def get_latest_clock_file(mission):
         "https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/"
     )
 
-    clckfiles = sorted([f for f in listing if "nuCclock" in f])
-    return clckfiles[-1]
+    clckfile = sorted([f for f in listing if "nuCclock" in f])[-1]
+
+    fname = clckfile.split("/")[-1]
+    urlretrieve(clckfile, fname)
+    return fname
 
 
 def get_dummy_parfile_for_position(orbfile):
