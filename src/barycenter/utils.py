@@ -75,13 +75,50 @@ def fits_open_including_remote(filename, **kwargs):
     return hdul
 
 
-def slim_down_file(file, outfile, additional_cols=None):
-    """Reduce a FITS file size by only keeping a few columns
+def slim_down_hdu_list(hdul, additional_cols=None, ext=1):
+    """Reduce a FITS HDUList size by only keeping few columns in the specified extension.
 
     Parameters
     ----------
-    file : str or astropy.io.fits.HDUList
-        Input FITS file path or HDUList.
+    hdul : astropy.io.fits.HDUList
+        Input HDUList.
+
+    Other Parameters
+    ----------------
+
+    additional_cols : list of str, optional
+        Additional column names to keep in the output file, in addition to the "TIME" column
+    ext: int or str or List
+        Extension(s) to slim down. Default is 1.
+    """
+
+    data = hdul[1].data
+    cols = [data.columns["TIME"]]
+    for col in additional_cols or []:
+        if col in data.columns.names:
+            cols.append(data.columns[col])
+    if isinstance(ext, (int, str)):
+        ext = [ext]
+
+    for e in ext:
+        hdu = hdul[e]
+        if hdu.data is None:
+            continue
+        if "TIME" not in hdu.data.names:
+            raise ValueError(f"Extension {e} does not contain a TIME column.")
+        logger.info(f"Slimming down extension {e} to columns {[c.name for c in cols]}")
+        hdul[e].data = fits.BinTableHDU.from_columns(cols).data
+
+    return hdul
+
+
+def slim_down_file(file, outfile, additional_cols=None, ext=1):
+    """Reduce a FITS file size only keeping few columns in the specified extension.
+
+    Parameters
+    ----------
+    file : str
+        Input FITS file path
     outfile : str
         Output FITS file path.
 
@@ -89,17 +126,11 @@ def slim_down_file(file, outfile, additional_cols=None):
     ----------------
     additional_cols : list of str, optional
         Additional column names to keep in the output file, in addition to the "TIME" column
+    ext: int or str or List
+        Extension(s) to slim down. Default is 1.
     """
-    if isinstance(file, str):
-        hdul = fits_open_including_remote(file)
-    else:
-        hdul = file
+    hdul = slim_down_hdu_list(
+        fits_open_including_remote(file), additional_cols=additional_cols, ext=ext
+    )
 
-    with hdul:
-        data = hdul[1].data
-        cols = [data.columns["TIME"]]
-        for col in additional_cols or []:
-            if col in data.columns.names:
-                cols.append(data.columns[col])
-        hdul[1].data = fits.BinTableHDU.from_columns(cols).data
-        hdul.writeto(outfile)
+    hdul.writeto(outfile)
