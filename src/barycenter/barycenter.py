@@ -24,7 +24,7 @@ from astropy.time import Time
 from astropy.coordinates import Angle
 from scipy.interpolate import Akima1DInterpolator
 import barycenter
-from .utils import fits_open_including_remote
+from .utils import fits_open_including_remote, slim_down_hdu_list
 import barycenter.monkeypatch  # noqa: F401
 
 
@@ -192,6 +192,7 @@ def apply_clock_correction(
     ra=None,
     dec=None,
     overwrite=False,
+    only_columns=None,
 ):
     version = barycenter.__version__
     with fits_open_including_remote(fname, memmap=True) as hdul:
@@ -237,6 +238,8 @@ def apply_clock_correction(
             )
         elif clockfile is not None and not os.path.exists(clockfile):
             raise FileNotFoundError(f"Clock file {clockfile} not found")
+
+        hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
 
         for hdu in hdul:
             logger.info(f"Updating HDU {hdu.name}")
@@ -355,6 +358,13 @@ def main_barycenter(args=None):
     parser.add_argument(
         "--overwrite", help="Overwrite existing data", action="store_true", default=False
     )
+    parser.add_argument(
+        "--only-columns",
+        type=str,
+        default=None,
+        help="Only keep these additional columns in the output file, "
+        "in addition to the TIME column. It is a comma separated list, like PI,PRIOR",
+    )
 
     args = parser.parse_args(args)
 
@@ -379,6 +389,7 @@ def main_barycenter(args=None):
         radecsys=args.radecsys,
         ra=args.ra,
         dec=args.dec,
+        only_columns=args.only_columns.split(",") if args.only_columns else None,
     )
 
     return outfile
