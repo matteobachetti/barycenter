@@ -444,7 +444,7 @@ def main_barycenter(args=None):
         type=str,
     )
     parser.add_argument(
-        "--ephem", help="Solar system ephemeris (default DE400)", default="DE400", type=str
+        "--ephem", help="Solar system ephemeris (default DE440)", default="DE440", type=str
     )
 
     parser.add_argument(
