@@ -1,4 +1,6 @@
 import os
+import glob
+import warnings
 import logging as logger
 import numpy as np
 
@@ -41,14 +43,25 @@ def get_latest_clock_file(mission):
     if mission.lower() not in ["nustar"]:
         raise ValueError(f"Mission {mission} not supported for automatic clock file retrieval")
 
-    listing = get_remote_directory_listing(
-        "https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/"
-    )
+    try:
+        listing = get_remote_directory_listing(
+            "https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/"
+        )
 
-    clckfile = sorted([f for f in listing if "nuCclock" in f])[-1]
+        clckfile = sorted([f for f in listing if "nuCclock" in f])[-1]
 
-    fname = clckfile.split("/")[-1]
-    urlretrieve(clckfile, fname)
+        fname = clckfile.split("/")[-1]
+        if not os.path.exists(fname):
+            logger.info(f"Retrieving latest clock file {clckfile}")
+            urlretrieve(clckfile, fname)
+        else:
+            logger.info(f"Using existing local clock file {fname}")
+    except Exception as e:
+        warnings.warn(f"Could not retrieve latest clock file: {e}")
+
+        clckfile = sorted(glob.glob("nuCclock*.fits"))
+        if len(clckfile) == 0:
+            raise FileNotFoundError("Error retrieving clock file, and no clock file found locally")
     return fname
 
 
@@ -336,6 +349,7 @@ def apply_barycenter_correction(
         timepixr = hdul[1].header.get("TIMEPIXR", 0.5)
         timedel = hdul[1].header.get("TIMEDEL", 0.0)
         mission = hdul[1].header.get("TELESCOP", "unknown").lower()
+        logger.info(f"Mission: {mission}")
 
         if clockfile is None and clockfile != "none" and mission == "nustar":
             clockfile = get_latest_clock_file(mission)
