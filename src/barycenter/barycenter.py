@@ -348,6 +348,7 @@ def apply_barycenter_correction(
         timezero = hdul[1].header.get("TIMEZERO", 0.0)
         timepixr = hdul[1].header.get("TIMEPIXR", 0.5)
         timedel = hdul[1].header.get("TIMEDEL", 0.0)
+
         mission = hdul[1].header.get("TELESCOP", "unknown").lower()
         logger.info(f"Mission: {mission}")
 
@@ -435,7 +436,7 @@ def apply_barycenter_correction(
             hdu.header.add_history(f"Ephemeris: JPL-{ephem}")
             hdu.header.add_history(f"Coordinate system: {radecsys}")
 
-        hdul.writeto(outfile, overwrite=overwrite)
+        hdul.writeto(outfile, overwrite=overwrite, output_verify="ignore")
 
 
 def splitext_improved(path):
