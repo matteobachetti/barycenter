@@ -309,6 +309,174 @@ def nustar_clock_correction_fun(clockfile, t_start, t_stop, t_res=1.0):
     return clock_fun
 
 
+def official_barycorr(fname, orbfile, ra=None, dec=None, ephem="DE440", refframe="ICRS", outfile="bary.evt", clockfile=None):
+    """Apply barycorr to a FITS event file.
+
+    Parameters
+    ----------
+    fname : str
+        Input FITS event file.
+    orbfile : str
+        Orbit file.
+    ra : float
+        Right Ascension in degrees.
+    dec : float
+        Declination in degrees.
+    ephem : str, optional
+        Ephemeris model to use. Default is "DE440".
+    """
+    import heasoftpy as hsp
+    print("Applying official barycorr...")
+    hsp.barycorr(
+        infile=fname,
+        outfile=outfile,
+        ra=ra,
+        dec=dec,
+        ephem="JPLEPH." + ephem.replace("DE", ""),
+        refframe=refframe,
+        clobber="yes",
+        orbitfiles=orbfile,
+        clockfile=clockfile,
+        verbose=1,
+    )
+    if not os.path.exists(outfile):
+        raise RuntimeError(f"heasoft barycorr failed to produce output file {outfile}")
+
+    return outfile
+
+
+def apply_mission_specific_barycenter_correction(
+    fname,
+    orbfile,
+    outfile="bary.evt",
+    clockfile=None,
+    parfile=None,
+    ra=None,
+    dec=None,
+    ephem="DE440",
+    radecsys="ICRS",
+    overwrite=False,
+    only_columns=None,
+):
+    """Apply mission-specific barycenter correction to a FITS event file.
+
+    Parameters
+    ----------
+    fname : str
+        Input FITS event file.
+    orbfile : str
+        Orbit file.
+    mission : str
+        Mission name (e.g., 'nustar').
+
+    Other Parameters
+    ----------------
+    outfile : str, optional
+        Output FITS event file. Default is "bary.evt".
+    clockfile : str, optional
+        Clock file.
+    ra : float, optional
+        Right Ascension in degrees. If not provided, will be read from header.
+    dec : float, optional
+        Declination in degrees. If not provided, will be read from header.
+    ephem : str, optional
+        Ephemeris model to use. Default is "DE440".
+    radecsys : str, optional
+        Coordinate system for RA/Dec. Default is "ICRS".
+    overwrite : bool, optional
+        If True, will overwrite existing output file. Default is False.
+    only_columns : list of str, optional
+        List of column names to keep in the output file, in addition to the "TIME" column.
+    """
+    import tempfile
+    temp_outfile = tempfile.NamedTemporaryFile(delete=False, suffix=".evt").name
+
+    if parfile is not None and os.path.exists(parfile):
+        modelin = get_model(parfile)
+        ra = modelin.RAJ.quantity.deg
+        dec = modelin.DECJ.quantity.deg
+
+    with fits_open_including_remote(fname, memmap=True) as hdul:
+        mission = hdul[1].header.get("TELESCOP", "unknown").lower()
+        logger.info(f"Mission: {mission}")
+
+    if clockfile is None and clockfile != "none" and mission == "nustar":
+        clockfile = get_latest_clock_file(mission)
+        logger.info(f"Using latest {mission} clock file: {clockfile}")
+
+    if mission.lower() in ["nustar", "nicer", "xte", "swift"]:
+        official_barycorr(
+            fname,
+            orbfile,
+            outfile=temp_outfile,
+            clockfile=clockfile,
+            ra=ra,
+            dec=dec,
+            ephem=ephem,
+            refframe=radecsys,
+        )
+    else:
+        raise NotImplementedError(f"Barycenter correction for mission {mission} not implemented")
+
+    if only_columns is not None:
+        with fits.open(temp_outfile) as hdul:
+            hdul = slim_down_hdu_list(hdul, outfile, additional_cols=only_columns)
+        hdul.writeto(outfile, overwrite=overwrite)
+        os.remove(temp_outfile)
+    else:
+        os.rename(temp_outfile, outfile)
+    return outfile
+
+
+def download_locally(fname):
+    """Download a remote file locally if needed.
+    Manages S3 and HTTP(s) URLs. For S3, only public buckets are supported at the moment
+
+    Parameters
+    ----------
+    fname : str
+        Input file path or URL.
+    Returns
+    -------
+    local_fname : str
+        Local file path.
+    """
+    if fname.startswith("http://") or fname.startswith("https://"):
+        from astropy.utils.data import download_file
+
+        local_fname = download_file(fname, cache=True)
+        logger.info(f"Downloaded remote file {fname} to local file {local_fname}")
+        return local_fname
+    elif fname.startswith("s3://"):
+        import boto3
+        import botocore
+        from urllib.parse import urlparse
+
+       # Parse S3 URL
+        parsed = urlparse(fname)
+        bucket_name = parsed.netloc
+        config = botocore.client.Config(signature_version=botocore.UNSIGNED)
+        s3_resource = boto3.resource("s3", config=config)
+        s3_client = s3_resource.meta.client
+        path = fname.replace(f"s3://{bucket_name}/", "")
+        response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=path)
+        objects = response.get("Contents", [])
+        if len(objects) == 0:
+            print(objects)
+            raise FileNotFoundError(f"No objects found at S3 path {fname}")
+        key = objects[0]["Key"]
+        path2 = "/".join(path.strip("/").split("/")[:-1])
+        dest = key[len(path2) + 1 :]
+        if os.path.exists(dest):
+            logger.info(f"{dest} already exists, skipping download.")
+        else:
+            s3_client.download_file(bucket_name, key, dest)
+        logger.info(f"Downloaded remote file {fname} to local file {dest}")
+        return dest
+
+    return fname
+
+
 def apply_barycenter_correction(
     fname,
     orbfile,
@@ -321,6 +489,7 @@ def apply_barycenter_correction(
     dec=None,
     overwrite=False,
     only_columns=None,
+    apply_official=False,
 ):
     """Apply barycenter correction to a FITS event file.
 
@@ -352,6 +521,27 @@ def apply_barycenter_correction(
     only_columns : list of str, optional
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
+    cloud = "SCISERVER_USER_ID" in os.environ or "/home/jovyan" in os.environ.get("HOME", "")
+
+    if apply_official or not cloud:
+        fname = download_locally(fname)
+        orbfile = download_locally(orbfile)
+
+    if apply_official:
+        return apply_mission_specific_barycenter_correction(
+            fname,
+            orbfile,
+            outfile=outfile,
+            clockfile=clockfile,
+            parfile=parfile,
+            ra=ra,
+            dec=dec,
+            ephem=ephem,
+            radecsys=radecsys,
+            overwrite=overwrite,
+            only_columns=only_columns,
+        )
+
     version = barycenter.__version__
     with fits_open_including_remote(fname, memmap=True) as hdul:
         if parfile is not None and os.path.exists(parfile):
@@ -396,7 +586,8 @@ def apply_barycenter_correction(
         elif clockfile is not None and not os.path.exists(clockfile):
             raise FileNotFoundError(f"Clock file {clockfile} not found")
 
-        hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
+        if only_columns is not None:
+            hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
 
         for hdu in hdul:
             logger.info(f"Updating HDU {hdu.name}")
@@ -541,6 +732,12 @@ def main_barycenter(args=None):
         "--overwrite", help="Overwrite existing data", action="store_true", default=False
     )
     parser.add_argument(
+        "--apply-official",
+        help="Use mission-specific official barycenter correction (e.g., heasoft barycorr)",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
         "--only-columns",
         type=str,
         default=None,
@@ -572,6 +769,7 @@ def main_barycenter(args=None):
         ra=args.ra,
         dec=args.dec,
         only_columns=args.only_columns.split(",") if args.only_columns else None,
+        apply_official=args.apply_official,
     )
 
     return outfile
