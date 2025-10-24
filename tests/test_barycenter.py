@@ -1,3 +1,4 @@
+import glob
 from barycenter import main_barycenter
 import os
 import numpy as np
@@ -18,10 +19,19 @@ class TestExecution(object):
         self.orbfile = os.path.join(datadir, "dummy_orb.fits.gz")
         self.parfile = os.path.join(datadir, "dummy_par.par")
         self.evfile = os.path.join(datadir, "dummy_evt.evt")
+        self.clkfile = os.path.join(datadir, "dummy_clk.fits")
+        self.bary_evfile = os.path.join(datadir, "dummy_evt_bary.evt")
 
     def test_barycorr_overwrite(self):
-        outfile = main_barycenter([self.evfile, self.orbfile, "-p", self.parfile])
-        assert os.path.exists(outfile)
+        outfile = main_barycenter([self.evfile, self.orbfile])
+
+        with fits.open(outfile) as hdul:
+            with fits.open(self.bary_evfile) as hdul_ref:
+                print((hdul[1].data["TIME"] - hdul_ref[1].data["TIME"]) * 1000000)
+                assert np.allclose(hdul[1].data["TIME"], hdul_ref[1].data["TIME"])
+                assert np.allclose(hdul[1].header["RA_OBJ"], hdul_ref[1].header["RA_OBJ"])
+                assert np.allclose(hdul[1].header["DEC_OBJ"], hdul_ref[1].header["DEC_OBJ"])
+
         with pytest.raises(Exception, match="File bary_dummy_evt.evt already exists."):
             main_barycenter([self.evfile, self.orbfile, "-p", self.parfile, "-o", outfile])
         main_barycenter(
@@ -60,3 +70,10 @@ class TestExecution(object):
             assert "NUMRISE" not in hdul[1].data.names
 
         os.unlink(outfile)
+
+    def teardown_class(self):
+        files = glob.glob("bary_*.evt")
+
+        for f in files:
+            if os.path.exists(f):
+                os.unlink(f)

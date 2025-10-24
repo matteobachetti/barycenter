@@ -15,6 +15,7 @@ from astropy.table import Table, vstack
 
 from astropy.table import Table
 from scipy.interpolate import interp1d
+from scipy.interpolate import Akima1DInterpolator
 from astropy import log
 import pint.models
 import pint.toa as toa
@@ -24,7 +25,6 @@ from pint.observatory.satellite_obs import get_satellite_observatory
 from astropy.io import fits
 from astropy.time import Time
 from astropy.coordinates import Angle
-from scipy.interpolate import Akima1DInterpolator
 import barycenter
 from .utils import fits_open_including_remote, slim_down_hdu_list, get_remote_directory_listing
 import barycenter.monkeypatch  # noqa: F401
@@ -283,6 +283,32 @@ def get_coordinates_from_fits_header(hdr):
         raise ValueError("No coordinates found in header")
 
 
+def nustar_clock_correction_fun(clockfile, t_start, t_stop, t_res=1.0):
+    """Apply NuSTAR clock correction to times.
+
+    Parameters
+    ----------
+    times : array-like
+        Array of times to correct.
+    clock_table : astropy.table.Table
+        Table with columns TIME, CLOCK_OFF_CORR, CLOCK_FREQ_CORR.
+
+    Returns
+    -------
+    corrected_times : array-like
+        Array of corrected times.
+    """
+    unique_times = np.arange(t_start - t_res, t_stop + t_res, t_res)
+
+    hduname = "NU_FINE_CLOCK"
+    logger.info(f"Read extension {hduname}")
+    clocktable = Table.read(clockfile, hdu=hduname)
+    clock_corr, _ = interpolate_clock_function(clocktable, unique_times)
+    clock_fun = Akima1DInterpolator(unique_times, clock_corr, extrapolate=True)
+
+    return clock_fun
+
+
 def apply_barycenter_correction(
     fname,
     orbfile,
@@ -360,20 +386,12 @@ def apply_barycenter_correction(
 
         clock_fun = None
         if clockfile is not None and os.path.exists(clockfile):
-            times = hdul[1].data["TIME"]
-            times = times + timezero + (0.5 - timepixr) * timedel
-
-            unique_times = np.unique(times)
-            hduname = "NU_FINE_CLOCK"
-            logger.info(f"Read extension {hduname}")
-            clocktable = Table.read(clockfile, hdu=hduname)
-            clock_corr, _ = interpolate_clock_function(clocktable, unique_times)
-            clock_fun = interp1d(
-                unique_times,
-                clock_corr,
-                assume_sorted=True,
-                bounds_error=False,
-                fill_value="extrapolate",
+            if mission != "nustar":
+                warnings.warn(
+                    f"Clock correction for mission {mission} not implemented, skipping clock correction"
+                )
+            clock_fun = nustar_clock_correction_fun(
+                clockfile, hdul[1].data["TIME"].min(), hdul[1].data["TIME"].max()
             )
         elif clockfile is not None and not os.path.exists(clockfile):
             raise FileNotFoundError(f"Clock file {clockfile} not found")
