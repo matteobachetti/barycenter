@@ -404,7 +404,7 @@ def apply_mission_specific_barycenter_correction(
         clockfile = get_latest_clock_file(mission)
         logger.info(f"Using latest {mission} clock file: {clockfile}")
 
-    if mission.lower() in ["nustar", "nicer", "xte", "swift"]:
+    if mission.lower() in ["nustar", "nicer", "xte", "rxte", "swift"]:
         official_barycorr(
             fname,
             orbfile,
@@ -420,8 +420,8 @@ def apply_mission_specific_barycenter_correction(
 
     if only_columns is not None:
         with fits.open(temp_outfile) as hdul:
-            hdul = slim_down_hdu_list(hdul, outfile, additional_cols=only_columns)
-        hdul.writeto(outfile, overwrite=overwrite)
+            hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
+            hdul.writeto(outfile, overwrite=True)
         os.remove(temp_outfile)
     else:
         os.rename(temp_outfile, outfile)
