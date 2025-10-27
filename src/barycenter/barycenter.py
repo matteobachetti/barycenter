@@ -1,5 +1,7 @@
 import os
 import glob
+import shutil
+import subprocess as sp
 import warnings
 import logging as logger
 import numpy as np
@@ -389,6 +391,9 @@ def apply_mission_specific_barycenter_correction(
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
     import tempfile
+    if os.path.exists(outfile) and not overwrite:
+        raise FileExistsError(f"Output file {outfile} already exists. Use overwrite=True to overwrite.")
+
     temp_outfile = tempfile.NamedTemporaryFile(delete=False, suffix=".evt").name
 
     if parfile is not None and os.path.exists(parfile):
@@ -404,7 +409,7 @@ def apply_mission_specific_barycenter_correction(
         clockfile = get_latest_clock_file(mission)
         logger.info(f"Using latest {mission} clock file: {clockfile}")
 
-    if mission.lower() in ["nustar", "nicer", "xte", "rxte", "swift"]:
+    if mission.lower() in ["nustar", "nicer", "xte", "rxte", "swift", "axaf", "chandra"]:
         official_barycorr(
             fname,
             orbfile,
@@ -415,6 +420,13 @@ def apply_mission_specific_barycenter_correction(
             ephem=ephem,
             refframe=radecsys,
         )
+    elif mission.lower() == "asca":
+        shutil.copy(fname, temp_outfile)
+        # Add download for frf.orbit
+        download_locally("https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat")
+        download_locally("https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255")
+        cmd = f"timeconv ${temp_outfile} 2 {ra} {dec} earth.dat frf.orbit.255"
+        sp.check_call(cmd.split())
     else:
         raise NotImplementedError(f"Barycenter correction for mission {mission} not implemented")
 
