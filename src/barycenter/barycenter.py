@@ -422,13 +422,16 @@ def apply_mission_specific_barycenter_correction(
         )
     elif mission.lower() == "asca":
         fname = download_locally(fname)
+
         if fname.endswith(".gz"):
             sp.check_call(["gunzip", fname])
+            fname = fname[:-3]
         shutil.copy(fname, temp_outfile)
         # Add download for frf.orbit
         download_locally("https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat")
         download_locally("https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255")
-        cmd = f"timeconv ${temp_outfile} 2 {ra} {dec} earth.dat frf.orbit.255"
+        cmd = f"timeconv {temp_outfile} 2 {ra} {dec} earth.dat frf.orbit.255"
+        print(f"Executing {cmd}")
         sp.check_call(cmd.split())
     else:
         raise NotImplementedError(f"Barycenter correction for mission {mission} not implemented")
