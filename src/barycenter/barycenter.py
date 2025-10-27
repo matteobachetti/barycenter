@@ -19,7 +19,7 @@ from astropy.table import Table, vstack
 from astropy.table import Table
 from scipy.interpolate import interp1d
 from scipy.interpolate import Akima1DInterpolator
-from astropy import log
+from pint.logging import log
 import pint.models
 import pint.toa as toa
 from pint.models import StandardTimingModel
@@ -425,7 +425,7 @@ def apply_mission_specific_barycenter_correction(
         fname = download_locally(fname, outdir=os.path.dirname(outfile))
 
         if fname.endswith(".gz"):
-            sp.check_call(["gunzip", fname])
+            sp.check_call(["gunzip", "-f", fname])
             fname = fname[:-3]
         shutil.copy(fname, temp_outfile)
         # Add download for frf.orbit
@@ -451,6 +451,8 @@ def apply_mission_specific_barycenter_correction(
 
 @contextlib.contextmanager
 def _do_in_other_directory(x):
+    if x == "":
+        x = "."
     d = os.getcwd()
 
     # This could raise an exception, but it's probably
@@ -481,17 +483,18 @@ def download_locally(fname, outdir="."):
     local_fname : str
         Local file path.
     """
-    print(fname, outdir)
-    fname_path = os.path.abspath(fname)
-
-    print(fname_path)
 
     with _do_in_other_directory(outdir):
         if fname.startswith("http://") or fname.startswith("https://"):
             from astropy.utils.data import download_file
 
-            local_fname = download_file(fname, cache=True)
-            logger.info(f"Downloaded remote file {fname} to local file {local_fname}")
+            local_fname = os.path.basename(fname)
+            if os.path.exists(local_fname):
+                log.info(f"{local_fname} already exists, skipping download.")
+            else:
+                cache_file = download_file(fname, cache=True)
+                shutil.move(cache_file, local_fname)
+                log.info(f"Downloaded remote file {fname} to local file {local_fname}")
         elif fname.startswith("s3://"):
             import boto3
             import botocore
@@ -507,22 +510,22 @@ def download_locally(fname, outdir="."):
             response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=path)
             objects = response.get("Contents", [])
             if len(objects) == 0:
-                print(objects)
                 raise FileNotFoundError(f"No objects found at S3 path {fname}")
             key = objects[0]["Key"]
             path2 = "/".join(path.strip("/").split("/")[:-1])
             dest = key[len(path2) + 1 :]
             if os.path.exists(dest):
-                logger.info(f"{dest} already exists, skipping download.")
+                log.info(f"{dest} already exists, skipping download.")
             else:
                 s3_client.download_file(bucket_name, key, dest)
-            logger.info(f"Downloaded remote file {fname} to local file {dest}")
+            log.info(f"Downloaded remote file {fname} to local file {dest}")
             local_fname = dest
         else:
+            fname_path = os.path.abspath(fname)
             dest = os.path.join(os.getcwd(), os.path.basename(fname))
             if fname_path != dest and not os.path.exists(dest):
                 shutil.copy2(fname_path, dest)
-                logger.info(f"Copied local file {fname_path} to {outdir}")
+                log.info(f"Copied local file {fname_path} to {outdir}")
             local_fname = dest
 
         fname = os.path.abspath(local_fname)
