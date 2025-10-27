@@ -421,6 +421,9 @@ def apply_mission_specific_barycenter_correction(
             refframe=radecsys,
         )
     elif mission.lower() == "asca":
+        fname = download_locally(fname)
+        if fname.endswith(".gz"):
+            sp.check_call(["gunzip", fname])
         shutil.copy(fname, temp_outfile)
         # Add download for frf.orbit
         download_locally("https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat")
