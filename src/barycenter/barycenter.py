@@ -4,6 +4,7 @@ import shutil
 import subprocess as sp
 import warnings
 import logging as logger
+import contextlib
 import numpy as np
 
 from astropy.io import fits
@@ -421,15 +422,15 @@ def apply_mission_specific_barycenter_correction(
             refframe=radecsys,
         )
     elif mission.lower() == "asca":
-        fname = download_locally(fname)
+        fname = download_locally(fname, outdir=os.path.dirname(outfile))
 
         if fname.endswith(".gz"):
             sp.check_call(["gunzip", fname])
             fname = fname[:-3]
         shutil.copy(fname, temp_outfile)
         # Add download for frf.orbit
-        download_locally("https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat")
-        download_locally("https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255")
+        download_locally("https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat", outdir=os.path.dirname(outfile))
+        download_locally("https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255", outdir=os.path.dirname(outfile))
         cmd = f"timeconv {temp_outfile} 2 {ra} {dec} earth.dat frf.orbit.255"
         print(f"Executing {cmd}")
         sp.check_call(cmd.split())
@@ -446,7 +447,28 @@ def apply_mission_specific_barycenter_correction(
     return outfile
 
 
-def download_locally(fname):
+
+
+@contextlib.contextmanager
+def _do_in_other_directory(x):
+    d = os.getcwd()
+
+    # This could raise an exception, but it's probably
+    # best to let it propagate and let the caller
+    # deal with it, since they requested x
+    os.chdir(x)
+
+    try:
+        yield
+
+    finally:
+        # This could also raise an exception, but you *really*
+        # aren't equipped to figure out what went wrong if the
+        # old working directory can't be restored.
+        os.chdir(d)
+
+
+def download_locally(fname, outdir="."):
     """Download a remote file locally if needed.
     Manages S3 and HTTP(s) URLs. For S3, only public buckets are supported at the moment
 
@@ -459,38 +481,51 @@ def download_locally(fname):
     local_fname : str
         Local file path.
     """
-    if fname.startswith("http://") or fname.startswith("https://"):
-        from astropy.utils.data import download_file
+    print(fname, outdir)
+    fname_path = os.path.abspath(fname)
 
-        local_fname = download_file(fname, cache=True)
-        logger.info(f"Downloaded remote file {fname} to local file {local_fname}")
-        return local_fname
-    elif fname.startswith("s3://"):
-        import boto3
-        import botocore
-        from urllib.parse import urlparse
+    print(fname_path)
 
-       # Parse S3 URL
-        parsed = urlparse(fname)
-        bucket_name = parsed.netloc
-        config = botocore.client.Config(signature_version=botocore.UNSIGNED)
-        s3_resource = boto3.resource("s3", config=config)
-        s3_client = s3_resource.meta.client
-        path = fname.replace(f"s3://{bucket_name}/", "")
-        response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=path)
-        objects = response.get("Contents", [])
-        if len(objects) == 0:
-            print(objects)
-            raise FileNotFoundError(f"No objects found at S3 path {fname}")
-        key = objects[0]["Key"]
-        path2 = "/".join(path.strip("/").split("/")[:-1])
-        dest = key[len(path2) + 1 :]
-        if os.path.exists(dest):
-            logger.info(f"{dest} already exists, skipping download.")
+    with _do_in_other_directory(outdir):
+        if fname.startswith("http://") or fname.startswith("https://"):
+            from astropy.utils.data import download_file
+
+            local_fname = download_file(fname, cache=True)
+            logger.info(f"Downloaded remote file {fname} to local file {local_fname}")
+        elif fname.startswith("s3://"):
+            import boto3
+            import botocore
+            from urllib.parse import urlparse
+
+        # Parse S3 URL
+            parsed = urlparse(fname)
+            bucket_name = parsed.netloc
+            config = botocore.client.Config(signature_version=botocore.UNSIGNED)
+            s3_resource = boto3.resource("s3", config=config)
+            s3_client = s3_resource.meta.client
+            path = fname.replace(f"s3://{bucket_name}/", "")
+            response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=path)
+            objects = response.get("Contents", [])
+            if len(objects) == 0:
+                print(objects)
+                raise FileNotFoundError(f"No objects found at S3 path {fname}")
+            key = objects[0]["Key"]
+            path2 = "/".join(path.strip("/").split("/")[:-1])
+            dest = key[len(path2) + 1 :]
+            if os.path.exists(dest):
+                logger.info(f"{dest} already exists, skipping download.")
+            else:
+                s3_client.download_file(bucket_name, key, dest)
+            logger.info(f"Downloaded remote file {fname} to local file {dest}")
+            local_fname = dest
         else:
-            s3_client.download_file(bucket_name, key, dest)
-        logger.info(f"Downloaded remote file {fname} to local file {dest}")
-        return dest
+            dest = os.path.join(os.getcwd(), os.path.basename(fname))
+            if fname_path != dest and not os.path.exists(dest):
+                shutil.copy2(fname_path, dest)
+                logger.info(f"Copied local file {fname_path} to {outdir}")
+            local_fname = dest
+
+        fname = os.path.abspath(local_fname)
 
     return fname
 
