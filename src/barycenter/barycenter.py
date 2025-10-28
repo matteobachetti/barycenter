@@ -424,7 +424,8 @@ def apply_mission_specific_barycenter_correction(
     elif mission.lower() == "asca":
         if ephem != "DE200":
             warnings.warn("ASCA barycenter correction only supports DE200 ephemeris, overriding ephem to DE200")
-
+            if ephem in outfile:
+                outfile = outfile.replace(ephem, "DE200")
         fname = download_locally(fname, outdir=os.path.dirname(outfile))
 
         if fname.endswith(".gz"):
@@ -434,19 +435,26 @@ def apply_mission_specific_barycenter_correction(
         # Add download for frf.orbit
         download_locally("https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat", outdir=os.path.dirname(outfile))
         download_locally("https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255", outdir=os.path.dirname(outfile))
-        cmd = f"timeconv {temp_outfile} 2 {ra} {dec} earth.dat frf.orbit.255"
+        cmd = f"timeconv {temp_outfile} 2 {ra:.7f} {dec:.7f} earth.dat frf.orbit.255"
         log.info(f"Executing {cmd}")
         sp.check_call(cmd.split())
+
+        log.info("Updating header keywords...")
+        def _add_to_header_if_missing(header, label, value, comment):
+            if label not in header or header[label].strip() == "":
+                header[label] = (value, comment)
+
         with fits.open(temp_outfile) as hdul:
-            hdul[1].header["TIMESYS"] = "TDB"
-            hdul[1].header["TIMEREF"] = "SOLARSYSTEM"
-            hdul[1].header["PLEPHEM"] = f"JPL-DE200"
-            hdul[1].header["RA_BARY"] = ra
-            hdul[1].header["DEC_BARY"] = dec
+            _add_to_header_if_missing(hdul[1].header, "TIMESYS", "TDB", "Added by barycenter.py")
+            _add_to_header_if_missing(hdul[1].header, "TIMEREF", "SOLARSYSTEM", "Added by barycenter.py")
+            _add_to_header_if_missing(hdul[1].header, "PLEPHEM", "JPL-DE200", "Added by barycenter.py")
+            _add_to_header_if_missing(hdul[1].header, "RA_BARY", ra, "Added by barycenter.py")
+            _add_to_header_if_missing(hdul[1].header, "DEC_BARY", dec, "Added by barycenter.py")
             hdul[1].header.add_history(f"TOOL: timeconv applied for barycentering")
             hdul.writeto(temp_outfile, overwrite=True)
     else:
         raise NotImplementedError(f"Barycenter correction for mission {mission} not implemented")
+
 
     if only_columns is not None:
         with fits.open(temp_outfile) as hdul:
