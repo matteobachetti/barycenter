@@ -584,7 +584,6 @@ def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt
 
         data = hdul[1].data
         header = hdul[1].header
-        print(header)
         refframe = header.get("RADECSYS", "icrs").lower()
 
         source_coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame=refframe)
@@ -653,6 +652,7 @@ def apply_barycenter_correction(
     only_columns : list of str, optional
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
+    import tempfile
     cloud = "SCISERVER_USER_ID" in os.environ or "/home/jovyan" in os.environ.get("HOME", "")
 
     if apply_official or not cloud:
@@ -660,8 +660,7 @@ def apply_barycenter_correction(
         orbfile = download_locally(orbfile)
 
     if source_region_deg is not None:
-        path, name = os.path.split(fname)
-        source_sel_fname = os.path.join(path, f"src_{name}")
+        source_sel_fname = tempfile.NamedTemporaryFile(delete=False, suffix=".evt").name
         fname = extract_events_in_region(fname, ra, dec, source_region_deg, outfile=source_sel_fname)
 
     if apply_official:

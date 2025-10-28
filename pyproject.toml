@@ -63,7 +63,7 @@ recommended = [
     "toaextractor",
     "astroquery",
     "regions",
-    "numba"
+    "numba",
 ]
 
 ################################################################################
