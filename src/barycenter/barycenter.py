@@ -832,7 +832,7 @@ def main_barycenter(args=None):
         else:
             args.radecsys = "ICRS"
 
-    apply_barycenter_correction(
+    return apply_barycenter_correction(
         args.file,
         args.orbitfile,
         parfile=args.parfile,
@@ -846,8 +846,6 @@ def main_barycenter(args=None):
         only_columns=args.only_columns.split(",") if args.only_columns else None,
         apply_official=args.apply_official,
     )
-
-    return outfile
 
 
 if __name__ == "__main__":
