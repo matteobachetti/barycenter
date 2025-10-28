@@ -818,6 +818,12 @@ def _default_out_file(args):
         outfile += "_slim"
     if args.clockfile == "none":
         outfile += "_noclk"
+    if args.source_region_deg is not None:
+        if args.source_region_deg >= 1.0:
+            region_str = f"{args.source_region_deg:g}deg"
+        else:
+            region_str = f"{args.source_region_deg * 3600:g}asec".replace(".", "d")
+        outfile += f"_src{region_str}"
     outfile += ".evt"
 
     return outfile
