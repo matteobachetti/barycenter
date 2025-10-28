@@ -592,7 +592,7 @@ def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt
         xcolnum = colnames.index('x')+1
         ycolnum = colnames.index('y')+1
         w = WCS(header, keysel=["pixel"], colsel=[xcolnum, ycolnum])
-        print(w)
+
         sky_region = CircleSkyRegion(source_coord, region_deg * u.deg)
         sky_region_pixel = sky_region.to_pixel(w)
 
@@ -601,6 +601,7 @@ def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt
 
         extracted_data = data[good]
         hdul[1].data = extracted_data
+        hdul[1].header.add_history(f"Selected events within {region_deg} deg of RA={ra}, Dec={dec}")
 
         hdul.writeto(outfile, overwrite=True, output_verify="ignore")
 
