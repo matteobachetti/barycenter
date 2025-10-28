@@ -554,6 +554,59 @@ def download_locally(fname, outdir="."):
     return fname
 
 
+def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt"):
+    """Extract events within a circular region from a FITS event file.
+
+    Parameters
+    ----------
+    fname : str
+        Input FITS event file.
+    ra : float
+        Right Ascension in degrees.
+    dec : float
+        Declination in degrees.
+    region_deg : float
+        Radius of the circular region in degrees.
+    outfile : str, optional
+        Output FITS event file. Default is "src_events.evt".
+
+    Returns
+    -------
+    local_fname : str
+        Path to the output FITS event file with extracted events.
+    """
+    from astropy.coordinates import SkyCoord
+    from regions import CircleSkyRegion, PixCoord
+    from astropy.wcs import WCS
+    from astropy import units as u
+
+    with fits_open_including_remote(fname, memmap=True) as hdul:
+
+        data = hdul[1].data
+        header = hdul[1].header
+        print(header)
+        refframe = header.get("RADECSYS", "icrs").lower()
+
+        source_coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame=refframe)
+        colnames = [ n.lower() for n in hdul[1].columns.names ]
+        xcolnum = colnames.index('x')+1
+        ycolnum = colnames.index('y')+1
+        w = WCS(header, keysel=["pixel"], colsel=[xcolnum, ycolnum])
+        print(w)
+        sky_region = CircleSkyRegion(source_coord, region_deg * u.deg)
+        sky_region_pixel = sky_region.to_pixel(w)
+
+        x, y = data["X"], data["Y"]
+        good = (sky_region_pixel.contains(PixCoord(x, y)))
+
+        extracted_data = data[good]
+        hdul[1].data = extracted_data
+
+        hdul.writeto(outfile, overwrite=True, output_verify="ignore")
+
+    return outfile
+
+
 def apply_barycenter_correction(
     fname,
     orbfile,
@@ -564,6 +617,7 @@ def apply_barycenter_correction(
     radecsys="ICRS",
     ra=None,
     dec=None,
+    source_region_deg=None,
     overwrite=False,
     only_columns=None,
     apply_official=False,
@@ -603,6 +657,11 @@ def apply_barycenter_correction(
     if apply_official or not cloud:
         fname = download_locally(fname)
         orbfile = download_locally(orbfile)
+
+    if source_region_deg is not None:
+        path, name = os.path.split(fname)
+        source_sel_fname = os.path.join(path, f"src_{name}")
+        fname = extract_events_in_region(fname, ra, dec, source_region_deg, outfile=source_sel_fname)
 
     if apply_official:
         return apply_mission_specific_barycenter_correction(
@@ -783,6 +842,7 @@ def main_barycenter(args=None):
         "--ra", help="Right ascension (deg) if no parfile", default=None, type=float
     )
     parser.add_argument("--dec", help="Declination (deg) if no parfile", default=None, type=float)
+    parser.add_argument("--source-region-deg", help="Source region radius (deg)", default=None, type=float)
     parser.add_argument(
         "--radecsys",
         help="Coordinate system (default ICRS for DE4XX, FK5 for DE200)",
@@ -845,6 +905,7 @@ def main_barycenter(args=None):
         radecsys=args.radecsys,
         ra=args.ra,
         dec=args.dec,
+        source_region_deg=args.source_region_deg,
         only_columns=args.only_columns.split(",") if args.only_columns else None,
         apply_official=args.apply_official,
     )
