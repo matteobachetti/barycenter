@@ -329,6 +329,8 @@ def official_barycorr(fname, orbfile, ra=None, dec=None, ephem="DE440", refframe
         Ephemeris model to use. Default is "DE440".
     """
     import heasoftpy as hsp
+    if clockfile is None:
+        clockfile = "CALDB"
     print("Applying official barycorr...")
     hsp.barycorr(
         infile=fname,
