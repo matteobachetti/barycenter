@@ -59,7 +59,7 @@ recommended = [
     "fsspec",
     "boto3",
     "botocore",
-    "toaextractor",
+    "toa-extractor",
     "astroquery",
     "regions",
     "numba",
