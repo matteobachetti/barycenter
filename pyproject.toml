@@ -47,6 +47,25 @@ dev = [
     "hatch",
     "pre-commit",
 ]
+test = [
+    "pytest",
+    "pytest-astropy",
+]
+recommended = [
+    "s3fs",
+    "numpy<2.2",
+    "astroquery>=0.4.11",
+    "stingray>=2.2.10",
+    "pint-pulsar",
+    "fsspec",
+    "boto3",
+    "botocore",
+    "git+https://github.com/matteobachetti/toaextractor.git",
+    "astroquery",
+    "regions",
+    "numba"
+]
+
 ################################################################################
 # Tool Configuration
 ################################################################################
