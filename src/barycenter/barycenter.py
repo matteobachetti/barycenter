@@ -453,7 +453,7 @@ def apply_mission_specific_barycenter_correction(
             _add_to_header_if_missing(hdul[1].header, "RA_BARY", ra, "Added by barycenter.py")
             _add_to_header_if_missing(hdul[1].header, "DEC_BARY", dec, "Added by barycenter.py")
             hdul[1].header.add_history(f"TOOL: timeconv applied for barycentering")
-            hdul.writeto(temp_outfile, overwrite=True)
+            hdul.writeto(temp_outfile, overwrite=True, output_verify="ignore")
     else:
         raise NotImplementedError(f"Barycenter correction for mission {mission} not implemented")
 
@@ -461,7 +461,7 @@ def apply_mission_specific_barycenter_correction(
     if only_columns is not None:
         with fits.open(temp_outfile) as hdul:
             hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
-            hdul.writeto(outfile, overwrite=True)
+            hdul.writeto(outfile, overwrite=True, output_verify="ignore")
         os.remove(temp_outfile)
     else:
         os.rename(temp_outfile, outfile)
