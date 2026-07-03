@@ -117,6 +117,7 @@ def get_barycentric_correction(
     bary_fun : callable
         Function to compute barycentric correction.
     """
+
     if not isinstance(orbfile, str) and isinstance(orbfile, Iterable):
         with tempfile.NamedTemporaryFile(
             suffix=".txt",
@@ -129,6 +130,8 @@ def get_barycentric_correction(
             tmp.flush()
             orbit_files = "@" + tmp.name
         orbfile = orbfile[0]
+    else:
+        orbit_files = orbfile
 
     with fits_open_including_remote(orbfile) as hdul:
         mjdref = high_precision_keyword_read(hdul[1].header, "MJDREF")
