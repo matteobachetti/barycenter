@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 import numpy as np
 from astropy.table import Table, vstack
 import astropy.units as u
@@ -6,7 +7,10 @@ import pint
 import pint.observatory
 import pint.observatory.satellite_obs
 from pint.fits_utils import read_fits_event_mjds
-import logging as logger
+
+# import logging as logger
+from pint.logging import log as logger
+
 from .utils import fits_open_including_remote
 
 __all__ = ["load_orbit"]
@@ -56,6 +60,64 @@ def load_Fermi_FT2(ft2_filename):
     try:
         # If available, get the velocities from the FT2 file
         SC_VEL = FT2_dat.field("SC_VELOCITY")
+        Vx = SC_VEL[:, 0] * u.m / u.s
+        Vy = SC_VEL[:, 1] * u.m / u.s
+        Vz = SC_VEL[:, 2] * u.m / u.s
+    except Exception:
+        # Otherwise, compute velocities by differentiation because FT2 does not have velocities
+        # This is not the best way. Should fit an orbit and determine velocity from that.
+        dt = mjds_TT[1] - mjds_TT[0]
+        logger.info(f"FT2 spacing is {str(dt.to(u.s))}")
+        # Use "spacing" argument for gradient to handle nonuniform entries
+        tt = mjds_TT.to(u.s).value
+        Vx = np.gradient(X.value, tt) * u.m / u.s
+        Vy = np.gradient(Y.value, tt) * u.m / u.s
+        Vz = np.gradient(Z.value, tt) * u.m / u.s
+    logger.info("Building FT2 table covering MJDs {0} to {1}".format(mjds_TT.min(), mjds_TT.max()))
+    return Table(
+        [mjds_TT, X, Y, Z, Vx, Vy, Vz],
+        names=("MJD_TT", "X", "Y", "Z", "Vx", "Vy", "Vz"),
+        meta={"name": "FT2"},
+    )
+
+
+def load_SVOM_orbit(ft2_filename):
+    """Load data from a SVOM ORB file
+
+    Parameters
+    ----------
+    ft2_filename : str
+        Name of file to load
+
+    Returns
+    -------
+    astropy Table containing Time, x, y, z, v_x, v_y, v_z data
+
+    """
+    # Load photon times from FT1 file
+    hdulist = fits_open_including_remote(ft2_filename)
+    FT2_hdr = hdulist[1].header
+    FT2_dat = hdulist[1].data
+
+    logger.info("Opened orbit FITS file {0}".format(ft2_filename))
+    # TIMESYS should be 'TT'
+    # TIMEREF should be 'LOCAL', since no delays are applied
+    timesys = FT2_hdr["TIMESYS"]
+    logger.info("FT2 TIMESYS {0}".format(timesys))
+    timeref = FT2_hdr["TIMEREF"]
+    logger.info("FT2 TIMEREF {0}".format(timeref))
+
+    # The X, Y, Z position are for the START time
+    mjds_TT = read_fits_event_mjds(hdulist[1], timecolumn="TIME")
+    mjds_TT = mjds_TT * u.d
+    # SC_POS is in meters in X,Y,Z Earth-centered Inertial (ECI) coordinates
+    SC_POS = FT2_dat.field("POSITION")
+    X = SC_POS[:, 0] * u.m
+    Y = SC_POS[:, 1] * u.m
+    Z = SC_POS[:, 2] * u.m
+    try:
+        # If available, get the velocities from the FT2 file
+        SC_VEL = FT2_dat.field("VELOCITY")
         Vx = SC_VEL[:, 0] * u.m / u.s
         Vy = SC_VEL[:, 1] * u.m / u.s
         Vz = SC_VEL[:, 2] * u.m / u.s
@@ -238,13 +300,23 @@ def load_orbit(obs_name, orb_filename):
         A table containing entries MJD_TT, X, Y, Z, Vx, Vy, Vz
     """
     logger.info(f"Using monkeypatched load_orbit for {obs_name} with file {orb_filename}")
+
     if str(orb_filename).startswith("@"):
         # Read multiple orbit files names
         fnames = [ll.strip() for ll in open(orb_filename[1:]).readlines()]
+        orb_filename = fnames
+
+    if not isinstance(orb_filename, str) and isinstance(orb_filename, Iterable):
+        logger.info(f"Loading multiple orbit files for {obs_name}: {fnames}")
         orb_list = [load_orbit(obs_name, fn) for fn in fnames]
         full_orb = vstack(orb_list)
         # Make sure full table is sorted
         full_orb.sort("MJD_TT")
+        bad = np.zeros(len(full_orb), dtype=bool)
+        if len(full_orb) > 1:
+            bad[1:] = np.diff(full_orb["MJD_TT"]) == 0
+        if np.any(bad):
+            full_orb = full_orb[~bad]
         return full_orb
 
     lower_name = obs_name.lower()
@@ -258,6 +330,8 @@ def load_orbit(obs_name, orb_filename):
         return load_FPorbit(orb_filename)
     elif "nustar" in lower_name:
         return load_nustar_orbit(orb_filename)
+    elif "svom" in lower_name:
+        return load_SVOM_orbit(orb_filename)
     else:
         raise ValueError(f"Unrecognized satellite observatory {obs_name}.")
 
@@ -287,12 +361,24 @@ def _check_bounds(self, t):
     dleft = np.abs(ft2_tt[i0 - 1] - in_tt)
     min_duration = np.minimum(dright, dleft)
     bad = min_duration > (self._maxextrap / 1440.0)
+    verybad = min_duration > (self._maxextrap * 5 / 1440.0)
 
-    if np.any(bad):
+    if np.any(verybad):
+        nverybad = np.sum(verybad)
+        raise ValueError(
+            f"Extrapolating S/C position by more than {self._maxextrap * 5} minutes "
+            f"in {nverybad} photons between MJDs {ft2_tt[i0 -1][verybad].min()} and {ft2_tt[i0][verybad].max()}."
+            "This is not allowed."
+        )
+    elif np.any(bad):
         nbad = np.sum(bad)
         logger.error(
             f"Extrapolating S/C position by more than {self._maxextrap} minutes "
             f"in {nbad} photons between MJDs {ft2_tt[i0 -1][bad].min()} and {ft2_tt[i0][bad].max()}."
+        )
+    else:
+        logger.debug(
+            f"All {len(in_tt)} photons are within {self._maxextrap} minutes of S/C position."
         )
 
 

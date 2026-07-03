@@ -5,7 +5,9 @@ import subprocess as sp
 import warnings
 import logging as logger
 import contextlib
+import tempfile
 import numpy as np
+from collections.abc import Iterable
 
 from astropy.io import fits
 from pint.observatory.satellite_obs import get_satellite_observatory
@@ -115,11 +117,24 @@ def get_barycentric_correction(
     bary_fun : callable
         Function to compute barycentric correction.
     """
+    if not isinstance(orbfile, str) and isinstance(orbfile, Iterable):
+        with tempfile.NamedTemporaryFile(
+            suffix=".txt",
+            prefix="orbit_files",
+            dir=os.getcwd(),
+            delete=False,
+        ) as tmp:
+            for f in orbfile:
+                tmp.write(f"{f}\n".encode())
+            tmp.flush()
+            orbit_files = "@" + tmp.name
+        orbfile = orbfile[0]
+
     with fits_open_including_remote(orbfile) as hdul:
         mjdref = high_precision_keyword_read(hdul[1].header, "MJDREF")
         telescope = hdul[1].header["TELESCOP"].lower()
 
-    no = get_satellite_observatory(telescope, orbfile, overwrite=True)
+    no = get_satellite_observatory(telescope, orbit_files, overwrite=True)
 
     knots = no.X.get_knots()
     mjds = np.arange(knots[1], knots[-2], dt / 86400)
@@ -312,7 +327,16 @@ def nustar_clock_correction_fun(clockfile, t_start, t_stop, t_res=1.0):
     return clock_fun
 
 
-def official_barycorr(fname, orbfile, ra=None, dec=None, ephem="DE440", refframe="ICRS", outfile="bary.evt", clockfile=None):
+def official_barycorr(
+    fname,
+    orbfile,
+    ra=None,
+    dec=None,
+    ephem="DE440",
+    refframe="ICRS",
+    outfile="bary.evt",
+    clockfile=None,
+):
     """Apply barycorr to a FITS event file.
 
     Parameters
@@ -329,6 +353,7 @@ def official_barycorr(fname, orbfile, ra=None, dec=None, ephem="DE440", refframe
         Ephemeris model to use. Default is "DE440".
     """
     import heasoftpy as hsp
+
     if clockfile is None:
         clockfile = "CALDB"
     print("Applying official barycorr...")
@@ -394,8 +419,11 @@ def apply_mission_specific_barycenter_correction(
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
     import tempfile
+
     if os.path.exists(outfile) and not overwrite:
-        raise FileExistsError(f"Output file {outfile} already exists. Use overwrite=True to overwrite.")
+        raise FileExistsError(
+            f"Output file {outfile} already exists. Use overwrite=True to overwrite."
+        )
 
     temp_outfile = tempfile.NamedTemporaryFile(delete=False, suffix=".evt").name
 
@@ -425,7 +453,9 @@ def apply_mission_specific_barycenter_correction(
         )
     elif mission.lower() == "asca":
         if ephem != "DE200":
-            warnings.warn("ASCA barycenter correction only supports DE200 ephemeris, overriding ephem to DE200")
+            warnings.warn(
+                "ASCA barycenter correction only supports DE200 ephemeris, overriding ephem to DE200"
+            )
             if ephem in outfile:
                 outfile = outfile.replace(ephem, "DE200")
         fname = download_locally(fname, outdir=os.path.dirname(outfile))
@@ -435,28 +465,38 @@ def apply_mission_specific_barycenter_correction(
             fname = fname[:-3]
         shutil.copy(fname, temp_outfile)
         # Add download for frf.orbit
-        download_locally("https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat", outdir=os.path.dirname(outfile))
-        download_locally("https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255", outdir=os.path.dirname(outfile))
+        download_locally(
+            "https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat",
+            outdir=os.path.dirname(outfile),
+        )
+        download_locally(
+            "https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255",
+            outdir=os.path.dirname(outfile),
+        )
         cmd = f"timeconv {temp_outfile} 2 {ra:.7f} {dec:.7f} earth.dat frf.orbit.255"
         log.info(f"Executing {cmd}")
         sp.check_call(cmd.split())
 
         log.info("Updating header keywords...")
+
         def _add_to_header_if_missing(header, label, value, comment):
             if label not in header or header[label].strip() == "":
                 header[label] = (value, comment)
 
         with fits.open(temp_outfile) as hdul:
             _add_to_header_if_missing(hdul[1].header, "TIMESYS", "TDB", "Added by barycenter.py")
-            _add_to_header_if_missing(hdul[1].header, "TIMEREF", "SOLARSYSTEM", "Added by barycenter.py")
-            _add_to_header_if_missing(hdul[1].header, "PLEPHEM", "JPL-DE200", "Added by barycenter.py")
+            _add_to_header_if_missing(
+                hdul[1].header, "TIMEREF", "SOLARSYSTEM", "Added by barycenter.py"
+            )
+            _add_to_header_if_missing(
+                hdul[1].header, "PLEPHEM", "JPL-DE200", "Added by barycenter.py"
+            )
             _add_to_header_if_missing(hdul[1].header, "RA_BARY", ra, "Added by barycenter.py")
             _add_to_header_if_missing(hdul[1].header, "DEC_BARY", dec, "Added by barycenter.py")
             hdul[1].header.add_history(f"TOOL: timeconv applied for barycentering")
             hdul.writeto(temp_outfile, overwrite=True, output_verify="ignore")
     else:
         raise NotImplementedError(f"Barycenter correction for mission {mission} not implemented")
-
 
     if only_columns is not None:
         with fits.open(temp_outfile) as hdul:
@@ -466,8 +506,6 @@ def apply_mission_specific_barycenter_correction(
     else:
         os.rename(temp_outfile, outfile)
     return outfile
-
-
 
 
 @contextlib.contextmanager
@@ -505,6 +543,9 @@ def download_locally(fname, outdir="."):
         Local file path.
     """
 
+    if not isinstance(fname, str) and isinstance(fname, Iterable):
+        return [download_locally(f, outdir=outdir) for f in fname]
+
     with _do_in_other_directory(outdir):
         if fname.startswith("http://") or fname.startswith("https://"):
             from astropy.utils.data import download_file
@@ -521,7 +562,7 @@ def download_locally(fname, outdir="."):
             import botocore
             from urllib.parse import urlparse
 
-        # Parse S3 URL
+            # Parse S3 URL
             parsed = urlparse(fname)
             bucket_name = parsed.netloc
             config = botocore.client.Config(signature_version=botocore.UNSIGNED)
@@ -587,16 +628,16 @@ def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt
         refframe = header.get("RADECSYS", "icrs").lower()
 
         source_coord = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame=refframe)
-        colnames = [ n.lower() for n in hdul[1].columns.names ]
-        xcolnum = colnames.index('x')+1
-        ycolnum = colnames.index('y')+1
+        colnames = [n.lower() for n in hdul[1].columns.names]
+        xcolnum = colnames.index("x") + 1
+        ycolnum = colnames.index("y") + 1
         w = WCS(header, keysel=["pixel"], colsel=[xcolnum, ycolnum])
 
         sky_region = CircleSkyRegion(source_coord, region_deg * u.deg)
         sky_region_pixel = sky_region.to_pixel(w)
 
         x, y = data["X"], data["Y"]
-        good = (sky_region_pixel.contains(PixCoord(x, y)))
+        good = sky_region_pixel.contains(PixCoord(x, y))
 
         extracted_data = data[good]
         hdul[1].data = extracted_data
@@ -653,6 +694,7 @@ def apply_barycenter_correction(
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
     import tempfile
+
     cloud = "SCISERVER_USER_ID" in os.environ or "/home/jovyan" in os.environ.get("HOME", "")
 
     if apply_official or not cloud:
@@ -661,7 +703,9 @@ def apply_barycenter_correction(
 
     if source_region_deg is not None:
         source_sel_fname = tempfile.NamedTemporaryFile(delete=False, suffix=".evt").name
-        fname = extract_events_in_region(fname, ra, dec, source_region_deg, outfile=source_sel_fname)
+        fname = extract_events_in_region(
+            fname, ra, dec, source_region_deg, outfile=source_sel_fname
+        )
 
     if apply_official:
         return apply_mission_specific_barycenter_correction(
@@ -813,7 +857,9 @@ def splitext_improved(path):
 
 
 def _default_out_file(args):
-    outfile = "bary_" + os.path.basename(args.file).replace(".evt", "").replace(".evt", "")
+    root, extension = splitext_improved(args.file)
+
+    outfile = "bary_" + root
     if args.only_columns is not None:
         outfile += "_slim"
     if args.clockfile == "none":
@@ -824,7 +870,7 @@ def _default_out_file(args):
         else:
             region_str = f"{args.source_region_deg * 3600:g}asec".replace(".", "d")
         outfile += f"_src{region_str}"
-    outfile += ".evt"
+    outfile += extension
 
     return outfile
 
@@ -836,7 +882,7 @@ def main_barycenter(args=None):
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("file", help="Uncorrected event file")
-    parser.add_argument("orbitfile", help="Orbit file")
+    parser.add_argument("orbitfile", help="Orbit file", nargs="+")
     parser.add_argument(
         "-p",
         "--parfile",
@@ -848,7 +894,9 @@ def main_barycenter(args=None):
         "--ra", help="Right ascension (deg) if no parfile", default=None, type=float
     )
     parser.add_argument("--dec", help="Declination (deg) if no parfile", default=None, type=float)
-    parser.add_argument("--source-region-deg", help="Source region radius (deg)", default=None, type=float)
+    parser.add_argument(
+        "--source-region-deg", help="Source region radius (deg)", default=None, type=float
+    )
     parser.add_argument(
         "--radecsys",
         help="Coordinate system (default ICRS for DE4XX, FK5 for DE200)",
@@ -900,9 +948,13 @@ def main_barycenter(args=None):
         else:
             args.radecsys = "ICRS"
 
+    orbitfiles = args.orbitfile
+    if len(orbitfiles) == 1:
+        orbitfiles = orbitfiles[0]
+
     return apply_barycenter_correction(
         args.file,
-        args.orbitfile,
+        orbitfiles,
         parfile=args.parfile,
         outfile=outfile,
         overwrite=args.overwrite,
