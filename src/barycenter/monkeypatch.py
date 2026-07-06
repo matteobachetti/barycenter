@@ -363,14 +363,7 @@ def _check_bounds(self, t):
     bad = min_duration > (self._maxextrap / 1440.0)
     verybad = min_duration > (self._maxextrap * 5 / 1440.0)
 
-    if np.any(verybad):
-        nverybad = np.sum(verybad)
-        raise ValueError(
-            f"Extrapolating S/C position by more than {self._maxextrap * 5} minutes "
-            f"in {nverybad} photons between MJDs {ft2_tt[i0 -1][verybad].min()} and {ft2_tt[i0][verybad].max()}."
-            "This is not allowed."
-        )
-    elif np.any(bad):
+    if np.any(bad):
         nbad = np.sum(bad)
         logger.error(
             f"Extrapolating S/C position by more than {self._maxextrap} minutes "
