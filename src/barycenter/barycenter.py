@@ -157,6 +157,7 @@ def get_barycentric_correction(
         tdb_method="default",
     )
     bats = modelin.get_barycentric_toas(ts)
+
     return Akima1DInterpolator(
         mets,
         (bats.value - mjds) * 86400,
@@ -860,9 +861,11 @@ def splitext_improved(path):
 
 
 def _default_out_file(args):
-    root, extension = splitext_improved(args.file)
+    path, fname = os.path.split(args.file)
+    root, extension = splitext_improved(fname)
 
-    outfile = "bary_" + root
+    outfile = os.path.join(path, "bary_" + root)
+
     if args.only_columns is not None:
         outfile += "_slim"
     if args.clockfile == "none":
