@@ -118,20 +118,13 @@ def get_barycentric_correction(
         Function to compute barycentric correction.
     """
 
+    # load_orbit (see monkeypatch.py) accepts a list of file names directly, so
+    # there is no need to write out a "@metafile" for it. Keywords are read from
+    # the first file: they describe the mission, which is the same for all of them.
+    orbit_files = orbfile
     if not isinstance(orbfile, str) and isinstance(orbfile, Iterable):
-        with tempfile.NamedTemporaryFile(
-            suffix=".txt",
-            prefix="orbit_files",
-            dir=os.getcwd(),
-            delete=False,
-        ) as tmp:
-            for f in orbfile:
-                tmp.write(f"{f}\n".encode())
-            tmp.flush()
-            orbit_files = "@" + tmp.name
-        orbfile = orbfile[0]
-    else:
-        orbit_files = orbfile
+        orbit_files = list(orbfile)
+        orbfile = orbit_files[0]
 
     with fits_open_including_remote(orbfile) as hdul:
         mjdref = high_precision_keyword_read(hdul[1].header, "MJDREF")
@@ -830,6 +823,8 @@ def apply_barycenter_correction(
             hdu.header.add_history(f"Coordinate system: {radecsys}")
 
         hdul.writeto(outfile, overwrite=overwrite, output_verify="ignore")
+
+    return outfile
 
 
 def splitext_improved(path):

@@ -302,13 +302,14 @@ def load_orbit(obs_name, orb_filename):
     logger.info(f"Using monkeypatched load_orbit for {obs_name} with file {orb_filename}")
 
     if str(orb_filename).startswith("@"):
-        # Read multiple orbit files names
-        fnames = [ll.strip() for ll in open(orb_filename[1:]).readlines()]
-        orb_filename = fnames
+        # Read multiple orbit file names. Blank lines are ignored: a trailing
+        # newline in the metafile would otherwise be passed on as "".
+        with open(str(orb_filename)[1:]) as metafile:
+            orb_filename = [ll.strip() for ll in metafile if ll.strip()]
 
     if not isinstance(orb_filename, str) and isinstance(orb_filename, Iterable):
-        logger.info(f"Loading multiple orbit files for {obs_name}: {fnames}")
-        orb_list = [load_orbit(obs_name, fn) for fn in fnames]
+        logger.info(f"Loading multiple orbit files for {obs_name}: {orb_filename}")
+        orb_list = [load_orbit(obs_name, fn) for fn in orb_filename]
         full_orb = vstack(orb_list)
         # Make sure full table is sorted
         full_orb.sort("MJD_TT")
