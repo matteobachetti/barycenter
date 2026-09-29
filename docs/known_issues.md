@@ -29,6 +29,20 @@ difference of two absolute epochs, removes the problem.
 0.1 arcsec on the NuSTAR test file, which is 172 µs of light travel time. Always pass
 `--ra`/`--dec` explicitly when the answer must match another tool.
 
+**The `TIMEPIXR` half-bin shift is applied, but `barycorr` does not apply one.**
+Measured on a NICER observation: `barycorr` shifts by `TIMEZERO` only, while this
+package also adds `(0.5 - TIMEPIXR) * TIMEDEL`. That is 20 ns on NICER, but it scales
+with `TIMEDEL` and would be much larger on a coarsely binned mission.
+
+**`--radecsys` does not reach the computation in the PINT engine.** PINT treats the
+coordinates as ICRS whatever the keyword says, so asking for FK5 changes only the
+output header. Getting this wrong is worth 45 µs. The native engine handles it, by
+rotating the source direction into the frame the ephemeris itself uses.
+
+**astropy's `de200` and `de405` shortcuts point at a dead JPL FTP server.** Passing
+`ephem="de200"` raises `HTTPError: 404`. A working URL or a local `.bsp` path has to
+be given instead, so the engine needs a name-to-URL table.
+
 **With a `.par` file the `PLEPHEM` header keyword can lie.** The correction uses the
 ephemeris named *in the par file*, but the output header is stamped with the value of
 `--ephem`. If the two disagree, the file claims an ephemeris it was not computed with.

@@ -186,6 +186,102 @@ Monkey-patching a library's internals is fragile — it breaks whenever PINT
 reorganises — and it is global, so importing `barycenter` changes PINT's behaviour for
 everything else in the process. It is on the list to remove.
 
+## The native engine
+
+[`native.py`](../src/barycenter/native.py) computes the correction directly from
+astropy, ERFA and a JPL ephemeris, without PINT. It writes out four terms explicitly:
+
+| Term | What it is | Size (NuSTAR test file) |
+|---|---|---|
+| Einstein | `(TDB − TT)` at the geocentre, ERFA's `dtdb` | ±1.7 ms |
+| topocentric Einstein | `r_sc · v_earth / c²`, the observer's offset from the geocentre | −0.7 µs, varying by 4.2 µs per orbit |
+| Roemer | `r_obs · n̂ / c`, light travel time to the barycentre | ±500 s |
+| Shapiro | `2·T☉·ln(1 + cos θ)`, the Sun's gravity | +4.7 µs |
+
+plus a parallax term if a source distance is given, which the official tools omit.
+
+Each of these is a *small* number of seconds, computed in float64 (~1e-13 s). Nothing
+is ever obtained by subtracting two absolute epochs, which is the whole reason the
+PINT engine needs an 80-bit `longdouble` and this one does not.
+
+### Two things it gets right that are easy to get wrong
+
+**The Shapiro delay is only defined up to a constant**, because it is the logarithm of
+a distance ratio and you must pick a reference distance. `axBary` normalises by the
+observer's distance from the Sun, PINT by the astronomical unit. The two differ by
+`2·T☉·ln(r☉/AU)`, an annual term of about 170 ns amplitude and 96 ns on the test file —
+which is the entire disagreement between the PINT engine and `barycorr`. The native
+engine writes it the `axBary` way by default; `shapiro="pint"` reproduces PINT's.
+
+**The source direction must be in the ephemeris's own frame.** Reading a JPL kernel
+applies no rotation, whatever frame astropy labels the result with: DE200 is referred
+to the FK5 dynamical equinox of J2000, and DE405 onwards to the ICRF. So DE200 paired
+with FK5 coordinates, or DE440 with ICRS coordinates, needs no rotation — and pairing
+them the wrong way round costs **45 µs**. That is what HEASOFT's `refframe` parameter
+is really selecting. `ephemeris_frame()` encodes the rule and
+`source_unit_vector()` applies it.
+
+### Measured against `barycorr`
+
+On the committed NuSTAR file (937 events, DE440, ICRS, no clock correction):
+
+| engine | mean | std | peak-to-peak | max abs |
+|---|---|---|---|---|
+| **native**, `axBary` Shapiro | **+22.0 ns** | 19.5 ns | 59.6 ns | **59.6 ns** |
+| native, PINT Shapiro | +117.3 ns | 19.6 ns | 59.6 ns | 149.0 ns |
+| native, no Shapiro | −4671.5 ns | 13.9 ns | 59.6 ns | 4708.8 ns |
+| PINT engine (`py313-x64`) | +117.2 ns | 19.6 ns | 59.6 ns | 149.0 ns |
+
+There is nothing left to chase in that 59.6 ns. The reference times are around
+1.8e8 s, where one float64 step is **29.802 ns**, and the residual takes exactly three
+values — 0, 1 and 2 of those steps. The reference file cannot express a finer
+difference, so the true disagreement is under one step and most likely the +22 ns mean.
+`test_residual_is_only_rounding_of_the_stored_times` asserts precisely this.
+
+Native and PINT, with the Shapiro convention matched, agree to **mean −95.7 ns,
+std 0.63 ns** — i.e. two independent implementations of the same physics agree to
+sub-nanosecond, and the offset is the convention and nothing else.
+
+### An independent cross-check
+
+A NICER observation of the Crab barycentred with `barycorr` 2.17 using **DE200 and FK5**
+— a different mission, a different orbit file format (`ORBIT` extension, scalar `X`/`Y`/`Z`
+in metres at 10 s sampling), a different ephemeris and a different frame:
+
+| | mean | std | peak-to-peak |
+|---|---|---|---|
+| native, coordinates read as FK5 (correct) | +52.7 ns | 7.4 ns | 14.9 ns = 1 ulp |
+| native, coordinates read as ICRS (wrong frame) | −45049.8 ns | 18.8 ns | 44.7 ns |
+
+Two incidental findings from that comparison:
+
+* `barycorr` does **not** apply the `TIMEPIXR` half-bin shift, but this package does.
+  On NICER that is 20 ns; on a mission with a coarser `TIMEDEL` it would matter much
+  more.
+* `barycorr` **does** apply `TIMEZERO` (−1 s here), and so must we.
+
+### Speed
+
+| | per event | 1e6 events |
+|---|---|---|
+| native (arm64) | 6.5 µs | 6.5 s |
+| native (x86 under emulation) | 13.6 µs | 13.6 s |
+| PINT, at the event times | 581 µs | ~10 min |
+
+and the correction is smooth enough that it need not be evaluated per event at all.
+Sampling it on a grid and interpolating with a cubic spline costs:
+
+| grid step | max error |
+|---|---|
+| 1 s | 0.5 ns |
+| 5 s | 1.2 ns |
+| 20 s | 1.3 ns |
+| 60 s | 2.6 µs |
+
+So the 5-second grid the package already uses is a good choice, and the problem with
+it is not its spacing but its extent — it spans the whole orbit file rather than the
+events.
+
 ## Accuracy
 
 The target is **100 ns** against the mission's own tool.

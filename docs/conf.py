@@ -11,6 +11,9 @@ extensions = [
     "myst_parser",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autodoc",
+    # The docstrings are numpy-style; without napoleon, autodoc hands them to
+    # docutils as raw reStructuredText and every "Parameters" section is a warning.
+    "sphinx.ext.napoleon",
 ]
 
 # The suffix of source filenames. The pages are Markdown, read by myst_parser;
