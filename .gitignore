@@ -243,3 +243,15 @@ cython_debug/
 
 # Hatch-VCS
 _version.py
+
+### barycenter
+# Event files and other FITS products land next to their input by default; none of
+# them belong in the repository. Test data is force-added under tests/data/.
+*.evt
+*.evt.gz
+*.fits
+*.fits.gz
+*.orb.gz
+*.attorb
+*.attorb.gz
+!tests/data/**

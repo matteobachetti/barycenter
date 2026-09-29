@@ -52,11 +52,16 @@ class TestExecution(object):
                 [
                     self.evfile,
                     self.orbfile,
-                    "-o", outfile,
-                    "--ra", REF_RA,
-                    "--dec", REF_DEC,
-                    "--ephem", "DE440",
-                    "--clockfile", "none",
+                    "-o",
+                    outfile,
+                    "--ra",
+                    REF_RA,
+                    "--dec",
+                    REF_DEC,
+                    "--ephem",
+                    "DE440",
+                    "--clockfile",
+                    "none",
                 ]
             )
             == outfile
@@ -79,14 +84,26 @@ class TestExecution(object):
         """
         outfile = str(tmp_path / "gti.evt")
         main_barycenter(
-            [self.evfile, self.orbfile, "-o", outfile, "--ra", REF_RA, "--dec", REF_DEC,
-             "--clockfile", "none"]
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                REF_RA,
+                "--dec",
+                REF_DEC,
+                "--clockfile",
+                "none",
+            ]
         )
         with fits.open(outfile) as hdul, fits.open(self.bary_evfile) as ref:
-            assert np.allclose(hdul["GTI"].data["START"], ref["GTI"].data["START"],
-                               rtol=0, atol=TOLERANCE_S)
-            assert np.allclose(hdul["GTI"].data["STOP"], ref["GTI"].data["STOP"],
-                               rtol=0, atol=TOLERANCE_S)
+            assert np.allclose(
+                hdul["GTI"].data["START"], ref["GTI"].data["START"], rtol=0, atol=TOLERANCE_S
+            )
+            assert np.allclose(
+                hdul["GTI"].data["STOP"], ref["GTI"].data["STOP"], rtol=0, atol=TOLERANCE_S
+            )
 
     def test_several_orbit_files(self, tmp_path):
         """Passing a list of orbit files works, and repeated entries are dropped.
@@ -98,9 +115,7 @@ class TestExecution(object):
         one = str(tmp_path / "one.evt")
         two = str(tmp_path / "two.evt")
         main_barycenter([self.evfile, self.orbfile, "-o", one, "--clockfile", "none"])
-        main_barycenter(
-            [self.evfile, self.orbfile, self.orbfile, "-o", two, "--clockfile", "none"]
-        )
+        main_barycenter([self.evfile, self.orbfile, self.orbfile, "-o", two, "--clockfile", "none"])
 
         with fits.open(one) as h1, fits.open(two) as h2:
             assert np.array_equal(h1[1].data["TIME"], h2[1].data["TIME"])
@@ -112,20 +127,47 @@ class TestExecution(object):
 
         with pytest.raises(Exception, match="already exists"):
             main_barycenter(
-                [self.evfile, self.orbfile, "-p", self.parfile, "-o", outfile,
-                 "--clockfile", "none"]
+                [
+                    self.evfile,
+                    self.orbfile,
+                    "-p",
+                    self.parfile,
+                    "-o",
+                    outfile,
+                    "--clockfile",
+                    "none",
+                ]
             )
         main_barycenter(
-            [self.evfile, self.orbfile, "-p", self.parfile, "-o", outfile,
-             "--clockfile", "none", "--overwrite"]
+            [
+                self.evfile,
+                self.orbfile,
+                "-p",
+                self.parfile,
+                "-o",
+                outfile,
+                "--clockfile",
+                "none",
+                "--overwrite",
+            ]
         )
 
     def test_barycorr_slim(self, tmp_path):
         """--only-columns keeps TIME plus the named columns and drops the rest."""
         outfile = str(tmp_path / "slim.evt")
         main_barycenter(
-            [self.evfile, self.orbfile, "-p", self.parfile, "-o", outfile,
-             "--clockfile", "none", "--only-columns", "PI,PRIOR"]
+            [
+                self.evfile,
+                self.orbfile,
+                "-p",
+                self.parfile,
+                "-o",
+                outfile,
+                "--clockfile",
+                "none",
+                "--only-columns",
+                "PI,PRIOR",
+            ]
         )
         assert os.path.exists(outfile)
 
@@ -143,9 +185,7 @@ class TestExecution(object):
         orbfile = f"{prefix}nustar/data/obs/07/3/30702012003/event_cl/nu30702012003A.attorb.gz"
 
         outfile = str(tmp_path / "remote.evt")
-        main_barycenter(
-            [infile, orbfile, "-o", outfile, "--ra", str(ra), "--dec", str(dec)]
-        )
+        main_barycenter([infile, orbfile, "-o", outfile, "--ra", str(ra), "--dec", str(dec)])
         with fits.open(outfile) as hdul:
             assert np.isclose(hdul[1].header["RA_OBJ"], ra)
             assert np.isclose(hdul[1].header["DEC_OBJ"], dec)

@@ -81,9 +81,7 @@ def run_barycorr(infile, orbitfiles, outfile, args):
         ]
         cmd += [f"{k}={v}" for k, v in args.items()]
         # HEASOFT insists on a tty for its prompts; "script" provides one.
-        subprocess.run(
-            ["script", "-q", "/dev/null"] + cmd, cwd=workdir, env=env, check=True
-        )
+        subprocess.run(["script", "-q", "/dev/null"] + cmd, cwd=workdir, env=env, check=True)
         shutil.move(os.path.join(workdir, os.path.basename(outfile)), outfile)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

@@ -365,10 +365,15 @@ def _check_bounds(self, t):
     verybad = min_duration > (self._maxextrap * 5 / 1440.0)
 
     if np.any(bad):
+        # A short gap at the edge of an orbit file is routine and harmless; a gap
+        # five times longer than the allowance means the orbit file is missing a
+        # chunk, and the positions there are guesses.
+        report = logger.error if np.any(verybad) else logger.warning
         nbad = np.sum(bad)
-        logger.error(
+        report(
             f"Extrapolating S/C position by more than {self._maxextrap} minutes "
-            f"in {nbad} photons between MJDs {ft2_tt[i0 -1][bad].min()} and {ft2_tt[i0][bad].max()}."
+            f"in {nbad} photons between MJDs {ft2_tt[i0 - 1][bad].min()} "
+            f"and {ft2_tt[i0][bad].max()}."
         )
     else:
         logger.debug(

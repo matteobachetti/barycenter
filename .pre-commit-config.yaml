@@ -1,0 +1,24 @@
+# Install once with `pre-commit install`; after that these run on every `git commit`.
+# To check the whole tree by hand: `pre-commit run --all-files`.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-toml
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        # The committed reference event, orbit and clock files are the point of
+        # the test suite; the largest is the 4 MB NuSTAR orbit file.
+        args: [--maxkb=5000]
+      - id: end-of-file-fixer
+        exclude: '\.(evt|fits|gz|par)$'
+      - id: trailing-whitespace
+        exclude: '\.(evt|fits|gz|par)$'
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
