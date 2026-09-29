@@ -32,7 +32,7 @@ limitations. This package does the same arithmetic in Python.
 ### 1. The pure-Python workflow (the default)
 
 This is the one that matters. It is `apply_barycenter_correction` in
-[`barycenter.py`](../src/barycenter/barycenter.py), and it runs as follows.
+[`core.py`](../src/barycenter/core.py), and it runs as follows.
 
 **Step 1 — fetch the inputs.** `download_locally` pulls the event and orbit files if
 they are `http(s)://` or `s3://` URLs. On SciServer (detected from the
@@ -153,11 +153,20 @@ It requires a working HEASOFT installation and is not exercised in CI.
 
 | Module | Role |
 |---|---|
-| `barycenter.py` | CLI, both workflows, the clock correction, region extraction, downloads. |
+| `cli.py` | Argument parsing, the default output file name, and `main_barycenter`. |
+| `core.py` | The mission-agnostic workflow: `apply_barycenter_correction`, `correct_times`, region extraction. |
 | `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
-| `native.py` | The default engine: the correction from astropy + ERFA + a JPL ephemeris. |
+| `native.py` | The engine: the correction from astropy + ERFA + a JPL ephemeris. |
 | `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
-| `utils.py` | FITS I/O that also works on `http(s)://` and `s3://` URLs (`fits_open_including_remote`), column slimming (`slim_down_hdu_list`), HTML directory listing for the CALDB scrape, and the `MJDREFI`+`MJDREFF` reader. |
+| `clock.py` | Spacecraft clock corrections, and the CALDB clock file fetcher. NuSTAR only so far. |
+| `official.py` | Shelling out to HEASOFT `barycorr` and `timeconv` under `--apply-official`. |
+| `remote.py` | `download_locally`: local paths, `https://` and `s3://`. |
+| `utils.py` | FITS I/O that also works on `http(s)://` and `s3://` URLs (`fits_open_including_remote`), column slimming (`slim_down_hdu_list`), HTML directory listing for the CALDB scrape, the `MJDREFI`+`MJDREFF` reader, and `splitext_improved`. |
+
+Until this release all of that lived in one 979-line `barycenter.py`. Nothing outside
+the package needs to change: `main_barycenter` and the other public names are still
+importable from `barycenter` itself, and the `barycenter` command is unaffected. Code
+that imported from `barycenter.barycenter` has to be updated.
 
 (the-orbit-reader)=
 ## The orbit reader

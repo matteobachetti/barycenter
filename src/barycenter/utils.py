@@ -8,6 +8,7 @@ __all__ = [
     "fits_open_remote",
     "high_precision_keyword_read",
     "high_precision_mjdref",
+    "splitext_improved",
 ]
 
 
@@ -216,3 +217,32 @@ def high_precision_mjdref(header):
     if mjdref is None:
         raise ValueError("Header has no MJDREF, nor MJDREFI/MJDREFF")
     return mjdref
+
+
+def splitext_improved(path):
+    """Split off a file extension, keeping a compression suffix attached to it.
+
+    Examples
+    --------
+    >>> splitext_improved("a.tar.gz")
+    ('a', '.tar.gz')
+    >>> splitext_improved("a.tar")
+    ('a', '.tar')
+    >>> splitext_improved("a.f/a.tar")
+    ('a.f/a', '.tar')
+    >>> splitext_improved("a.a.a.f/a.tar.gz")
+    ('a.a.a.f/a', '.tar.gz')
+    """
+    import os
+
+    ext = ""
+    dir, file = os.path.split(path)
+    for zip_ext in [".tar", ".tar.gz", ".gz", ".bz2", ".zip", ".xz", ".Z"]:
+        if file.endswith(zip_ext):
+            file = file[: -len(zip_ext)]
+            ext = zip_ext
+            break
+
+    froot, new_ext = os.path.splitext(file)
+
+    return os.path.join(dir, froot), new_ext + ext

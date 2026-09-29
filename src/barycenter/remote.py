@@ -1,0 +1,103 @@
+"""Getting the input files onto the local disk.
+
+Event and orbit files may be given as local paths, ``https://`` URLs or ``s3://`` URLs
+(HEASARC publishes its archive both ways). On SciServer the archive is already
+mounted, so nothing is downloaded there; see
+:func:`barycenter.core.apply_barycenter_correction`.
+"""
+
+import contextlib
+import logging as logger
+import os
+import shutil
+from collections.abc import Iterable
+
+__all__ = ["download_locally"]
+
+
+@contextlib.contextmanager
+def _do_in_other_directory(x):
+    if x == "":
+        x = "."
+    d = os.getcwd()
+
+    # This could raise an exception, but it's probably
+    # best to let it propagate and let the caller
+    # deal with it, since they requested x
+    os.chdir(x)
+
+    try:
+        yield
+
+    finally:
+        # This could also raise an exception, but you *really*
+        # aren't equipped to figure out what went wrong if the
+        # old working directory can't be restored.
+        os.chdir(d)
+
+
+def download_locally(fname, outdir="."):
+    """Download a remote file locally if needed.
+    Manages S3 and HTTP(s) URLs. For S3, only public buckets are supported at the moment
+
+    Parameters
+    ----------
+    fname : str
+        Input file path or URL.
+    Returns
+    -------
+    local_fname : str
+        Local file path.
+    """
+
+    if not isinstance(fname, str) and isinstance(fname, Iterable):
+        return [download_locally(f, outdir=outdir) for f in fname]
+
+    with _do_in_other_directory(outdir):
+        if fname.startswith("http://") or fname.startswith("https://"):
+            from astropy.utils.data import download_file
+
+            local_fname = os.path.basename(fname)
+            if os.path.exists(local_fname):
+                logger.info(f"{local_fname} already exists, skipping download.")
+            else:
+                cache_file = download_file(fname, cache=True)
+                shutil.move(cache_file, local_fname)
+                logger.info(f"Downloaded remote file {fname} to local file {local_fname}")
+        elif fname.startswith("s3://"):
+            from urllib.parse import urlparse
+
+            import boto3
+            import botocore
+
+            # Parse S3 URL
+            parsed = urlparse(fname)
+            bucket_name = parsed.netloc
+            config = botocore.client.Config(signature_version=botocore.UNSIGNED)
+            s3_resource = boto3.resource("s3", config=config)
+            s3_client = s3_resource.meta.client
+            path = fname.replace(f"s3://{bucket_name}/", "")
+            response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=path)
+            objects = response.get("Contents", [])
+            if len(objects) == 0:
+                raise FileNotFoundError(f"No objects found at S3 path {fname}")
+            key = objects[0]["Key"]
+            path2 = "/".join(path.strip("/").split("/")[:-1])
+            dest = key[len(path2) + 1 :]
+            if os.path.exists(dest):
+                logger.info(f"{dest} already exists, skipping download.")
+            else:
+                s3_client.download_file(bucket_name, key, dest)
+            logger.info(f"Downloaded remote file {fname} to local file {dest}")
+            local_fname = dest
+        else:
+            fname_path = os.path.abspath(fname)
+            dest = os.path.join(os.getcwd(), os.path.basename(fname))
+            if fname_path != dest and not os.path.exists(dest):
+                shutil.copy2(fname_path, dest)
+                logger.info(f"Copied local file {fname_path} to {outdir}")
+            local_fname = dest
+
+        fname = os.path.abspath(local_fname)
+
+    return fname
