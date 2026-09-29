@@ -70,9 +70,7 @@ def fits_open_including_remote(filename, **kwargs):
 
     if "://" in filename:
         return fits_open_remote(filename, **kwargs)
-    hdul = fits.open(filename, **kwargs)
-    print(filename, hdul[1].data["TIME"][0], hdul[1].data["TIME"][-1])
-    return hdul
+    return fits.open(filename, **kwargs)
 
 
 def slim_down_hdu_list(hdul, additional_cols=None, ext=1):

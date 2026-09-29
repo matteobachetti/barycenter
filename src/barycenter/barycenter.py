@@ -174,6 +174,18 @@ def correct_times(times, bary_fun, clock_fun=None):
     -------
     corrected_times : array-like
         Array of corrected times.
+
+    Notes
+    -----
+    The clock correction is applied here *after* the barycentric correction has
+    been evaluated: both ``clock_fun`` and ``bary_fun`` see the raw mission
+    time.  HEASOFT ``barycorr`` does the opposite -- it corrects the clock
+    first and then evaluates the barycentric correction, and the spacecraft
+    position lookup, at the clock-corrected time.  On NuSTAR, where the clock
+    correction reaches a few milliseconds, the two orders differ by about
+    1.1 us, well above our 100 ns target.  Matching barycorr means calling
+    ``bary_fun(times + cl_corr)``; this is deliberately left for the clock-file
+    work, and is why the reference test runs with the clock correction off.
     """
     cl_corr = 0
     if clock_fun is not None:
@@ -353,7 +365,7 @@ def official_barycorr(
 
     if clockfile is None:
         clockfile = "CALDB"
-    print("Applying official barycorr...")
+    logger.info("Applying official barycorr...")
     hsp.barycorr(
         infile=fname,
         outfile=outfile,
@@ -433,7 +445,10 @@ def apply_mission_specific_barycenter_correction(
         mission = hdul[1].header.get("TELESCOP", "unknown").lower()
         logger.info(f"Mission: {mission}")
 
-    if clockfile is None and clockfile != "none" and mission == "nustar":
+    if isinstance(clockfile, str) and clockfile.lower() == "none":
+        # barycorr takes "NONE" (upper case) to mean "no clock correction".
+        clockfile = "NONE"
+    elif clockfile is None and mission == "nustar":
         clockfile = get_latest_clock_file(mission)
         logger.info(f"Using latest {mission} clock file: {clockfile}")
 
@@ -745,23 +760,27 @@ def apply_barycenter_correction(
         mission = hdul[1].header.get("TELESCOP", "unknown").lower()
         logger.info(f"Mission: {mission}")
 
-        if clockfile is None and clockfile != "none" and mission == "nustar":
+        if isinstance(clockfile, str) and clockfile.lower() == "none":
+            logger.info("Clock correction explicitly disabled")
+            clockfile = None
+        elif clockfile is None and mission == "nustar":
             clockfile = get_latest_clock_file(mission)
             logger.info(f"Using latest {mission} clock file: {clockfile}")
 
         timezero += (0.5 - timepixr) * timedel
 
         clock_fun = None
-        if clockfile is not None and os.path.exists(clockfile):
-            if mission != "nustar":
-                warnings.warn(
-                    f"Clock correction for mission {mission} not implemented, skipping clock correction"
-                )
+        if clockfile is not None and not os.path.exists(clockfile):
+            raise FileNotFoundError(f"Clock file {clockfile} not found")
+        elif clockfile is not None and mission != "nustar":
+            warnings.warn(
+                f"Clock correction for mission {mission} not implemented, "
+                "skipping clock correction"
+            )
+        elif clockfile is not None:
             clock_fun = nustar_clock_correction_fun(
                 clockfile, hdul[1].data["TIME"].min(), hdul[1].data["TIME"].max()
             )
-        elif clockfile is not None and not os.path.exists(clockfile):
-            raise FileNotFoundError(f"Clock file {clockfile} not found")
 
         if only_columns is not None:
             hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
