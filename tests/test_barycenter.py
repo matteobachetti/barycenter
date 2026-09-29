@@ -15,14 +15,16 @@ datadir = os.path.join(curdir, "data")
 #: subtracts two absolute MJDs, is then quantised at ~1.1 us.
 HAS_EXTENDED_PRECISION = np.finfo(np.longdouble).eps < np.finfo(np.float64).eps
 
-#: How close we must get to the official tool, in seconds.  The science target
-#: is 100 ns; the PINT engine sits at +116 ns mean with 60 ns of spread, because
-#: PINT's Shapiro delay carries an extra 2T*ln(r/AU) annual term that axBary
-#: omits.  Without extended precision the spread grows to ~1.3 us peak to peak
-#: for the reason above, so the check is looser there; the native engine
-#: evaluates small quantities in float64 and removes the distinction.
-#: See docs/technical_details.md.
-TOLERANCE_S = 2e-7 if HAS_EXTENDED_PRECISION else 2e-6
+#: How close we must get to the official tool, in seconds. The science target is 100 ns,
+#: and the default (native) engine reaches it on every platform: what is left is 0, 1 or
+#: 2 units in the last place of the reference file's float64 times, 29.8 ns each.
+TOLERANCE_S = 1e-7
+
+#: The PINT engine needs a looser one. It sits at +116 ns mean because PINT's Shapiro
+#: delay carries an extra 2T*ln(r/AU) annual term that axBary omits, and without an
+#: 80-bit longdouble it is quantised at ~1.1 us on top of that, because it subtracts two
+#: absolute MJDs. See docs/technical_details.md.
+PINT_TOLERANCE_S = 2e-7 if HAS_EXTENDED_PRECISION else 2e-6
 
 #: Coordinates the reference was generated with.  dummy_evt.evt has
 #: RA_OBJ=294.91067 and RA_NOM=294.9107; the two differ by 0.1 arcsec, which is
@@ -40,7 +42,7 @@ class TestExecution(object):
         cls.bary_evfile = os.path.join(datadir, "dummy_evt_bary_DE440_noclk.evt.gz")
 
     def test_agrees_with_barycorr(self, tmp_path):
-        """Our barycentred times match HEASOFT barycorr to better than 200 ns.
+        """Our barycentred times match HEASOFT barycorr to better than 100 ns.
 
         The reference was made with DE440, ICRS, explicit coordinates and no
         clock correction, and the run below pins all four the same way: anything
@@ -75,6 +77,71 @@ class TestExecution(object):
             )
             assert np.isclose(hdul[1].header["RA_OBJ"], ref[1].header["RA_OBJ"])
             assert np.isclose(hdul[1].header["DEC_OBJ"], ref[1].header["DEC_OBJ"])
+
+    def test_pint_engine_also_agrees_with_barycorr(self, tmp_path):
+        """--engine pint still reproduces barycorr, to its own looser tolerance.
+
+        The PINT path is kept as an independent second opinion, so it has to keep
+        working; its offset is the Shapiro convention, not a mistake.
+        """
+        outfile = str(tmp_path / "pint.evt")
+        main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                REF_RA,
+                "--dec",
+                REF_DEC,
+                "--ephem",
+                "DE440",
+                "--clockfile",
+                "none",
+                "--engine",
+                "pint",
+            ]
+        )
+        with fits.open(outfile) as hdul, fits.open(self.bary_evfile) as ref:
+            diff = hdul[1].data["TIME"] - ref[1].data["TIME"]
+            assert np.max(np.abs(diff)) < PINT_TOLERANCE_S, (
+                f"max |difference| = {np.max(np.abs(diff)) * 1e9:.1f} ns "
+                f"(mean {diff.mean() * 1e9:+.1f} ns, std {diff.std() * 1e9:.1f} ns)"
+            )
+
+    def test_the_two_engines_agree(self, tmp_path):
+        """Two independent implementations of the same physics, on the same file.
+
+        They are not identical -- the Shapiro convention differs by ~100 ns, and PINT
+        loses another microsecond where there is no extended precision -- but a
+        disagreement beyond that would mean one of them has a bug.
+        """
+        tolerance = 2e-7 if HAS_EXTENDED_PRECISION else 2e-6
+        files = {}
+        for engine in ("native", "pint"):
+            files[engine] = str(tmp_path / f"{engine}.evt")
+            main_barycenter(
+                [
+                    self.evfile,
+                    self.orbfile,
+                    "-o",
+                    files[engine],
+                    "--ra",
+                    REF_RA,
+                    "--dec",
+                    REF_DEC,
+                    "--ephem",
+                    "DE440",
+                    "--clockfile",
+                    "none",
+                    "--engine",
+                    engine,
+                ]
+            )
+        with fits.open(files["native"]) as a, fits.open(files["pint"]) as b:
+            diff = a[1].data["TIME"] - b[1].data["TIME"]
+        assert np.max(np.abs(diff)) < tolerance, f"max {np.max(np.abs(diff)) * 1e9:.1f} ns"
 
     def test_gtis_corrected_like_the_events(self, tmp_path):
         """The GTIs get the same correction as the events that fall inside them.

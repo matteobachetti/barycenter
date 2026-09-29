@@ -11,18 +11,18 @@ from this page as they are fixed, and each fix should arrive with a test.
 ~1.1 µs difference. Until it is fixed, comparisons against `barycorr` must be run with
 `--clockfile none`, which is what the test suite does.
 
-**PINT's Shapiro delay differs from `axBary`'s by ~100 ns.** PINT's solar-system
-Shapiro delay carries an extra `2·T☉·ln(r/AU)` annual term that `axBary` omits. This
-accounts for the +116 ns mean offset measured against the reference. Neither is wrong;
-they differ by a term a pulsar fit would absorb. See
+**`--engine pint` sits ~116 ns from `barycorr`.** PINT's solar-system Shapiro delay
+carries an extra `2·T☉·ln(r/AU)` annual term that `axBary` omits. Neither is wrong; they
+differ by a term a pulsar fit would absorb. The default native engine uses the `axBary`
+convention and does not have the offset. See
 [Technical details](technical_details.md#accuracy).
 
-**On Apple Silicon and Windows the correction is quantised at ~1.1 µs.** `numpy` has no
+**On Apple Silicon and Windows `--engine pint` is quantised at ~1.1 µs.** `numpy` has no
 80-bit `longdouble` on those platforms, and PINT represents absolute times as
 `longdouble` MJDs, so subtracting two large MJDs to get a small correction loses the
-answer. The test suite loosens its tolerance from 200 ns to 2 µs where extended
-precision is absent. Computing the correction terms directly, rather than as the
-difference of two absolute epochs, removes the problem.
+answer: measured 775 ns peak-to-peak on arm64 against 149 ns on x86. The default native
+engine computes every term as a small quantity in float64 and gives bit-identical
+answers on both.
 
 **The coordinate fallback order differs from HEASOFT's.** We prefer
 `RA_OBJ`/`DEC_OBJ`, `barycorr` prefers `RA_NOM`/`DEC_NOM`. The two keywords differ by
@@ -34,18 +34,10 @@ Measured on a NICER observation: `barycorr` shifts by `TIMEZERO` only, while thi
 package also adds `(0.5 - TIMEPIXR) * TIMEDEL`. That is 20 ns on NICER, but it scales
 with `TIMEDEL` and would be much larger on a coarsely binned mission.
 
-**`--radecsys` does not reach the computation in the PINT engine.** PINT treats the
-coordinates as ICRS whatever the keyword says, so asking for FK5 changes only the
-output header. Getting this wrong is worth 45 µs. The native engine handles it, by
+**`--radecsys` does not reach the computation with `--engine pint`.** PINT treats the
+coordinates as ICRS whatever the keyword says, so asking for FK5 changes only the output
+header. Getting this wrong is worth 45 µs. The default native engine handles it, by
 rotating the source direction into the frame the ephemeris itself uses.
-
-**astropy's `de200` and `de405` shortcuts point at a dead JPL FTP server.** Passing
-`ephem="de200"` raises `HTTPError: 404`. A working URL or a local `.bsp` path has to
-be given instead, so the engine needs a name-to-URL table.
-
-**With a `.par` file the `PLEPHEM` header keyword can lie.** The correction uses the
-ephemeris named *in the par file*, but the output header is stamped with the value of
-`--ephem`. If the two disagree, the file claims an ephemeris it was not computed with.
 
 ## Correctness
 
@@ -56,11 +48,6 @@ falling back to a local clock file, because `fname` is never assigned on that pa
 `nustar_clock_correction_fun` then builds an Akima spline from a full-length `x` and a
 possibly shorter `y`, which raises a length mismatch whenever an event falls outside
 the clock table's span.
-
-**Mutating PINT's global timing model leaks between calls.** Without a `.par` file the
-code sets `RAJ`/`DECJ`/`EPHEM` on PINT's module-level `StandardTimingModel`
-*instance*, so the coordinates persist into every later call in the same process and
-into any other PINT user.
 
 **`download_locally` corrupts astropy's download cache.** It calls
 `download_file(cache=True)` and then `shutil.move`s the cached file out of the cache
@@ -95,11 +82,17 @@ files are ~11 MB.
 
 ## Performance
 
-**The TOA grid spans the whole orbit file, not the events.** A 5-second grid across a
-multi-day `.attorb` file, or across a stack of orbit files, costs tens of thousands of
-PINT TOAs that are then never used. `pint_barycentric_correction` now accepts a
-`met_range` that clips the grid to the events plus one step of margin, but
-`apply_barycenter_correction` does not yet pass it.
+**`--engine pint`'s TOA grid spans the whole orbit file, not the events.** A 5-second
+grid across a multi-day `.attorb` file, or across a stack of orbit files, costs tens of
+thousands of PINT TOAs that are then never used. `pint_barycentric_correction` accepts a
+`met_range` that clips the grid, but `apply_barycenter_correction` does not yet pass it.
+The native engine uses no grid at all.
+
+**The native engine evaluates the ephemeris once per event.** That is exact, and at
+~6.5 µs per event it is still 30× faster than the PINT path, but a 10-million-event file
+would take about a minute. `native_barycentric_correction` accepts a `dt` that puts a
+cubic spline through a grid instead -- measured cost 1.2 ns at 5 s -- and nothing passes
+it yet.
 
 **The clock correction is interpolated twice.** Hermite interpolation onto a 1-second
 grid, then an Akima spline from that grid onto the events. One interpolation evaluated

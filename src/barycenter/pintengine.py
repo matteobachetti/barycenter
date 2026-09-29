@@ -38,7 +38,7 @@ import numpy as np
 from astropy.coordinates import EarthLocation
 from scipy.interpolate import Akima1DInterpolator, InterpolatedUnivariateSpline
 
-__all__ = ["TableSatelliteObs", "pint_barycentric_correction"]
+__all__ = ["TableSatelliteObs", "pint_barycentric_correction", "timing_model_for_position"]
 
 
 def _satellite_obs_bases():
@@ -187,3 +187,34 @@ def pint_barycentric_correction(orbit_table, model, mjdref=None, dt=5.0, met_ran
     correction = np.asarray((bats.to_value(u.d) - mjds) * 86400, dtype=np.float64)
 
     return Akima1DInterpolator(grid, correction, extrapolate=True)
+
+
+def timing_model_for_position(ra_deg, dec_deg, ephem="DE440"):
+    """A minimal PINT timing model for a source at a fixed position.
+
+    PINT exposes ``StandardTimingModel`` as a module-level *instance*, so setting
+    ``RAJ`` on it changes it for every later call in the process and for every other
+    piece of code using PINT. This returns a copy instead.
+
+    Parameters
+    ----------
+    ra_deg, dec_deg : float
+        Source coordinates in degrees.
+    ephem : str, optional
+        Ephemeris name, as PINT spells it (``DE440``).
+
+    Returns
+    -------
+    pint.models.TimingModel
+    """
+    import copy
+
+    import astropy.units as u
+    from pint.models import StandardTimingModel
+
+    model = copy.deepcopy(StandardTimingModel)
+    model.RAJ.quantity = ra_deg * u.deg
+    model.DECJ.quantity = dec_deg * u.deg
+    model.DM.quantity = 0.0
+    model.EPHEM.value = str(ephem).upper()
+    return model

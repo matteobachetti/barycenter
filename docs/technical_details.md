@@ -62,34 +62,36 @@ while `RA_NOM` is the rounded pointing. On the NuSTAR test file the difference i
 explicitly. When comparing against an official tool, always pass `--ra` and `--dec`.
 :::
 
-Without a `.par` file the code builds a timing model by mutating PINT's module-level
-`StandardTimingModel` object, setting `RAJ`, `DECJ`, `DM = 0` and `EPHEM`.
+A `.par` file is the only thing on this path that needs PINT installed, since it is the
+one source of coordinates we do not parse ourselves. Its `EPHEM` also wins over
+`--ephem`, because the model was fitted with it, and the output header is stamped with
+the one actually used.
 
 **Step 4 — build the barycentric correction function.** This is
-`get_barycentric_correction`, and it is the heart of the package:
+`get_barycentric_correction`, and it is the heart of the package. First,
+[`orbit.read_orbit`](#the-orbit-reader) reads the orbit file (or the list of them) into
+one cleaned table, taking `MJDREF` from `MJDREFI`+`MJDREFF` in extended precision. Then
+one of two engines turns it into a callable:
 
-1. [`orbit.read_orbit`](#the-orbit-reader) reads the orbit file (or the list of them)
-   into one cleaned table, taking `MJDREF` from `MJDREFI`+`MJDREFF` in extended
-   precision.
-2. [`pintengine.TableSatelliteObs`](#the-pint-engine) registers that table with PINT as
-   a moving observatory. PINT fits cubic splines through the position columns; the
-   correction is only valid where those splines are.
-3. A **grid of TOAs is laid down every 5 seconds** across the span, one
-   `pint.toa.TOA` object per grid point. With `met_range` the grid is clipped to the
-   events plus one step of margin.
-4. `model.get_barycentric_toas(ts)` computes, for each grid point, the barycentric
-   arrival time. Internally that is `tdbld - delay`, where PINT's delay chain contains
-   the geometric (Roemer) delay, the solar-system Shapiro delay, and whatever else the
-   timing model happens to have switched on.
-5. The difference (barycentric MJD − spacecraft MJD), converted to seconds, is wrapped
-   in a `scipy.interpolate.Akima1DInterpolator` against MET, with extrapolation
-   enabled. That interpolator is the returned `bary_fun`.
+- **`--engine native`** (the default) builds a cubic Hermite spline through the
+  spacecraft positions and evaluates [the four terms](#the-native-engine) directly at
+  whatever times it is asked for. No grid, no interpolation of the correction itself.
+- **`--engine pint`** registers the table with PINT as a moving observatory via
+  [`pintengine.TableSatelliteObs`](#the-pint-engine), lays down a **grid of TOAs every
+  5 seconds**, and Akima-interpolates between them. PINT fits its own cubic splines
+  through the position columns, so the correction is only valid where those splines are.
+On the PINT path, `model.get_barycentric_toas(ts)` computes the barycentric arrival time
+for each grid point — internally `tdbld - delay`, where PINT's delay chain contains the
+geometric (Roemer) delay, the solar-system Shapiro delay, and whatever else the timing
+model happened to switch on — and the difference (barycentric MJD − spacecraft MJD) in
+seconds is wrapped in a `scipy.interpolate.Akima1DInterpolator` against MET.
 
-So the correction is *never* evaluated at the event times themselves; it is evaluated
-on a 5 s grid and interpolated. The Akima spline over a smooth 5 s-sampled function
-contributes well under a nanosecond, so this is not a precision problem — but the grid
-covers the whole orbit file rather than the events, which is a performance problem (see
-[Known issues](known_issues.md)).
+So with `--engine pint` the correction is *never* evaluated at the event times
+themselves. An Akima spline over a smooth 5 s-sampled function contributes well under a
+nanosecond, so that is not a precision problem — but the grid covers the whole orbit
+file rather than the events, which is a performance one (see
+[Known issues](known_issues.md)). The native engine has no grid, and takes an optional
+`dt` if one is ever wanted for speed.
 
 **Step 5 — build the clock correction function.** Only NuSTAR has one implemented. If
 no `-c/--clockfile` is given and the mission is NuSTAR, `get_latest_clock_file` scrapes
@@ -230,6 +232,24 @@ The remaining coupling is to PINT's internal attribute names (`FT2`, `X`…`Vz`,
 `_geocenter`, `_maxextrap`). That is narrower than a monkey patch, not absent: if PINT
 renames them this class breaks — but it breaks visibly, in one place, and only for the
 optional engine.
+
+## Choosing an engine
+
+`--engine native` is the default. `--engine pint` computes the same thing through PINT's
+pulsar timing model. Measured on the committed NuSTAR reference (937 events, DE440,
+ICRS, explicit coordinates, no clock correction):
+
+| engine | platform | mean | std | max abs |
+|---|---|---|---|---|
+| native | arm64 **and** x86 | **+22.0 ns** | 19.5 ns | **59.6 ns** |
+| pint | x86 (80-bit longdouble) | +117.2 ns | 19.6 ns | 149.0 ns |
+| pint | arm64 (no extended precision) | +129.7 ns | 256.0 ns | 774.9 ns |
+
+The native engine is the same to the last bit on both platforms, because every term it
+computes is a small number of seconds. The PINT engine's constant offset is the Shapiro
+convention and its arm64 spread is the `longdouble` MJD subtraction; both are explained
+below. Keep `--engine pint` for a second opinion, and for a `.par` file whose proper
+motion or parallax actually matters — the native engine uses only `RAJ`/`DECJ`.
 
 ## The native engine
 

@@ -11,18 +11,26 @@ import os
 import tempfile
 import warnings
 
+import astropy.units as u
 import numpy as np
 from astropy.time import Time
 
 from ._version import __version__
 from .clock import get_latest_clock_file, nustar_clock_correction_fun
+from .native import native_barycentric_correction
 from .official import apply_mission_specific_barycenter_correction
 from .orbit import read_orbit
-from .pintengine import pint_barycentric_correction
 from .remote import download_locally
 from .utils import fits_open_including_remote, slim_down_hdu_list
 
+#: The engines that can compute the correction. ``native`` is the default: it is exact
+#: in float64 on every platform, about 30 times faster, and matches HEASOFT ``barycorr``
+#: to the resolution the reference files can express. ``pint`` is kept as an independent
+#: second opinion and for timing models with proper motion.
+ENGINES = ("native", "pint")
+
 __all__ = [
+    "ENGINES",
     "apply_barycenter_correction",
     "correct_times",
     "extract_events_in_region",
@@ -74,61 +82,117 @@ def get_dummy_parfile_for_position(orbfile):
         Timing model with RAJ and DECJ defined.
     """
     from astropy.coordinates import Angle
-    from pint.models import StandardTimingModel
 
-    # Construct model by hand
+    from .pintengine import timing_model_for_position
+
     with fits_open_including_remote(orbfile, memmap=True) as hdul:
         ra_label, dec_label = get_coordinates_from_fits_header(hdul[1].header)
         ra = hdul[1].header[ra_label]
         dec = hdul[1].header[dec_label]
 
-    modelin = StandardTimingModel
     # Should check if 12:13:14.2 syntax is used and support that as well!
-    modelin.RAJ.quantity = Angle(ra, unit="deg")
-    modelin.DECJ.quantity = Angle(dec, unit="deg")
-    modelin.DM.quantity = 0
-    return modelin
+    return timing_model_for_position(Angle(ra, unit="deg").deg, Angle(dec, unit="deg").deg)
+
+
+def position_from_model(model, ephem=None):
+    """The coordinates and ephemeris a PINT timing model describes.
+
+    Returns
+    -------
+    ra_deg, dec_deg : float
+    ephem : str
+        The model's own ``EPHEM``, if it has one. A par file's ephemeris wins over the
+        command line, because the model was fitted with it -- and the output header is
+        then stamped with the one actually used, rather than with whatever ``--ephem``
+        said.
+    """
+    ra_deg = model.RAJ.quantity.to_value(u.deg)
+    dec_deg = model.DECJ.quantity.to_value(u.deg)
+    model_ephem = getattr(getattr(model, "EPHEM", None), "value", None)
+    return ra_deg, dec_deg, model_ephem or ephem
 
 
 def get_barycentric_correction(
     orbfile,
-    modelin,
-    dt=5,
+    ra=None,
+    dec=None,
+    ephem="DE440",
+    radecsys="ICRS",
+    model=None,
+    engine="native",
+    dt=None,
     met_range=None,
 ):
-    """Get a function to compute barycentric correction from MET TT to MET TDB.
+    """Get a function to compute the barycentric correction, from MET(TT) to MET(TDB).
 
     Parameters
     ----------
-    orbfile : str
-        Orbit file.
-    modelin : pint.models.TimingModel
-        Timing model with RAJ, DECJ and EPHEM defined.
+    orbfile : str or list of str
+        Orbit file, a list of them, or an ``"@metafile"``.
+
+    Other Parameters
+    ----------------
+    ra, dec : float, optional
+        Source coordinates in degrees. Required unless ``model`` is given.
+    ephem : str, optional
+        JPL ephemeris. Default ``"DE440"``.
+    radecsys : str, optional
+        Frame of the coordinates. The native engine rotates the source direction into
+        the frame the ephemeris itself uses, which matters by 45 us between FK5 (DE200)
+        and ICRS (DE405 and later). The PINT engine ignores this and assumes ICRS.
+    model : pint.models.TimingModel, optional
+        A model read from a ``.par`` file. Its coordinates and ephemeris take precedence
+        over ``ra``/``dec``/``ephem``.
+    engine : {"native", "pint"}, optional
+        Which implementation to use. See :data:`ENGINES`.
     dt : float, optional
-        Time step in seconds for the interpolation grid. Default is 5.
+        Grid spacing in seconds. ``None`` means each engine's own default: the native
+        engine evaluates the correction directly at the times asked for, the PINT engine
+        uses a 5 s grid.
     met_range : tuple of float, optional
-        ``(start, stop)`` in mission elapsed time, to keep the grid from spanning the
-        whole orbit file when only a short observation is being corrected.
+        ``(start, stop)`` in mission elapsed time, to keep a grid from spanning the whole
+        orbit file when only a short observation is being corrected.
 
     Returns
     -------
     bary_fun : callable
-        Function to compute barycentric correction.
+        ``bary_fun(met)`` gives the correction in seconds.
     """
+    if engine not in ENGINES:
+        raise ValueError(f"Unknown engine {engine!r}. Choose one of {ENGINES}.")
 
     # read_orbit takes a file name, a list of them or an "@metafile", reads the
     # mission's columns from the ORBIT_SPECS registry, and hands back one cleaned
-    # table. The native engine reads the same table, so the two engines cannot
-    # disagree about where the spacecraft was.
+    # table. Both engines read the same table, so they cannot disagree about where the
+    # spacecraft was.
     orbit_table = read_orbit(orbfile)
-    mjdref = orbit_table.meta["mjdref"]
 
     met = np.asarray(orbit_table["MET"].value, dtype=np.float64)
     if met_range is not None:
         met_range = (max(met.min(), met_range[0]), min(met.max(), met_range[1]))
 
+    if model is not None:
+        ra, dec, ephem = position_from_model(model, ephem)
+
+    if engine == "native":
+        if ra is None or dec is None:
+            raise ValueError("The native engine needs ra and dec, or a timing model")
+        return native_barycentric_correction(
+            orbit_table,
+            ra,
+            dec,
+            ephem=ephem,
+            frame=radecsys,
+            dt=dt,
+            met_range=met_range,
+        )
+
+    from .pintengine import pint_barycentric_correction, timing_model_for_position
+
+    if model is None:
+        model = timing_model_for_position(ra, dec, ephem)
     return pint_barycentric_correction(
-        orbit_table, modelin, mjdref=mjdref, dt=dt, met_range=met_range
+        orbit_table, model, dt=5.0 if dt is None else dt, met_range=met_range
     )
 
 
@@ -235,6 +299,7 @@ def apply_barycenter_correction(
     overwrite=False,
     only_columns=None,
     apply_official=False,
+    engine="native",
 ):
     """Apply barycenter correction to a FITS event file.
 
@@ -265,9 +330,9 @@ def apply_barycenter_correction(
         If True, will overwrite existing output file. Default is False.
     only_columns : list of str, optional
         List of column names to keep in the output file, in addition to the "TIME" column.
+    engine : {"native", "pint"}, optional
+        Which implementation computes the correction. See :data:`ENGINES`.
     """
-    import astropy.units as u
-
     cloud = "SCISERVER_USER_ID" in os.environ or "/home/jovyan" in os.environ.get("HOME", "")
 
     if apply_official or not cloud:
@@ -297,26 +362,30 @@ def apply_barycenter_correction(
 
     version = __version__
     with fits_open_including_remote(fname, memmap=True) as hdul:
+        # A par file is the only thing that needs PINT on this path: it is the one
+        # source of coordinates we do not parse ourselves.
+        model = None
         if parfile is not None and os.path.exists(parfile):
             from pint.models import get_model
 
-            modelin = get_model(parfile)
-        else:
-            from pint.models import StandardTimingModel
+            model = get_model(parfile)
+            ra, dec, ephem = position_from_model(model, ephem)
+            logger.info(f"Using coordinates from {parfile}: RA={ra}, Dec={dec}, ephem={ephem}")
+        elif ra is None or dec is None:
+            ra_str, dec_str = get_coordinates_from_fits_header(hdul[1].header)
+            ra = hdul[1].header[ra_str]
+            dec = hdul[1].header[dec_str]
+            logger.info(f"Using coordinates from header: {ra_str}={ra}, {dec_str}={dec}")
 
-            if ra is None or dec is None:
-                ra_str, dec_str = get_coordinates_from_fits_header(hdul[1].header)
-                ra = hdul[1].header[ra_str]
-                dec = hdul[1].header[dec_str]
-                logger.info(f"Using coordinates from header: {ra_str}={ra}, {dec_str}={dec}")
-
-            modelin = StandardTimingModel
-            modelin.RAJ.quantity = ra * u.deg
-            modelin.DECJ.quantity = dec * u.deg
-            modelin.DM.quantity = 0.0
-            modelin.EPHEM.value = ephem
-
-        bary_fun = get_barycentric_correction(orbfile, modelin)
+        bary_fun = get_barycentric_correction(
+            orbfile,
+            ra=ra,
+            dec=dec,
+            ephem=ephem,
+            radecsys=radecsys,
+            model=model if engine == "pint" else None,
+            engine=engine,
+        )
 
         timezero = hdul[1].header.get("TIMEZERO", 0.0)
         timepixr = hdul[1].header.get("TIMEPIXR", 0.5)
@@ -371,14 +440,8 @@ def apply_barycenter_correction(
                         hdu.header[keyname] = corrected_time
 
             hdu.header["CREATOR"] = f"Barycenter - v. {version}"
-            hdu.header["RA_OBJ"] = (
-                modelin.RAJ.quantity.deg,
-                "Coordinate used for barycentering",
-            )
-            hdu.header["DEC_OBJ"] = (
-                modelin.DECJ.quantity.deg,
-                "Coordinate used for barycentering",
-            )
+            hdu.header["RA_OBJ"] = (ra, "Coordinate used for barycentering")
+            hdu.header["DEC_OBJ"] = (dec, "Coordinate used for barycentering")
             hdu.header["EQUINOX"] = (
                 hdul[1].header.get("EQUINOX", 2000.0),
                 "Equinox of the coordinates",
@@ -392,16 +455,14 @@ def apply_barycenter_correction(
             hdu.header["TREFDIR"] = "RA_OBJ,DEC_OBJ"
             hdu.header["TREFPOS"] = "BARYCENTER"
             hdu.header["CLOCKAPP"] = True if clock_fun is not None else False
-            hdu.header.add_history(f"TOOL: barycenter v{version} applied")
+            hdu.header.add_history(f"TOOL: barycenter v{version} applied, {engine} engine")
             hdu.header.add_history(f"Orbit file: {orbfile}")
             if clockfile is not None:
                 hdu.header.add_history(f"Clock file: {clockfile}")
             if parfile is not None and os.path.exists(parfile):
                 hdu.header.add_history(f"Par file: {parfile}")
             else:
-                hdu.header.add_history(
-                    f"Position used: RA={modelin.RAJ.quantity.deg}, DEC={modelin.DECJ.quantity.deg}"
-                )
+                hdu.header.add_history(f"Position used: RA={ra}, DEC={dec}")
             hdu.header.add_history(f"Ephemeris: JPL-{ephem}")
             hdu.header.add_history(f"Coordinate system: {radecsys}")
 
