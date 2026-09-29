@@ -22,6 +22,21 @@ class TestExecution(object):
         self.clkfile = os.path.join(datadir, "dummy_clk.fits")
         self.bary_evfile = os.path.join(datadir, "dummy_evt_bary.evt")
 
+    def test_several_orbit_files(self, tmp_path):
+        """Passing a list of orbit files works, and repeated entries are dropped.
+
+        The same file given twice must give exactly the answer it gives once:
+        this exercises the multi-file branch of load_orbit and its
+        de-duplication, which the spline interpolation depends on.
+        """
+        one = str(tmp_path / "one.evt")
+        two = str(tmp_path / "two.evt")
+        main_barycenter([self.evfile, self.orbfile, "-o", one])
+        main_barycenter([self.evfile, self.orbfile, self.orbfile, "-o", two])
+
+        with fits.open(one) as h1, fits.open(two) as h2:
+            assert np.array_equal(h1[1].data["TIME"], h2[1].data["TIME"])
+
     def test_barycorr_overwrite(self):
         outfile = main_barycenter([self.evfile, self.orbfile])
 
