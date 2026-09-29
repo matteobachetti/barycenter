@@ -6,6 +6,7 @@ from astropy.coordinates import SkyCoord
 from astropy.io import fits
 
 from barycenter import main_barycenter
+from barycenter.core import get_coordinates_from_fits_header
 
 curdir = os.path.abspath(os.path.dirname(__file__))
 datadir = os.path.join(curdir, "data")
@@ -441,3 +442,42 @@ class TestRXTE:
             self.run(outfile, "-c", os.path.join(datadir, "dummy_fine_clk.fits"))
         with fits.open(outfile) as hdul, fits.open(self.bary_clk) as ref:
             assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])
+
+
+class TestCoordinateKeywords:
+    """The header keywords we take the source position from, and HEASOFT's different order."""
+
+    @staticmethod
+    def header(**keywords):
+        return fits.Header(keywords)
+
+    def test_the_target_position_wins_over_the_pointing(self):
+        """RA_OBJ is preferred even when the pointing keywords HEASOFT prefers are present."""
+        hdr = self.header(RA_OBJ=294.91067, DEC_OBJ=21.58308, RA_NOM=294.9107, DEC_NOM=21.58308)
+        assert get_coordinates_from_fits_header(hdr) == ("RA_OBJ", "DEC_OBJ")
+
+    @pytest.mark.parametrize(
+        "ra_key,dec_key", [("RA_NOM", "DEC_NOM"), ("RA_PNT", "DEC_PNT"), ("RA", "DEC")]
+    )
+    def test_falls_back_down_the_chain(self, ra_key, dec_key):
+        """With no RA_OBJ, each remaining pair in turn is used, down to plain RA/DEC."""
+        hdr = self.header(**{ra_key: 294.9107, dec_key: 21.58308})
+        assert get_coordinates_from_fits_header(hdr) == (ra_key, dec_key)
+
+    def test_says_so_when_heasoft_would_have_chosen_differently(self, caplog):
+        """A material disagreement with barycorr's choice is logged, quantified as a delay."""
+        hdr = self.header(RA_OBJ=294.91067, DEC_OBJ=21.58308, RA_NOM=294.9107, DEC_NOM=21.58308)
+        get_coordinates_from_fits_header(hdr)
+        assert "RA_NOM" in caplog.text
+        assert "us of Roemer delay" in caplog.text
+
+    def test_stays_quiet_when_the_keywords_agree(self, caplog):
+        """No warning when the target and pointing positions are the same to under a ns."""
+        hdr = self.header(RA_OBJ=294.9107, DEC_OBJ=21.58308, RA_NOM=294.9107, DEC_NOM=21.58308)
+        get_coordinates_from_fits_header(hdr)
+        assert caplog.text == ""
+
+    def test_a_header_with_no_position_says_what_it_looked_for(self):
+        """The error names every keyword pair tried, and points at --ra/--dec."""
+        with pytest.raises(ValueError, match=r"RA_OBJ/DEC_OBJ.*--ra"):
+            get_coordinates_from_fits_header(self.header(TELESCOP="NUSTAR"))

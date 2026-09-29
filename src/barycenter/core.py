@@ -29,7 +29,9 @@ from .utils import fits_open_including_remote, slim_down_hdu_list
 ENGINES = ("native", "pint")
 
 __all__ = [
+    "COORDINATE_KEYWORDS",
     "ENGINES",
+    "HEASOFT_COORDINATE_KEYWORDS",
     "apply_barycenter_correction",
     "correct_times",
     "extract_events_in_region",
@@ -39,10 +41,77 @@ __all__ = [
 ]
 
 
+#: Our order of preference for the source position, when it is not given explicitly.
+#: ``RA_OBJ`` is the position of the object the observation was aimed at, which is the
+#: thing a barycentric correction is actually about; the others describe where the
+#: spacecraft was pointing, which is the same thing only to within the pointing
+#: accuracy. This deliberately differs from HEASOFT -- see
+#: :data:`HEASOFT_COORDINATE_KEYWORDS`.
+COORDINATE_KEYWORDS = (
+    ("RA_OBJ", "DEC_OBJ"),
+    ("RA_NOM", "DEC_NOM"),
+    ("RA_PNT", "DEC_PNT"),
+    ("RA", "DEC"),
+)
+
+#: The order HEASOFT ``barycorr`` uses, read off its own ``kwfallback`` call (barycorr
+#: 2.19, line 278). We do not follow it, but we keep it here so that
+#: :func:`get_coordinates_from_fits_header` can say when the two would disagree, and by
+#: how much: the two keywords routinely differ by a fraction of an arcsecond, and
+#: 0.1 arcsec is 172 us of light travel time.
+HEASOFT_COORDINATE_KEYWORDS = (
+    ("RA_NOM", "DEC_NOM"),
+    ("RA_PNT", "DEC_PNT"),
+    ("RA_OBJ", "DEC_OBJ"),
+    ("RA", "DEC"),
+)
+
+#: The largest Roemer delay any position error can produce: the Earth's orbit is about
+#: 500 light seconds in radius, so an angular error of ``theta`` radians is worth at
+#: most ``500 * theta`` seconds of delay.
+_MAX_ROEMER_DELAY_S = 499.0
+
+
+def _first_keyword_pair_present(hdr, chain):
+    """The first (ra, dec) keyword pair in ``chain`` that the header actually has."""
+    for ra_key, dec_key in chain:
+        if ra_key in hdr and dec_key in hdr:
+            return ra_key, dec_key
+    return None
+
+
+def _log_if_heasoft_would_disagree(hdr, chosen, heasoft):
+    """Warn when HEASOFT would have used other keywords, quantified as a time delay."""
+    from astropy.coordinates import angular_separation
+
+    ours = [np.deg2rad(float(hdr[key])) for key in chosen]
+    theirs = [np.deg2rad(float(hdr[key])) for key in heasoft]
+    separation = angular_separation(ours[0], ours[1], theirs[0], theirs[1])
+    delay = _MAX_ROEMER_DELAY_S * separation
+    if delay < 1e-9:
+        return
+    logger.warning(
+        f"Using {chosen[0]}/{chosen[1]} for the source position; HEASOFT barycorr would "
+        f"have used {heasoft[0]}/{heasoft[1]}. They differ by "
+        f"{np.rad2deg(separation) * 3600:.3f} arcsec, i.e. up to {delay * 1e6:.1f} us of "
+        "Roemer delay. Pass --ra and --dec explicitly when the answer must match another "
+        "tool."
+    )
+
+
 def get_coordinates_from_fits_header(hdr):
     """Get RA/Dec coordinate keywords from FITS header.
 
-    In order of priority, looks for RA_OBJ/DEC_OBJ, RA_NOM/DEC_NOM, RA_PNT/DEC_PNT.
+    The order of preference is :data:`COORDINATE_KEYWORDS`: ``RA_OBJ``/``DEC_OBJ``, then
+    ``RA_NOM``/``DEC_NOM``, then ``RA_PNT``/``DEC_PNT``, then plain ``RA``/``DEC``.
+
+    That is **not** HEASOFT's order, which is :data:`HEASOFT_COORDINATE_KEYWORDS` and
+    starts from ``RA_NOM``. Preferring ``RA_OBJ`` is deliberate: it is the position of
+    the target, while ``RA_NOM`` is where the spacecraft was aimed, and it is the target
+    position that the arrival times should be referred to. When the two disagree by
+    enough to matter this logs a warning saying so, because that is precisely when a
+    comparison against an official tool will not match unless ``--ra``/``--dec`` are
+    given explicitly.
 
     Parameters
     ----------
@@ -56,15 +125,19 @@ def get_coordinates_from_fits_header(hdr):
     dec_key : str
         Keyword name for Declination.
     """
+    chosen = _first_keyword_pair_present(hdr, COORDINATE_KEYWORDS)
+    if chosen is None:
+        looked_for = ", ".join(f"{ra}/{dec}" for ra, dec in COORDINATE_KEYWORDS)
+        raise ValueError(
+            f"No coordinates found in header. Looked for {looked_for}. Pass --ra and "
+            "--dec, or a .par file, instead."
+        )
 
-    if "RA_OBJ" in hdr:
-        return "RA_OBJ", "DEC_OBJ"
-    elif "RA_NOM" in hdr:
-        return "RA_NOM", "DEC_NOM"
-    elif "RA_PNT" in hdr:
-        return "RA_PNT", "DEC_PNT"
-    else:
-        raise ValueError("No coordinates found in header")
+    heasoft = _first_keyword_pair_present(hdr, HEASOFT_COORDINATE_KEYWORDS)
+    if heasoft is not None and heasoft != chosen:
+        _log_if_heasoft_would_disagree(hdr, chosen, heasoft)
+
+    return chosen
 
 
 def get_dummy_parfile_for_position(orbfile):
