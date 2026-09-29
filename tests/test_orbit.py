@@ -17,6 +17,7 @@ curdir = os.path.abspath(os.path.dirname(__file__))
 datadir = os.path.join(curdir, "data")
 
 NUSTAR_ORBIT = os.path.join(datadir, "dummy_orb.fits.gz")
+XMM_ORBIT = os.path.join(datadir, "dummy_xmm_orb.fits.gz")
 
 
 def write_fporbit(path, met, pos, vel=None, telescope="NICER", extname="ORBIT"):
@@ -75,6 +76,23 @@ class TestRealFile:
         table = read_orbit(NUSTAR_ORBIT)
         assert "nustar" in str(table.meta["telescope"]).lower()
         assert 55196 < table.meta["mjdref"] < 55198
+
+    def test_xmm_takes_the_equatorial_triple_and_not_the_ecliptic_one(self):
+        """XMM's orbit file offers two position triples; only GEI is the right one.
+
+        ``GEI_X/Y/Z`` is geocentric equatorial, which is the frame the ephemeris and the
+        source direction are in. ``GSE_X/Y/Z`` is the same vector rotated into the
+        Earth-Sun frame, so it has the same length and looks equally plausible -- and
+        using it is a 160 ms error. Checking the components, not the magnitude, is the
+        only way to tell the two apart.
+        """
+        table = read_orbit(XMM_ORBIT)
+        with fits.open(XMM_ORBIT) as hdul:
+            gei = np.column_stack([hdul["ORBIT"].data[f"GEI_{c}"] for c in "XYZ"])
+            gse = np.column_stack([hdul["ORBIT"].data[f"GSE_{c}"] for c in "XYZ"])
+        ours = np.column_stack([table[c].value for c in "XYZ"])
+        assert np.allclose(ours, gei * 1000.0, rtol=0, atol=1e-6)
+        assert not np.allclose(ours, gse * 1000.0, rtol=0, atol=1.0)
 
 
 class TestCleaning:

@@ -265,8 +265,8 @@ MISSIONS["nustar"] = Mission(
 3. Add the 100 ns test.
 
 Step 1 is usually five lines. Steps 2 and 3 are the work, and they are the reason a
-mission is not listed until there is a file to check it against: `swift`, `chandra` and
-`xmm` have entries with `orbit=None`, which is the registry saying "known about, not yet
+mission is not listed until there is a file to check it against: `swift` and `chandra`
+have entries with `orbit=None`, which is the registry saying "known about, not yet
 validated" rather than pretending.
 
 `Mission` is a frozen dataclass, so a misspelt field is a `TypeError` at import rather
@@ -288,6 +288,7 @@ mission's [registry entry](#the-mission-registry):
 | SVOM | 1 | `POSITION` | `VELOCITY` | m |
 | NICER, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | RXTE | `XTE_PE` (or `ORBIT`) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
+| XMM-Newton | `ORBIT` | scalar `GEI_X`,`GEI_Y`,`GEI_Z` | scalar `VX`,`VY`,`VZ` | **km** |
 
 The units are declared in the spec, not read from `TUNITn`, because orbit files are
 unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
@@ -516,6 +517,41 @@ Measured on 404 events, native engine:
 The two agreeing to 0.6 ns is the point: the clock correction is reproduced well enough
 to leave the solar-system residual untouched.
 
+### XMM-Newton
+
+`tests/data/dummy_xmm_bary_DE430.evt.gz` is an SAS 22.1 `barycen` reference, made with
+DE430 and explicit coordinates on 401 EPIC-pn events spanning 7.6 h of observation
+0112290201. Measured with the native engine:
+
+| quantity | mean | std | max abs |
+|---|---|---|---|
+| `TIME` column | **−42.3 ns** | 6.9 ns | 59.6 ns (4 ulp) |
+| GTI `START`/`STOP` | −40 ns | — | 44.7 ns (3 ulp) |
+| `TSTART`, `TSTOP` keywords | — | — | 373 ns, −179 ns |
+
+The residual on the events is a **constant**: it sits on −3 units in the last place of the
+reference's float64 times (14.9 ns each at XMM's 1.06e8 s), with no drift, no annual term
+and no correlation with the spacecraft's geocentric distance. The 6.9 ns "scatter" is
+entirely that quantisation. So the disagreement with `barycen` is an offset of about
+−40 ns, which is below the 100 ns target and, being constant, affects no measured period
+or pulse phase at all.
+
+The two keywords are a different matter, and not our doing: SAS writes a floating-point
+keyword with **15 significant digits**, which at 1.06e8 s leaves six decimals, so the
+reference's `TSTART` is quantised at 1 µs — a hundred times coarser than the binary `TIME`
+column beside it. Both keywords come out inside half a step, which is as close as the file
+can record.
+
+Ephemeris sensitivity on this dataset, which is also how DE430 was confirmed as the
+reference's own choice (`barycen`'s default is DE200, so it has to be asked for):
+
+| against the DE430 reference | offset |
+|---|---|
+| DE430 | −42 ns |
+| DE405 | +1.7 µs |
+| DE440 | +95 µs |
+| DE200 | +1.8 ms |
+
 (the-coordinate-keyword-order)=
 ### The coordinate keyword order is deliberately not HEASOFT's
 
@@ -570,10 +606,10 @@ When a comparison disagrees, check these before looking for a bug:
 | IXPE | `FPorbit`-style | none needed | works |
 | Fermi | FT2 | none needed | works |
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
+| XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Swift | `sw*sao.fits` — spec not written, no test file | none needed | `--apply-official` only |
 | ASCA | — | — | `--apply-official` only, DE200 only |
 | Chandra | `primary/orbitf*_eph1.fits` — spec not written | none needed | `--apply-official` only, DE405 only |
-| XMM-Newton | PPS `*ORBTSR*.FTZ` — spec not written | none needed | not supported |
 
 ## Test data
 
@@ -593,8 +629,45 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_xte_orb.fits.gz` | 78 rows of the matching `FPorbit_Day6223`, the observation plus 600 s either side |
 | `dummy_xte_bary_DE440_noclk.evt.gz` | the `barycorr` reference for those events, `clockfile=NONE` |
 | `dummy_xte_bary_DE440_clk.evt.gz` | the same with `tdc.dat` applied, which barycorr does whatever `clockfile` says |
+| `dummy_xmm_evt.evt` | 401 EPIC-pn events, every 839th row of observation 0112290201, so the sample spans the whole 7.6 h, plus one `STDGTI` extension |
+| `dummy_xmm_orb.fits.gz` | 2832 rows of the matching PPS `ORBTSR` file, every 10th second over the events plus 600 s, with **all ten** columns kept |
+| `dummy_xmm_bary_DE430.evt.gz` | the SAS 22.1 `barycen` reference for those events, DE430, GTIs corrected too |
+
+The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
+triples of identical length — `GEI_*` is geocentric equatorial and is the one the
+ephemeris is referred to, `GSE_*` is the same vector rotated into the Earth-Sun frame —
+and reading the wrong one is a 160 ms error that nothing in the units or the column
+comments would give away. A committed file that still offers the wrong choice is a
+sharper test than a hand-built one.
 
 `tools/make_test_data.py` regenerates all of them, including the trimming, and it now
 allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and
 abort with `ERROR: Device not configured` without one, and the old `script -q /dev/null`
 wrapper only worked when it already had a terminal to start from.
+
+### Driving SAS `barycen` for the XMM reference
+
+`barycen` is harder to drive than `barycorr`, and the reasons are worth writing down:
+
+* **It has no output parameter.** It edits the table it is given, irreversibly — its own
+  documentation says so. `run_barycen` therefore copies the input into a private temporary
+  directory, runs there, and moves the result out. Neither the committed input nor the
+  source observation is ever written to.
+* **It will not take an orbit file on the command line.** The spacecraft position comes
+  through SAS's observation access layer, which means an *ingested* ODF. An ingested ODF's
+  summary (`*SUM.SAS`) records **absolute** paths, so a summary made elsewhere fails with
+  `OrbitFileOpenError` naming a directory that no longer exists. A copy of the ODF is
+  re-ingested inside the working directory; that is the only reason `odfingest` appears in
+  the script. The orbit it then reads is the ODF's `ROS.ASC`, *not* the PPS `ORBTSR` file
+  we read — so the XMM test quietly checks that those two describe the same orbit.
+* **No CCF is needed.** Checked by running with `SAS_CCF` and `SAS_CCFPATH` unset and
+  comparing the output bit for bit. `setsas.sh` prints a reminder to set them anyway.
+* **`setsas.sh` needs HEASOFT initialised first**, exports nothing unless `SAS_DIR` is
+  already set, clears the positional parameters of the script that sourced it, and tries to
+  raise the stack limit — which fails harmlessly in a sandbox. So it must not be sourced
+  under `set -e`, and anything the caller passed has to be saved before sourcing it.
+* Unlike HEASOFT, SAS tasks need **no controlling terminal**.
+
+Regenerating the reference also needs the observation itself, which is not committed:
+`XMM_OBS` in the script names where it lives on the machine that made it, in the same way
+`RXTE_EVENTS` points at PINT's test data and `CALDB_CLOCK` at a local CALDB.

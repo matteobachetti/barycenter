@@ -22,8 +22,10 @@ Notes for whoever runs it
   each other's parameter files.
 """
 
+import glob
 import os
 import pty
+import re
 import shlex
 import shutil
 import subprocess
@@ -46,6 +48,37 @@ RXTE_ORBIT = os.path.expanduser("~/devel/pint/tests/datafile/FPorbit_Day6223")
 CALDB_CLOCK = os.path.expanduser(
     "~/devel/CALDB/data/nustar/fpm/bcf/clock/nuCclock20100101v230.fits.gz"
 )
+
+#: The XMM-Newton dataset the ``barycen`` reference is made with: the EPIC-pn event list of
+#: observation 0112290201 (M82, revolution 258), the PPS orbit file beside it, and the ODF
+#: that ``barycen`` reads the spacecraft position from.  Nothing under this directory is
+#: ever written to: ``barycen`` edits the table it is given *in place*, so every run here
+#: works on copies in a private temporary directory.
+XMM_OBS = os.path.expanduser("~/tmp/m82_xmm/0112290201")
+XMM_EVENTS = os.path.join(XMM_OBS, "event_cl", "xmm0112290201_pn_S003_imaging_cl.evt")
+XMM_ORBIT = os.path.join(XMM_OBS, "PPS", "P0112290201OBX000ORBTSR0000.FTZ")
+XMM_ODF = os.path.join(XMM_OBS, "event_cl", "odf")
+
+#: Where SAS lives.  Globbed rather than pinned, so a SAS update does not silently stop
+#: the XMM reference from being regenerable.
+SAS_DIRS = sorted(glob.glob(os.path.expanduser("~/devel/SAS/xmmsas_*")))
+
+#: How the XMM reference is made.  ``srcra``/``srcdec`` are the position of M82 X-2, which
+#: matches none of the file's own RA_/DEC_ keywords on purpose: a bug where the code reads
+#: a header keyword instead of the coordinates it was handed would then show up as a
+#: 100 us disagreement rather than as nothing at all.  ``DE430`` is not the task default
+#: (DE200 is) and has to be asked for: DE405 would be 1.7 us out and DE200 1.8 ms out.
+XMM_REFERENCE = {
+    "outfile": "dummy_xmm_bary_DE430.evt.gz",
+    "infile": "dummy_xmm_evt.evt",
+    "args": {
+        "withsrccoordinates": "yes",
+        "srcra": "148.96267",
+        "srcdec": "69.67931",
+        "processgtis": "yes",
+        "ephemeris": "DE430",
+    },
+}
 
 #: One entry per reference file.  ``args`` are passed to ``barycorr`` verbatim.
 REFERENCES = {
@@ -190,6 +223,158 @@ def trim_rxte_inputs(nevents=400, margin=600.0):
     return evt_out, orb_out + ".gz"
 
 
+#: Keywords a freshly built table defines for itself, plus everything indexed by a column
+#: number.  Carrying those over from a table with different columns leaves TFIELDS
+#: disagreeing with the number of columns, which SAS refuses to open.
+_STRUCTURAL = re.compile(r"^(XTENSION|BITPIX|NAXIS\d*|PCOUNT|GCOUNT|TFIELDS|END)$|^T[A-Z]+\d+$")
+
+
+def subset_table(hdu, rows, columns=None):
+    """A copy of one table HDU with a subset of its rows and, optionally, its columns.
+
+    ``fits.BinTableHDU(data=..., header=hdu.header)`` is enough when every column is kept,
+    but dropping one leaves the old ``TTYPEn``/``TFORMn`` cards behind.  So the columns are
+    rebuilt and only the non-structural keywords are carried over.
+    """
+    from astropy.io import fits
+
+    names = list(hdu.data.names) if columns is None else list(columns)
+    trimmed = fits.BinTableHDU.from_columns(
+        [
+            fits.Column(
+                name=name,
+                format=hdu.columns[name].format,
+                unit=hdu.columns[name].unit,
+                array=hdu.data[name][rows],
+            )
+            for name in names
+        ],
+        name=hdu.name,
+    )
+    for card in hdu.header.cards:
+        if card.keyword and card.keyword not in ("COMMENT", "HISTORY"):
+            if not _STRUCTURAL.match(card.keyword):
+                trimmed.header[card.keyword] = (card.value, card.comment)
+    for entry in hdu.header.get("HISTORY", []):
+        trimmed.header.add_history(entry)
+    return trimmed
+
+
+def trim_xmm_inputs(nevents=400, orbit_step=10, margin=600.0):
+    """Cut the XMM event and orbit files down to something committable.
+
+    The event list keeps ``TIME`` and ``PI`` only, decimated so that the sample still spans
+    the whole 7.6 h exposure, plus one ``STDGTI`` extension -- which is what makes the
+    reference able to check the GTIs as well as the events.
+
+    The orbit file keeps **all ten** of its columns.  The two position triples are the
+    point: ``GEI_X/Y/Z`` is geocentric equatorial and is the one to use, ``GSE_X/Y/Z`` is
+    geocentric solar-ecliptic, and reading the wrong triple is a 160 ms error, so a
+    committed file that still offers both is a sharper test than a hand-built one.  Rows
+    are kept every ``orbit_step`` seconds rather than at the file's own 1 s sampling:
+    measured against the full-rate file, 10 s costs 0.8 ns and saves 1.8 MB.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(DATA, "dummy_xmm_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_xmm_orb.fits")
+
+    with fits.open(XMM_EVENTS) as hdul:
+        events = hdul["EVENTS"]
+        nrows = len(events.data)
+        step = max(1, nrows // nevents)
+        rows = slice(None, None, step)
+        trimmed = subset_table(events, rows, columns=("TIME", "PI"))
+        trimmed.header.add_history(
+            f"Every {step}th row of {os.path.basename(XMM_EVENTS)}, by tools/make_test_data.py"
+        )
+        # Materialised, not a view: it is used after the file is closed.
+        times = np.array(events.data["TIME"][rows])
+        fits.HDUList([hdul[0].copy(), trimmed, hdul["STDGTI01"].copy()]).writeto(
+            evt_out, overwrite=True
+        )
+    print(f"    wrote {evt_out} ({len(times)} of {nrows} rows)")
+
+    with fits.open(XMM_ORBIT) as hdul:
+        orbit = hdul["ORBIT"]
+        t = orbit.data["TIME"]
+        window = np.flatnonzero((t > times.min() - margin) & (t < times.max() + margin))
+        keep = window[::orbit_step]
+        trimmed = subset_table(orbit, keep)
+        trimmed.header["TSTART"] = float(t[keep].min())
+        trimmed.header["TSTOP"] = float(t[keep].max())
+        trimmed.header.add_history(
+            f"Every {orbit_step}th row of {os.path.basename(XMM_ORBIT)} over the span of "
+            f"{os.path.basename(evt_out)}, by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), trimmed]).writeto(orb_out, overwrite=True)
+    print(f"    wrote {orb_out} ({len(keep)} of {len(t)} rows)")
+    subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
+    return evt_out, orb_out + ".gz"
+
+
+def run_barycen(infile, outfile, args):
+    """Run SAS ``barycen`` on a copy of ``infile``, writing an uncompressed ``outfile``.
+
+    Two things make this more involved than ``barycorr``:
+
+    * ``barycen`` has no output parameter -- it edits the table it is given, irreversibly.
+      So the input is copied into a private working directory and the result moved out, and
+      neither the committed input nor the observation directory is ever written to.
+    * It will not take an orbit file on the command line.  It reaches the spacecraft
+      position through SAS's observation access layer, which means an *ingested* ODF, and
+      an ingested ODF's summary records absolute paths -- so a copy of the ODF is
+      re-ingested inside the working directory.  That is the only reason ``odfingest``
+      appears here.  No CCF is needed: checked by running with ``SAS_CCF`` and
+      ``SAS_CCFPATH`` unset and comparing the output bit for bit.
+    """
+    if not SAS_DIRS:
+        raise RuntimeError("No SAS installation found under ~/devel/SAS/xmmsas_*")
+    workdir = tempfile.mkdtemp(prefix="barycen_")
+    try:
+        local_in = os.path.join(workdir, os.path.basename(outfile))
+        shutil.copy(infile, local_in)
+        odf = os.path.join(workdir, "odf")
+        shutil.copytree(XMM_ODF, odf)
+        # The summary is what carries the stale absolute paths; odfingest rewrites it.
+        for stale in glob.glob(os.path.join(odf, "*SUM.SAS")):
+            os.remove(stale)
+
+        table = f"{os.path.basename(local_in)}:EVENTS"
+        cmd = ["barycen", "withtable=yes", f"table={table}", "timecolumn=TIME"]
+        cmd += [f"{k}={v}" for k, v in args.items()]
+        run_sas(cmd, workdir, odf)
+        shutil.move(local_in, outfile)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def run_sas(cmd, cwd, odf):
+    """Run a SAS task, after ingesting the ODF in ``odf`` so it can be found.
+
+    ``setsas.sh`` needs HEASOFT initialised before it, refuses to run unless ``SAS_DIR``
+    is exported, and tries to raise the stack limit -- which fails harmlessly in a
+    sandbox, so the script must not be run under ``set -e``.
+    """
+    script = (
+        f'export HEADAS={shlex.quote(HEADAS)}; . "$HEADAS/headas-init.sh"; '
+        f'export SAS_DIR={shlex.quote(SAS_DIRS[-1])}; . "$SAS_DIR/setsas.sh"; '
+        f"export SAS_ODF={shlex.quote(odf)}; "
+        f"odfingest withodfdir=no outdir={shlex.quote(odf)} "
+        "usecanonicalname=yes writepath=yes -w 1 -V 2 && "
+        f'export SAS_ODF="$(ls {shlex.quote(odf)}/*SUM.SAS)" && '
+        + " ".join(shlex.quote(part) for part in cmd)
+    )
+    result = subprocess.run(
+        ["bash", "-c", script], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    )
+    output = result.stdout.decode(errors="replace")
+    if result.returncode != 0 or "error (" in output:
+        raise RuntimeError(f"{cmd[0]} failed:\n{output}")
+    print("\n".join(line for line in output.splitlines() if ":- " in line or "warning" in line))
+
+
 def run_barycorr(infile, orbitfiles, outfile, args, extra_inputs=()):
     """Run HEASOFT barycorr on ``infile``, writing an uncompressed ``outfile``."""
     workdir = tempfile.mkdtemp(prefix="barycorr_")
@@ -273,6 +458,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_xte_evt.evt")):
         print("--- dummy_xte_evt.evt, dummy_xte_orb.fits.gz")
         trim_rxte_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_xmm_evt.evt")):
+        print("--- dummy_xmm_evt.evt, dummy_xmm_orb.fits.gz")
+        trim_xmm_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target
@@ -287,6 +475,13 @@ def main():
         if target.endswith(".gz"):
             subprocess.run(["gzip", "-9", "-f", raw], check=True)
         print(f"    wrote {target}")
+
+    target = os.path.join(DATA, XMM_REFERENCE["outfile"])
+    raw = target[: -len(".gz")]
+    print(f"--- {XMM_REFERENCE['outfile']}")
+    run_barycen(os.path.join(DATA, XMM_REFERENCE["infile"]), raw, XMM_REFERENCE["args"])
+    subprocess.run(["gzip", "-9", "-f", raw], check=True)
+    print(f"    wrote {target}")
 
 
 if __name__ == "__main__":
