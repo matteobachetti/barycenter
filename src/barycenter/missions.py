@@ -1,0 +1,168 @@
+"""What the package knows about each mission, in one place.
+
+Everything mission-specific lives here: which ``TELESCOP`` values identify a mission, where
+its orbit file keeps position and velocity, whether it has a clock correction and what
+builds it, and which official tool can be shelled out to for it. Nothing else in the
+package branches on a mission name.
+
+Adding a mission is one :class:`Mission` entry. The fields are checked by the dataclass, so
+a misspelt one fails at import rather than silently doing nothing, and
+:func:`mission_for` raises with the list of known missions rather than guessing.
+
+Three columns of :data:`MISSIONS` deserve a word:
+
+``orbit``
+    ``None`` means there is no native orbit reader, either because the mission does not
+    distribute a spacecraft position in a format we read (ASCA) or because nobody has had
+    a file to test against (Swift, Chandra, XMM). Such a mission still works through
+    ``--apply-official``.
+``clock``
+    ``None`` means the mission needs no clock correction -- which for most of them is
+    because the correction is already applied in the pipeline that produced the event file.
+``official``
+    The tool ``--apply-official`` hands the file to, or ``None`` if there is none.
+"""
+
+from collections.abc import Callable
+from dataclasses import dataclass
+
+import astropy.units as u
+
+from .clock import nustar_clock_builder, rxte_clock_builder
+from .orbit import OrbitSpec
+
+__all__ = ["Mission", "MISSIONS", "mission_for"]
+
+
+#: The shape shared by NICER, RXTE and IXPE: three scalar position columns in metres.
+#: PINT calls this an FPorbit file, after the RXTE product it comes from.
+FPORBIT = OrbitSpec(
+    pos=("X", "Y", "Z"), vel=("Vx", "Vy", "Vz"), expected_extnames=("ORBIT", "XTE_PE")
+)
+
+
+@dataclass(frozen=True)
+class Mission:
+    """Everything the package knows about one mission.
+
+    Parameters
+    ----------
+    name : str
+        Canonical short name, matching the key in :data:`MISSIONS`.
+    telescop : tuple of str
+        Lower-case substrings of the ``TELESCOP`` keyword that identify this mission.
+        Substrings, because the keyword is written inconsistently: ``XTE`` and ``RXTE``,
+        ``NuSTAR`` and ``NUSTAR``, ``AXAF`` and ``CHANDRA``.
+    orbit : ~barycenter.orbit.OrbitSpec or None
+        How to read the orbit file. ``None`` if there is no native reader.
+    clock : callable or None
+        ``clock(clockfile, instrument)`` returning ``(correction_function, path)``.
+        ``None`` if the mission needs no clock correction.
+    official : str or None
+        The mission's own tool: ``"barycorr"``, ``"timeconv"``, or ``None``.
+    official_ephem : str or None
+        The only ephemeris that tool can use, if it is limited to one. ASCA's ``timeconv``
+        is fixed to DE200 and CIAO's ``axbary`` to DE405, which is the main reason to
+        prefer the native engine for those missions.
+    """
+
+    name: str
+    telescop: tuple
+    orbit: "OrbitSpec | None" = None
+    clock: "Callable | None" = None
+    official: "str | None" = None
+    official_ephem: "str | None" = None
+
+    @property
+    def has_native_support(self):
+        """Whether the pure-Python path can handle this mission."""
+        return self.orbit is not None
+
+
+#: One entry per mission. The key is the canonical name; ``telescop`` is what is matched
+#: against a file's header.
+MISSIONS = {
+    "nustar": Mission(
+        name="nustar",
+        telescop=("nustar",),
+        # The only mission that tabulates position in kilometres.
+        orbit=OrbitSpec(pos="POSITION", vel="VELOCITY", pos_unit=u.km, vel_unit=u.km / u.s),
+        clock=nustar_clock_builder,
+        official="barycorr",
+    ),
+    "nicer": Mission(
+        name="nicer",
+        telescop=("nicer",),
+        orbit=OrbitSpec(pos=("X", "Y", "Z"), vel=("Vx", "Vy", "Vz"), expected_extnames=("ORBIT",)),
+        official="barycorr",
+    ),
+    "rxte": Mission(
+        name="rxte",
+        telescop=("xte",),
+        orbit=FPORBIT,
+        clock=rxte_clock_builder,
+        official="barycorr",
+    ),
+    "ixpe": Mission(
+        name="ixpe",
+        telescop=("ixpe",),
+        orbit=OrbitSpec(pos=("X", "Y", "Z"), vel=("Vx", "Vy", "Vz"), expected_extnames=("ORBIT",)),
+    ),
+    "fermi": Mission(
+        name="fermi",
+        telescop=("fermi", "glast"),
+        orbit=OrbitSpec(
+            pos="SC_POSITION",
+            vel="SC_VELOCITY",
+            time_col="START",
+            expected_extnames=("SC_DATA",),
+        ),
+    ),
+    "svom": Mission(
+        name="svom",
+        telescop=("svom",),
+        orbit=OrbitSpec(pos="POSITION", vel="VELOCITY"),
+    ),
+    # No native orbit reader yet. Swift's position is in the `sw*sao.fits` attitude file,
+    # whose layout nobody here has a file to check; Chandra's is in
+    # `primary/orbitf*_eph1.fits`; XMM's is in the PPS `*ORBTSR*.FTZ`. All three are on the
+    # list, and each needs a reference dataset before it can be claimed.
+    "swift": Mission(name="swift", telescop=("swift",), official="barycorr"),
+    "chandra": Mission(
+        name="chandra",
+        telescop=("chandra", "axaf"),
+        official="barycorr",
+        official_ephem="DE405",
+    ),
+    "xmm": Mission(name="xmm", telescop=("xmm",)),
+    # ASCA is the odd one: barycorr refuses it, and the only tool is `timeconv`, which
+    # needs a downloaded earth.dat and frf.orbit file and can only do DE200.
+    "asca": Mission(name="asca", telescop=("asca",), official="timeconv", official_ephem="DE200"),
+}
+
+
+def mission_for(telescope):
+    """The :class:`Mission` matching a ``TELESCOP`` keyword value.
+
+    Parameters
+    ----------
+    telescope : str
+        The keyword as written in the file, in any case.
+
+    Returns
+    -------
+    Mission
+
+    Raises
+    ------
+    ValueError
+        If nothing matches, listing what is known.
+    """
+    name = str(telescope).lower()
+    for mission in MISSIONS.values():
+        if any(alias in name for alias in mission.telescop):
+            return mission
+    raise ValueError(
+        f"Unknown mission {telescope!r}. Known missions: {', '.join(sorted(MISSIONS))}. "
+        "Adding one is a single entry in barycenter.missions.MISSIONS."
+    )

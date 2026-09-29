@@ -225,7 +225,8 @@ It requires a working HEASOFT installation and is not exercised in CI.
 | `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
 | `native.py` | The engine: the correction from astropy + ERFA + a JPL ephemeris. |
 | `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
-| `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which decides which applies. |
+| `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which looks up which applies. |
+| `missions.py` | The `MISSIONS` registry: the only module that knows anything mission-specific. |
 | `official.py` | Shelling out to HEASOFT `barycorr` and `timeconv` under `--apply-official`. |
 | `remote.py` | `download_locally`: local paths, `https://` and `s3://`. |
 | `utils.py` | FITS I/O that also works on `http(s)://` and `s3://` URLs (`fits_open_including_remote`), column slimming (`slim_down_hdu_list`), HTML directory listing for the CALDB scrape, the `MJDREFI`+`MJDREFF` reader, and `splitext_improved`. |
@@ -235,20 +236,65 @@ the package needs to change: `main_barycenter` and the other public names are st
 importable from `barycenter` itself, and the `barycenter` command is unaffected. Code
 that imported from `barycenter.barycenter` has to be updated.
 
+(the-mission-registry)=
+## The mission registry
+
+Everything mission-specific lives in one dict in
+[`missions.py`](../src/barycenter/missions.py). Nothing else in the package branches on a
+mission name — `core.py` does not mention one, and `clock.py` and `official.py` only look
+entries up.
+
+```python
+MISSIONS["nustar"] = Mission(
+    name="nustar",
+    telescop=("nustar",),
+    orbit=OrbitSpec(pos="POSITION", vel="VELOCITY", pos_unit=u.km, vel_unit=u.km / u.s),
+    clock=nustar_clock_builder,
+    official="barycorr",
+)
+```
+
+| field | meaning |
+|---|---|
+| `name` | canonical short name; must match the dict key |
+| `telescop` | lower-case *substrings* of the `TELESCOP` keyword that identify the mission — substrings because the keyword is written `XTE` and `RXTE`, `NuSTAR` and `NUSTAR`, `AXAF` and `CHANDRA` |
+| `orbit` | an `OrbitSpec`, or `None` for no native reader |
+| `clock` | `clock(clockfile, instrument) -> (function, path)`, or `None` for a mission that needs no correction |
+| `official` | `"barycorr"`, `"timeconv"` or `None` — which branch of `official.py` `--apply-official` takes |
+| `official_ephem` | the only ephemeris that tool can manage, if it is stuck on one: DE200 for ASCA's `timeconv`, DE405 for CIAO's `axbary`. The native engine has no such limit, which is the main reason to prefer it for those two. |
+
+### Adding a mission
+
+1. Add the entry. If the orbit file's layout already matches an existing `OrbitSpec` —
+   three scalar `X`,`Y`,`Z` columns in metres covers NICER, RXTE and IXPE — reuse it.
+2. Generate a reference with the mission's own tool and commit it trimmed, following
+   `tools/make_test_data.py`.
+3. Add the 100 ns test.
+
+Step 1 is usually five lines. Steps 2 and 3 are the work, and they are the reason a
+mission is not listed until there is a file to check it against: `swift`, `chandra` and
+`xmm` have entries with `orbit=None`, which is the registry saying "known about, not yet
+validated" rather than pretending.
+
+`Mission` is a frozen dataclass, so a misspelt field is a `TypeError` at import rather
+than a silently ignored setting, and `mission_for` raises with the list of known missions
+rather than guessing.
+
 (the-orbit-reader)=
 ## The orbit reader
 
 Every mission tabulates the same three things — time, geocentric position, geocentric
 velocity — and differs only in the dialect. So [`orbit.py`](../src/barycenter/orbit.py)
-has one reader driven by a declarative `OrbitSpec`, and adding a mission is a single
-entry in `ORBIT_SPECS`:
+has one reader driven by a declarative `OrbitSpec`, which is the `orbit` field of a
+mission's [registry entry](#the-mission-registry):
 
 | Mission | Extension | Position column | Velocity column | Units in the file |
 |---|---|---|---|---|
 | Fermi | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
 | NuSTAR | 1 | `POSITION` | `VELOCITY` | **km** |
 | SVOM | 1 | `POSITION` | `VELOCITY` | m |
-| NICER, RXTE, IXPE | `ORBIT` (`XTE_PE` for RXTE) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
+| NICER, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
+| RXTE | `XTE_PE` (or `ORBIT`) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 
 The units are declared in the spec, not read from `TUNITn`, because orbit files are
 unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
@@ -500,12 +546,13 @@ When a comparison disagrees, check these before looking for a bug:
 | NuSTAR | `nu<obsid>A.attorb` | `nuCclock*.fits`, `NU_FINE_CLOCK` extension | validated to 100 ns |
 | NICER | `ni<obsid>.orb` | none needed | works |
 | RXTE | `orbit/FPorbit_*` | HEASOFT `tdc.dat`, bundled with the package | validated to 100 ns |
-| IXPE, Swift | `FPorbit`-style | none needed | works |
+| IXPE | `FPorbit`-style | none needed | works |
 | Fermi | FT2 | none needed | works |
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
-| ASCA | — | — | `--apply-official` only |
-| XMM-Newton | — | — | not supported |
-| Chandra | — | — | `--apply-official` only |
+| Swift | `sw*sao.fits` — spec not written, no test file | none needed | `--apply-official` only |
+| ASCA | — | — | `--apply-official` only, DE200 only |
+| Chandra | `primary/orbitf*_eph1.fits` — spec not written | none needed | `--apply-official` only, DE405 only |
+| XMM-Newton | PPS `*ORBTSR*.FTZ` — spec not written | none needed | not supported |
 
 ## Test data
 

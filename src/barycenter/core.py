@@ -161,7 +161,7 @@ def get_barycentric_correction(
         raise ValueError(f"Unknown engine {engine!r}. Choose one of {ENGINES}.")
 
     # read_orbit takes a file name, a list of them or an "@metafile", reads the
-    # mission's columns from the ORBIT_SPECS registry, and hands back one cleaned
+    # mission's columns from the MISSIONS registry, and hands back one cleaned
     # table. Both engines read the same table, so they cannot disagree about where the
     # spacecraft was.
     orbit_table = read_orbit(orbfile)

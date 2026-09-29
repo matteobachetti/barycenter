@@ -41,11 +41,13 @@ from .core import (
     correct_times,
     get_barycentric_correction,
 )
+from .missions import MISSIONS, Mission, mission_for
 from .native import barycentric_correction
-from .orbit import ORBIT_SPECS, OrbitSpec, read_orbit
+from .orbit import OrbitSpec, read_orbit
 
 __all__ = [
-    "ORBIT_SPECS",
+    "MISSIONS",
+    "Mission",
     "OrbitSpec",
     "__version__",
     "apply_barycenter_correction",
@@ -53,5 +55,6 @@ __all__ = [
     "correct_times",
     "get_barycentric_correction",
     "main_barycenter",
+    "mission_for",
     "read_orbit",
 ]
