@@ -156,16 +156,18 @@ class TestAgainstBarycorr:
         pint_toa = pytest.importorskip("pint.toa")
         import astropy.units as u
         from pint.models import StandardTimingModel
-        from pint.observatory.satellite_obs import get_satellite_observatory
 
-        import barycenter.monkeypatch  # noqa: F401
+        from barycenter.orbit import read_orbit
+        from barycenter.pintengine import TableSatelliteObs
 
         model = StandardTimingModel
         model.RAJ.quantity = REF_RA * u.deg
         model.DECJ.quantity = REF_DEC * u.deg
         model.DM.quantity = 0.0
         model.EPHEM.value = "DE440"
-        get_satellite_observatory("nustar", self.orbfile, overwrite=True)
+        # The same orbit table the native engine above was given, registered with PINT
+        # by our own SatelliteObs subclass: no patching of PINT's internals.
+        TableSatelliteObs("nustar", read_orbit(self.orbfile), overwrite=True)
 
         mjds = np.longdouble(self.met) / 86400 + MJDREF
         toas = [pint_toa.TOA(np.float64(m), obs="nustar", scale="tt") for m in mjds]

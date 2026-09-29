@@ -11,22 +11,24 @@ from collections.abc import Iterable
 from numba import vectorize
 
 from astropy.io import fits
-from pint.observatory.satellite_obs import get_satellite_observatory
 from pint.models import get_model, StandardTimingModel
 import astropy.units as u
-from stingray.io import high_precision_keyword_read
 from astropy.table import Table
 
 
 from scipy.interpolate import Akima1DInterpolator
 from pint.logging import log
-import pint.toa as toa
 
 from astropy.time import Time
 from astropy.coordinates import Angle
 import barycenter
-from .utils import fits_open_including_remote, slim_down_hdu_list, get_remote_directory_listing
-import barycenter.monkeypatch  # noqa: F401
+from .orbit import read_orbit
+from .pintengine import pint_barycentric_correction
+from .utils import (
+    fits_open_including_remote,
+    get_remote_directory_listing,
+    slim_down_hdu_list,
+)
 
 
 def get_latest_clock_file(mission):
@@ -94,6 +96,7 @@ def get_barycentric_correction(
     orbfile,
     modelin,
     dt=5,
+    met_range=None,
 ):
     """Get a function to compute barycentric correction from MET TT to MET TDB.
 
@@ -105,6 +108,9 @@ def get_barycentric_correction(
         Timing model with RAJ, DECJ and EPHEM defined.
     dt : float, optional
         Time step in seconds for the interpolation grid. Default is 5.
+    met_range : tuple of float, optional
+        ``(start, stop)`` in mission elapsed time, to keep the grid from spanning the
+        whole orbit file when only a short observation is being corrected.
 
     Returns
     -------
@@ -112,43 +118,19 @@ def get_barycentric_correction(
         Function to compute barycentric correction.
     """
 
-    # load_orbit (see monkeypatch.py) accepts a list of file names directly, so
-    # there is no need to write out a "@metafile" for it. Keywords are read from
-    # the first file: they describe the mission, which is the same for all of them.
-    orbit_files = orbfile
-    if not isinstance(orbfile, str) and isinstance(orbfile, Iterable):
-        orbit_files = list(orbfile)
-        orbfile = orbit_files[0]
+    # read_orbit takes a file name, a list of them or an "@metafile", reads the
+    # mission's columns from the ORBIT_SPECS registry, and hands back one cleaned
+    # table. The native engine reads the same table, so the two engines cannot
+    # disagree about where the spacecraft was.
+    orbit_table = read_orbit(orbfile)
+    mjdref = orbit_table.meta["mjdref"]
 
-    with fits_open_including_remote(orbfile) as hdul:
-        mjdref = high_precision_keyword_read(hdul[1].header, "MJDREF")
-        telescope = hdul[1].header["TELESCOP"].lower()
+    met = np.asarray(orbit_table["MET"].value, dtype=np.float64)
+    if met_range is not None:
+        met_range = (max(met.min(), met_range[0]), min(met.max(), met_range[1]))
 
-    no = get_satellite_observatory(telescope, orbit_files, overwrite=True)
-
-    knots = no.X.get_knots()
-    mjds = np.arange(knots[1], knots[-2], dt / 86400)
-    mets = (mjds - mjdref) * 86400
-    obs, scale = telescope.lower(), "tt"
-    toalist = [None] * len(mjds)
-
-    for i in range(len(mjds)):
-        # Create TOA list
-        toalist[i] = toa.TOA(mjds[i], obs=obs, scale=scale)
-
-    ts = toa.get_TOAs_list(
-        toalist,
-        ephem=modelin.EPHEM.value,
-        include_bipm=False,
-        planets="PLANET_SHAPIRO" in modelin.params and modelin.PLANET_SHAPIRO.value,
-        tdb_method="default",
-    )
-    bats = modelin.get_barycentric_toas(ts)
-
-    return Akima1DInterpolator(
-        mets,
-        (bats.value - mjds) * 86400,
-        extrapolate=True,
+    return pint_barycentric_correction(
+        orbit_table, modelin, mjdref=mjdref, dt=dt, met_range=met_range
     )
 
 

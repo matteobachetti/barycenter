@@ -49,7 +49,6 @@ dependencies = [
     "numpy",
     "pint-pulsar",
     "scipy",
-    "stingray >= 2.2.10",
 ]
 
 

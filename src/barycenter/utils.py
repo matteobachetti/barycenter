@@ -1,8 +1,14 @@
-from astropy.io import fits
 import logging as logger
 
+import numpy as np
+from astropy.io import fits
 
-__all__ = ["fits_open_including_remote", "fits_open_remote"]
+__all__ = [
+    "fits_open_including_remote",
+    "fits_open_remote",
+    "high_precision_keyword_read",
+    "high_precision_mjdref",
+]
 
 
 def fits_open_remote(filename, **kwargs):
@@ -165,3 +171,48 @@ def get_remote_directory_listing(url: str):
             urls.append(url_new)
 
     return urls
+
+
+def high_precision_keyword_read(header, keyword):
+    """Read a FITS keyword that may be split into integer and fractional halves.
+
+    Missions write their reference epoch either as one keyword, ``MJDREF``, or as a
+    pair, ``MJDREFI`` + ``MJDREFF``. The pair exists precisely because a single float64
+    cannot hold an MJD to better than a microsecond, so the two parts have to be summed
+    in extended precision -- summing them as float64 throws away the reason they were
+    split.
+
+    Parameters
+    ----------
+    header : astropy.io.fits.Header or dict
+    keyword : str
+        For example ``"MJDREF"`` or ``"TSTART"``.
+
+    Returns
+    -------
+    numpy.longdouble or None
+        ``None`` if neither the single keyword nor the pair is present.
+    """
+    if keyword in header:
+        return np.longdouble(header[keyword])
+
+    stem = keyword[:7] if len(keyword) == 8 else keyword
+    if stem + "I" in header and stem + "F" in header:
+        return np.longdouble(header[stem + "I"]) + np.longdouble(header[stem + "F"])
+    return None
+
+
+def high_precision_mjdref(header):
+    """The mission reference epoch, MJD(TT), in extended precision.
+
+    Raises
+    ------
+    ValueError
+        If the header has neither ``MJDREF`` nor ``MJDREFI``/``MJDREFF``. Guessing a
+        reference epoch is never the right thing to do: being wrong by a day is a
+        half-hour error in the barycentric correction.
+    """
+    mjdref = high_precision_keyword_read(header, "MJDREF")
+    if mjdref is None:
+        raise ValueError("Header has no MJDREF, nor MJDREFI/MJDREFF")
+    return mjdref
