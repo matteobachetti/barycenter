@@ -18,11 +18,6 @@ answer: measured 775 ns peak-to-peak on arm64 against 149 ns on x86. The default
 engine computes every term as a small quantity in float64 and gives bit-identical
 answers on both.
 
-**The coordinate fallback order differs from HEASOFT's.** We prefer
-`RA_OBJ`/`DEC_OBJ`, `barycorr` prefers `RA_NOM`/`DEC_NOM`. The two keywords differ by
-0.1 arcsec on the NuSTAR test file, which is 172 µs of light travel time. Always pass
-`--ra`/`--dec` explicitly when the answer must match another tool.
-
 **`--radecsys` does not reach the computation with `--engine pint`.** PINT treats the
 coordinates as ICRS whatever the keyword says, so asking for FK5 changes only the output
 header. Getting this wrong is worth 45 µs. The default native engine handles it, by
