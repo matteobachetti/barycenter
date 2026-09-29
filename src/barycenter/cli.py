@@ -2,7 +2,7 @@
 
 import os
 
-from .core import apply_barycenter_correction
+from .core import ENGINES, apply_barycenter_correction
 from .utils import splitext_improved
 
 __all__ = ["main_barycenter"]
@@ -83,6 +83,16 @@ def main_barycenter(args=None):
         default=False,
     )
     parser.add_argument(
+        "--engine",
+        default="native",
+        choices=ENGINES,
+        help=(
+            "Which implementation computes the correction. 'native' (the default) uses "
+            "astropy, ERFA and a JPL ephemeris directly; 'pint' goes through PINT's "
+            "timing model, as an independent cross-check."
+        ),
+    )
+    parser.add_argument(
         "--only-columns",
         type=str,
         default=None,
@@ -120,6 +130,7 @@ def main_barycenter(args=None):
         source_region_deg=args.source_region_deg,
         only_columns=args.only_columns.split(",") if args.only_columns else None,
         apply_official=args.apply_official,
+        engine=args.engine,
     )
 
 

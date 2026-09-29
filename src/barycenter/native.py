@@ -1,7 +1,7 @@
 """The barycentric correction, computed directly from astropy, ERFA and a JPL ephemeris.
 
-This is an alternative to the PINT engine in :mod:`barycenter.barycenter`. It exists for
-three reasons:
+This is the default engine; :mod:`barycenter.pintengine` is the alternative. It exists
+for three reasons:
 
 * **It is auditable.** Each term below is written out explicitly, so "does ``axBary``
   include this?" is a switch we set on purpose rather than a side effect of which
@@ -45,6 +45,8 @@ is absorbed by a pulsar's spin parameters. But it has to be matched when compari
 against a tool.
 """
 
+import re
+
 import astropy.units as u
 import erfa
 import numpy as np
@@ -58,6 +60,15 @@ from astropy.coordinates import (
 from astropy.time import Time
 from scipy.interpolate import CubicHermiteSpline, CubicSpline
 
+__all__ = [
+    "barycentric_correction",
+    "ephemeris_frame",
+    "native_barycentric_correction",
+    "resolve_ephemeris",
+    "source_unit_vector",
+    "spacecraft_interpolator",
+]
+
 #: Half the Sun's Schwarzschild radius crossing time, GM_sun / c**3, in seconds.
 #: 4.925490947e-06 s.
 T_SUN = float((GM_sun / c**3).to_value(u.s))
@@ -67,6 +78,66 @@ T_SUN = float((GM_sun / c**3).to_value(u.s))
 #: slow and buys nothing here.
 C_M_S = float(c.to_value(u.m / u.s))
 AU_M = float(au.to_value(u.m))
+
+#: The JPL kernels NAIF still keeps in its current ``planets/`` directory, which is the
+#: URL astropy builds for any ``deNNN`` name. Anything else needs looking for.
+CURRENT_NAIF_KERNELS = frozenset({"de430", "de432s", "de440", "de440s", "de441"})
+
+#: Where the other kernels actually live, in the order they are tried. NAIF moved the
+#: older ephemerides to ``a_old_versions/`` -- which is why ``ephem="de200"`` fails with
+#: an HTTP 404 through astropy -- and never hosted the pulsar-timing ephemerides (DE435,
+#: DE436, DE438) at all; those are distributed by NANOGrav, and are what a ``.par`` file
+#: from a pulsar timing campaign will usually ask for.
+EPHEMERIS_MIRRORS = (
+    "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/{}.bsp",
+    "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/a_old_versions/{}.bsp",
+    "https://data.nanograv.org/static/data/ephem/{}.bsp",
+)
+
+#: Names already looked up in this process, so the mirrors are probed at most once each.
+_RESOLVED_EPHEMERIS = {}
+
+
+def resolve_ephemeris(ephem):
+    """Turn an ephemeris name into something astropy can actually open.
+
+    Astropy accepts ``deNNN`` and builds a NAIF URL from it, but only the handful of
+    kernels in :data:`CURRENT_NAIF_KERNELS` are still at that address, so
+    ``ephem="de200"`` -- the ephemeris ``axBary`` and the older HEASOFT tools use, and
+    therefore one we particularly need for comparisons -- raises an HTTP 404. The
+    mirrors in :data:`EPHEMERIS_MIRRORS` are tried in turn and the first one that
+    answers is used; the kernel lands in astropy's download cache, so this happens once
+    per machine and not once per run.
+
+    A file path, a URL, or anything that is not a plain ``deNNN`` name is passed through
+    untouched, so a locally downloaded ``.bsp`` always works and never touches the
+    network.
+    """
+    name = str(ephem).strip()
+    lower = name.lower()
+    if lower in CURRENT_NAIF_KERNELS or not re.fullmatch(r"de[0-9]{3}s?", lower):
+        return name
+    if lower in _RESOLVED_EPHEMERIS:
+        return _RESOLVED_EPHEMERIS[lower]
+
+    from astropy.utils.data import download_file
+
+    tried = []
+    for template in EPHEMERIS_MIRRORS:
+        url = template.format(lower)
+        try:
+            download_file(url, cache=True)
+        except Exception as exc:  # 404, or no network at all
+            tried.append(f"{url} ({exc})")
+            continue
+        _RESOLVED_EPHEMERIS[lower] = url
+        return url
+
+    raise ValueError(
+        f"Could not find a kernel for ephemeris {name!r}. Tried:\n  "
+        + "\n  ".join(tried)
+        + "\nPass the path to a local .bsp file instead."
+    )
 
 
 def spacecraft_interpolator(met, position, velocity=None):
@@ -183,7 +254,7 @@ def barycentric_correction(
     met : array-like
         Mission elapsed times, in seconds, on the TT scale. Any clock correction must
         already have been applied (see the note in
-        :func:`barycenter.barycenter.correct_times` about the order).
+        :func:`barycenter.core.correct_times` about the order).
     mjdref : float
         The mission's reference epoch, MJD(TT). Pass it at full precision, e.g. as
         ``MJDREFI + MJDREFF``.
@@ -222,7 +293,7 @@ def barycentric_correction(
 
     n_hat = source_unit_vector(ra_deg, dec_deg, frame=frame, ephem_frame=ephemeris_frame(ephem))
 
-    with solar_system_ephemeris.set(ephem):
+    with solar_system_ephemeris.set(resolve_ephemeris(ephem)):
         earth_pos, earth_vel = get_body_barycentric_posvel("earth", time)
         sun_pos = get_body_barycentric("sun", time)
 
@@ -272,3 +343,84 @@ def barycentric_correction(
         correction = correction - r_perp_sq / (2 * C_M_S * d)
 
     return correction
+
+
+def native_barycentric_correction(
+    orbit_table,
+    ra_deg,
+    dec_deg,
+    ephem="de440",
+    frame="icrs",
+    mjdref=None,
+    dt=None,
+    met_range=None,
+    shapiro="axbary",
+    distance_kpc=None,
+):
+    """Barycentric correction from an orbit table, as a function of mission elapsed time.
+
+    Parameters
+    ----------
+    orbit_table : astropy.table.Table
+        From :func:`barycenter.orbit.read_orbit`.
+    ra_deg, dec_deg : float
+        Source coordinates in degrees.
+    ephem : str, optional
+        JPL ephemeris name, file path or URL. See :func:`resolve_ephemeris`.
+    frame : str, optional
+        Frame of the coordinates, normally the ``RADECSYS`` keyword.
+    mjdref : float, optional
+        Reference epoch. Taken from the orbit table's metadata if omitted.
+    dt : float, optional
+        Grid spacing in seconds. The default, ``None``, evaluates the correction
+        directly at whatever times it is asked for, which is exact and needs no
+        interpolation layer at all. Giving a ``dt`` puts a cubic spline through a grid
+        instead, which is worth about a nanosecond at 5 s and saves evaluating the
+        ephemeris once per event on a large file.
+    met_range : tuple of float, optional
+        ``(start, stop)``, only used when ``dt`` is given.
+    shapiro : {"axbary", "pint", "none"}, optional
+        Shapiro delay convention; see the module docstring.
+    distance_kpc : float, optional
+        Source distance, for the parallax term.
+
+    Returns
+    -------
+    callable
+        ``fun(met)`` gives the correction in seconds, with the same shape as ``met``.
+    """
+    if mjdref is None:
+        mjdref = orbit_table.meta["mjdref"]
+
+    met = np.asarray(orbit_table["MET"].value, dtype=np.float64)
+    position = np.column_stack([orbit_table[c].value for c in ("X", "Y", "Z")])
+    velocity = np.column_stack([orbit_table[c].value for c in ("Vx", "Vy", "Vz")])
+    sc = spacecraft_interpolator(met, position, velocity)
+
+    def correction(times):
+        """The correction at arbitrary times, preserving the shape it was given."""
+        asked = np.asarray(times, dtype=np.float64)
+        values = barycentric_correction(
+            asked.ravel(),
+            mjdref,
+            ra_deg,
+            dec_deg,
+            sc,
+            ephem=ephem,
+            frame=frame,
+            shapiro=shapiro,
+            distance_kpc=distance_kpc,
+        )
+        return values.reshape(asked.shape) if asked.ndim else values[0]
+
+    if dt is None:
+        return correction
+
+    start, stop = met.min(), met.max()
+    if met_range is not None:
+        # One grid step of margin either side, so events are interpolated, not
+        # extrapolated.
+        start = max(start, met_range[0] - dt)
+        stop = min(stop, met_range[1] + dt)
+    grid = np.arange(start, stop + dt, dt)
+    return CubicSpline(grid, correction(grid), extrapolate=True)
