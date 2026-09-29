@@ -32,6 +32,25 @@ PINT_TOLERANCE_S = 2e-7 if HAS_EXTENDED_PRECISION else 2e-6
 REF_RA, REF_DEC = "294.9107", "21.58308"
 
 
+def assert_times_agree(ours, reference, tolerance=TOLERANCE_S):
+    """Assert two arrays of absolute times agree, allowing for float64 granularity.
+
+    A reference file stores times as float64 seconds since MJDREF, so it cannot express a
+    difference finer than one unit in the last place: 29.8 ns for NuSTAR's 1.8e8 s and
+    119.2 ns for RXTE's 5.4e8 s. Asserting a flat 100 ns would therefore be asserting
+    something the reference file is physically unable to record, so the quantisation step
+    is added to the tolerance -- and the mean, which averages that noise away, is
+    reported in the failure message.
+    """
+    ulp = np.spacing(np.max(np.abs(reference)))
+    diff = np.asarray(ours) - np.asarray(reference)
+    assert np.max(np.abs(diff)) < tolerance + ulp, (
+        f"max |difference| = {np.max(np.abs(diff)) * 1e9:.1f} ns "
+        f"(mean {diff.mean() * 1e9:+.1f} ns, std {diff.std() * 1e9:.1f} ns, "
+        f"allowed {(tolerance + ulp) * 1e9:.1f} ns)"
+    )
+
+
 class TestExecution(object):
     @classmethod
     def setup_class(cls):
@@ -70,11 +89,7 @@ class TestExecution(object):
             ]
         )
         with fits.open(outfile) as hdul, fits.open(self.bary_clk_evfile) as ref:
-            diff = hdul[1].data["TIME"] - ref[1].data["TIME"]
-            assert np.max(np.abs(diff)) < TOLERANCE_S, (
-                f"max |difference| = {np.max(np.abs(diff)) * 1e9:.1f} ns "
-                f"(mean {diff.mean() * 1e9:+.1f} ns, std {diff.std() * 1e9:.1f} ns)"
-            )
+            assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])
             assert hdul[1].header["CLOCKAPP"] is True
 
     def test_the_clock_correction_moves_the_times_by_milliseconds(self, tmp_path):
@@ -145,11 +160,7 @@ class TestExecution(object):
         )
 
         with fits.open(outfile) as hdul, fits.open(self.bary_evfile) as ref:
-            diff = hdul[1].data["TIME"] - ref[1].data["TIME"]
-            assert np.max(np.abs(diff)) < TOLERANCE_S, (
-                f"max |difference| = {np.max(np.abs(diff)) * 1e9:.1f} ns "
-                f"(mean {diff.mean() * 1e9:+.1f} ns, std {diff.std() * 1e9:.1f} ns)"
-            )
+            assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])
             assert np.isclose(hdul[1].header["RA_OBJ"], ref[1].header["RA_OBJ"])
             assert np.isclose(hdul[1].header["DEC_OBJ"], ref[1].header["DEC_OBJ"])
 
@@ -179,10 +190,8 @@ class TestExecution(object):
             ]
         )
         with fits.open(outfile) as hdul, fits.open(self.bary_evfile) as ref:
-            diff = hdul[1].data["TIME"] - ref[1].data["TIME"]
-            assert np.max(np.abs(diff)) < PINT_TOLERANCE_S, (
-                f"max |difference| = {np.max(np.abs(diff)) * 1e9:.1f} ns "
-                f"(mean {diff.mean() * 1e9:+.1f} ns, std {diff.std() * 1e9:.1f} ns)"
+            assert_times_agree(
+                hdul[1].data["TIME"], ref[1].data["TIME"], tolerance=PINT_TOLERANCE_S
             )
 
     def test_the_two_engines_agree(self, tmp_path):
@@ -332,3 +341,103 @@ class TestExecution(object):
             assert np.isclose(hdul[1].header["RA_OBJ"], ra)
             assert np.isclose(hdul[1].header["DEC_OBJ"], dec)
             assert "bary" in hdul[1].header.comments["RA_OBJ"].lower()
+
+
+class TestRXTE:
+    """RXTE, whose clock correction comes from an ASCII coefficient file, not FITS.
+
+    The dataset is a PCA observation of PSR B1509-58 with its FPorbit file, decimated to
+    404 events spanning the full hour so the orbit interpolation is exercised over a
+    whole RXTE orbit.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_xte_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_xte_orb.fits.gz")
+        cls.bary_noclk = os.path.join(datadir, "dummy_xte_bary_DE440_noclk.evt.gz")
+        cls.bary_clk = os.path.join(datadir, "dummy_xte_bary_DE440_clk.evt.gz")
+        cls.ra, cls.dec = "228.481995", "-59.136002"
+
+    def run(self, outfile, *extra):
+        return main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                self.ra,
+                "--dec",
+                self.dec,
+                "--ephem",
+                "DE440",
+                *extra,
+            ]
+        )
+
+    def test_agrees_with_barycorr_without_the_clock_correction(self, tmp_path):
+        """The solar-system delays alone match barycorr on RXTE.
+
+        The same test as for NuSTAR, on a mission whose orbit file has three scalar
+        position columns instead of one vector column, and whose times are three times
+        larger -- so this is also what caught the spurious TIMEPIXR half-bin shift, which
+        moved every PCA event 477 ns.
+        """
+        outfile = str(tmp_path / "noclk.evt")
+        assert self.run(outfile, "--clockfile", "none") == outfile
+        with fits.open(outfile) as hdul, fits.open(self.bary_noclk) as ref:
+            assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])
+            assert hdul[1].header["CLOCKAPP"] is False
+
+    def test_agrees_with_barycorr_with_the_clock_correction(self, tmp_path):
+        """With tdc.dat applied we still match barycorr, which applies it too.
+
+        No clock file is named: barycorr ignores its own ``clockfile`` parameter for RXTE
+        and reads ``tdc.dat``, and so do we, from the copy bundled with the package.
+        """
+        outfile = str(tmp_path / "clk.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul, fits.open(self.bary_clk) as ref:
+            assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])
+            assert hdul[1].header["CLOCKAPP"] is True
+
+    def test_the_clock_correction_matches_the_constant_barycorr_froze(self):
+        """Our reading of tdc.dat reproduces the number HEASOFT computed, to a few ns.
+
+        barycorr evaluates the RXTE correction once, at the middle of the observation, and
+        folds that single number into TIMEZERO, so the difference between the two
+        references *is* that constant, and comparing our coefficient file reader against
+        it directly is far sharper than comparing output files: the corrected times are
+        5.4e8 s, where one float64 step is 119 ns, so a 17 us difference between two of
+        them is only known to within that step.
+
+        This is what pins down the PCA's extra 16 us detector delay, which the two tests
+        above -- each using one reference only -- could not tell from a bad ephemeris.
+        """
+        from barycenter.clock import rxte_clock_correction_fun
+
+        with fits.open(self.bary_clk) as clk, fits.open(self.bary_noclk) as noclk:
+            barycorr_constant = np.mean(clk[1].data["TIME"] - noclk[1].data["TIME"])
+        header = fits.getheader(self.evfile, 1)
+        middle = (header["TSTART"] + header["TSTOP"]) / 2
+
+        ours = rxte_clock_correction_fun(instrument=header["INSTRUME"])(middle)
+        # Tens of microseconds, and the right tens: not zero, and not the 33 us that
+        # forgetting the detector delay would give.
+        assert 17e-6 < barycorr_constant < 18e-6
+        assert abs(ours - barycorr_constant) < 5e-9, (
+            f"ours {ours * 1e6:.4f} us vs barycorr {barycorr_constant * 1e6:.4f} us"
+        )
+
+    def test_a_clock_file_passed_for_rxte_is_refused_politely(self, tmp_path):
+        """Naming a clock file for RXTE warns and uses tdc.dat, rather than failing.
+
+        It is what HEASOFT does with the parameter, and a pipeline that passes
+        ``--clockfile`` for every mission should not break on this one.
+        """
+        outfile = str(tmp_path / "warned.evt")
+        with pytest.warns(UserWarning, match="tdc.dat"):
+            self.run(outfile, "-c", os.path.join(datadir, "dummy_fine_clk.fits"))
+        with fits.open(outfile) as hdul, fits.open(self.bary_clk) as ref:
+            assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])

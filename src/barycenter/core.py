@@ -9,14 +9,13 @@ column and time keyword in every extension.
 import logging as logger
 import os
 import tempfile
-import warnings
 
 import astropy.units as u
 import numpy as np
 from astropy.time import Time
 
 from ._version import __version__
-from .clock import get_latest_clock_file, nustar_clock_correction_fun
+from .clock import clock_correction_fun
 from .native import native_barycentric_correction
 from .official import apply_mission_specific_barycenter_correction
 from .orbit import read_orbit
@@ -389,31 +388,27 @@ def apply_barycenter_correction(
             engine=engine,
         )
 
+        # TIMEZERO is folded in, but TIMEPIXR deliberately is not. This used to add
+        # ``(0.5 - TIMEPIXR) * TIMEDEL``, moving every RXTE PCA event half a clock tick
+        # (477 ns) away from what barycorr produces, while leaving TIMEPIXR itself
+        # unchanged in the output header -- so the file then claimed a convention its
+        # times no longer followed. Where the time stamp sits inside its bin is not the
+        # barycentring tool's business.
         timezero = hdul[1].header.get("TIMEZERO", 0.0)
-        timepixr = hdul[1].header.get("TIMEPIXR", 0.5)
-        timedel = hdul[1].header.get("TIMEDEL", 0.0)
 
         mission = hdul[1].header.get("TELESCOP", "unknown").lower()
         logger.info(f"Mission: {mission}")
 
+        clock_fun = None
         if isinstance(clockfile, str) and clockfile.lower() == "none":
             logger.info("Clock correction explicitly disabled")
             clockfile = None
-        elif clockfile is None and mission == "nustar":
-            clockfile = get_latest_clock_file(mission)
-            logger.info(f"Using latest {mission} clock file: {clockfile}")
-
-        timezero += (0.5 - timepixr) * timedel
-
-        clock_fun = None
-        if clockfile is not None and not os.path.exists(clockfile):
-            raise FileNotFoundError(f"Clock file {clockfile} not found")
-        elif clockfile is not None and mission != "nustar":
-            warnings.warn(
-                f"Clock correction for mission {mission} not implemented, skipping clock correction"
+        else:
+            # Which missions have a clock correction, and where each one comes from, is
+            # barycenter.clock's business; this function stays mission-agnostic.
+            clock_fun, clockfile = clock_correction_fun(
+                mission, clockfile, instrument=hdul[1].header.get("INSTRUME")
             )
-        elif clockfile is not None:
-            clock_fun = nustar_clock_correction_fun(clockfile)
 
         if only_columns is not None:
             hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)

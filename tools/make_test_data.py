@@ -34,6 +34,12 @@ HERE = os.path.abspath(os.path.dirname(__file__))
 DATA = os.path.join(HERE, os.pardir, "tests", "data")
 HEADAS = os.path.expanduser("~/mamba/envs/henv313_x86/heasoft")
 
+#: The RXTE dataset the XTE reference is made with: a PSR B1509-58 PCA observation and
+#: the matching FPorbit file, both public HEASARC data that ship with PINT's test suite.
+#: Trimmed copies are committed; see :func:`trim_rxte_inputs`.
+RXTE_EVENTS = os.path.expanduser("~/devel/pint/tests/datafile/B1509_RXTE_short.fits")
+RXTE_ORBIT = os.path.expanduser("~/devel/pint/tests/datafile/FPorbit_Day6223")
+
 #: The CALDB clock file the fine-clock reference is made with.  It is 12 MB, so only the
 #: ~90 rows covering the test observation are committed, as ``dummy_fine_clk.fits``; see
 #: :func:`trim_clock_file`.
@@ -79,6 +85,33 @@ REFERENCES = {
             "dec": "21.58308",
         },
     },
+    # RXTE, with and without the fine clock correction.  barycorr ignores its
+    # ``clockfile`` parameter for RXTE and reads $LHEA_DATA/tdc.dat instead, so the pair
+    # of references is the only way to see what that file contributes (~33 us here).
+    "dummy_xte_bary_DE440_noclk.evt.gz": {
+        "infile": "dummy_xte_evt.evt",
+        "orbitfiles": ["dummy_xte_orb.fits.gz"],
+        "args": {
+            "clockfile": "NONE",
+            "refframe": "ICRS",
+            "ephem": "JPLEPH.440",
+            # The file has only RA_PNT/DEC_PNT, so there is nothing to be ambiguous
+            # about, but pin them anyway: the test passes the same numbers.
+            "ra": "228.481995",
+            "dec": "-59.136002",
+        },
+    },
+    "dummy_xte_bary_DE440_clk.evt.gz": {
+        "infile": "dummy_xte_evt.evt",
+        "orbitfiles": ["dummy_xte_orb.fits.gz"],
+        "args": {
+            "clockfile": "CALDB",
+            "refframe": "ICRS",
+            "ephem": "JPLEPH.440",
+            "ra": "228.481995",
+            "dec": "-59.136002",
+        },
+    },
 }
 
 
@@ -111,6 +144,50 @@ def trim_clock_file(source=CALDB_CLOCK, event_file=None, outfile=None, margin=50
         fits.HDUList([hdul[0].copy(), trimmed]).writeto(outfile, overwrite=True)
     print(f"    wrote {outfile} ({keep.sum()} of {len(t)} rows)")
     return outfile
+
+
+def trim_rxte_inputs(nevents=400, margin=600.0):
+    """Cut the RXTE event and orbit files down to something committable.
+
+    The events are decimated rather than truncated, so the sample still spans the whole
+    observation and the test exercises the orbit interpolation over a full RXTE orbit
+    rather than a few seconds of it. The orbit file is cut to the observation plus
+    ``margin`` seconds either side.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(DATA, "dummy_xte_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_xte_orb.fits")
+
+    with fits.open(RXTE_EVENTS) as hdul:
+        events = hdul["XTE_SE"]
+        step = max(1, len(events.data) // nevents)
+        trimmed = fits.BinTableHDU(data=events.data[::step], header=events.header, name=events.name)
+        trimmed.header.add_history(
+            f"Every {step}th row of {os.path.basename(RXTE_EVENTS)}, by tools/make_test_data.py"
+        )
+        # Only the first GTI: the file has two identical copies of the extension.
+        out = [hdul[0].copy(), trimmed, hdul["GTI"].copy()]
+        tstart = float(events.header["TSTART"])
+        tstop = float(events.header["TSTOP"])
+        fits.HDUList(out).writeto(evt_out, overwrite=True)
+    print(f"    wrote {evt_out} ({len(trimmed.data)} of {step * nevents} rows)")
+
+    with fits.open(RXTE_ORBIT) as hdul:
+        orbit = hdul["XTE_PE"]
+        t = orbit.data["Time"]
+        keep = (t > tstart - margin) & (t < tstop + margin)
+        trimmed = fits.BinTableHDU(data=orbit.data[keep], header=orbit.header, name=orbit.name)
+        trimmed.header["TSTART"] = float(np.min(t[keep]))
+        trimmed.header["TSTOP"] = float(np.max(t[keep]))
+        trimmed.header.add_history(
+            f"Trimmed from {os.path.basename(RXTE_ORBIT)} by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), trimmed]).writeto(orb_out, overwrite=True)
+    print(f"    wrote {orb_out} ({keep.sum()} of {len(t)} rows)")
+    subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
+    return evt_out, orb_out + ".gz"
 
 
 def run_barycorr(infile, orbitfiles, outfile, args, extra_inputs=()):
@@ -193,6 +270,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_fine_clk.fits")):
         print("--- dummy_fine_clk.fits")
         trim_clock_file()
+    if not os.path.exists(os.path.join(DATA, "dummy_xte_evt.evt")):
+        print("--- dummy_xte_evt.evt, dummy_xte_orb.fits.gz")
+        trim_rxte_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target

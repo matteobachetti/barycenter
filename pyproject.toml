@@ -98,6 +98,14 @@ only-packages = true
 # Read more about src layouts here: https://www.pyopensci.org/python-package-guide/package-structure-code/python-package-structure.html
 [tool.hatch.build.targets.wheel]
 packages = ["src/barycenter"]
+# only-packages above keeps the build to Python modules, so the bundled RXTE clock
+# coefficients have to be named. Without them an RXTE run cannot be clock-corrected
+# unless HEASOFT happens to be installed.
+force-include = { "src/barycenter/data" = "barycenter/data" }
+
+[tool.hatch.build.targets.sdist]
+# Same reason, at the path the sdist rebuilds from.
+force-include = { "src/barycenter/data" = "src/barycenter/data" }
 
 ######## Linting and formatting ########
 [tool.ruff]
