@@ -14,15 +14,16 @@ Three columns of :data:`MISSIONS` deserve a word:
 ``orbit``
     ``None`` means there is no native orbit reader, either because the mission does not
     distribute a spacecraft position in a format we read (ASCA) or because nobody has had
-    a file to test against (Swift, Chandra). Such a mission still works through
+    a file to test against (Swift). Such a mission still works through
     ``--apply-official``.
 ``clock``
     ``None`` means the mission needs no clock correction -- which for most of them is
     because the correction is already applied in the pipeline that produced the event file.
 ``official``
     The tool ``--apply-official`` hands the file to, or ``None`` if there is none -- which
-    for XMM means the native engine is the only way in, since ``barycorr`` refuses the
-    mission and ``barycen`` needs all of SAS.
+    for XMM and Chandra means the native engine is the only way in, since ``barycorr``
+    handles neither and their own tools, SAS ``barycen`` and CIAO ``axbary``, need all of
+    SAS and all of CIAO respectively.
 """
 
 from collections.abc import Callable
@@ -64,8 +65,8 @@ class Mission:
         The mission's own tool: ``"barycorr"``, ``"timeconv"``, or ``None``.
     official_ephem : str or None
         The only ephemeris that tool can use, if it is limited to one. ASCA's ``timeconv``
-        is fixed to DE200 and CIAO's ``axbary`` to DE405, which is the main reason to
-        prefer the native engine for those missions.
+        is fixed to DE200, which is the main reason to prefer the native engine for that
+        mission.
     """
 
     name: str
@@ -150,17 +151,29 @@ MISSIONS = {
         # nowhere else.
         official=None,
     ),
-    # No native orbit reader yet. Swift's position is in the `sw*sao.fits` attitude file,
-    # whose layout nobody here has a file to check; Chandra's is in
-    # `primary/orbitf*_eph1.fits`. Both are on the list, and each needs a reference
-    # dataset before it can be claimed.
-    "swift": Mission(name="swift", telescop=("swift",), official="barycorr"),
     "chandra": Mission(
         name="chandra",
+        # `primary/orbitf*_eph1.fits`, extension ORBITEPHEM, in metres. The column names
+        # are spelt `Time`, `X`, `Vx`: FITS column names are case-insensitive by standard
+        # and Chandra is the mission that relies on it, so every lookup here goes through
+        # `utils.column_named`.
+        orbit=OrbitSpec(
+            pos=("X", "Y", "Z"), vel=("Vx", "Vy", "Vz"), expected_extnames=("ORBITEPHEM",)
+        ),
         telescop=("chandra", "axaf"),
-        official="barycorr",
-        official_ephem="DE405",
+        # Not `barycorr`, despite what the mission list in its documentation suggests:
+        # `hdaxbary` carries orbit-file readers for RXTE, NICER, Swift and NuSTAR only,
+        # and on a Chandra orbit file it fails with "no bracketing sample found" followed
+        # by "Invalid Observatory/Spacecraft position vector", on a file that brackets the
+        # time comfortably. The mission's own tool is CIAO `axbary`, which needs all of
+        # CIAO and can reach only DE200 (`refframe=FK5`) or DE405 (`refframe=ICRS`);
+        # `tools/make_test_data.py` drives it for the reference files and nowhere else.
+        official=None,
     ),
+    # No native orbit reader yet. Swift's position is in the `sw*sao.fits` attitude file,
+    # whose layout nobody here has a file to check. It is on the list, and needs a
+    # reference dataset before it can be claimed.
+    "swift": Mission(name="swift", telescop=("swift",), official="barycorr"),
     # ASCA is the odd one: barycorr refuses it, and the only tool is `timeconv`, which
     # needs a downloaded earth.dat and frf.orbit file and can only do DE200.
     "asca": Mission(name="asca", telescop=("asca",), official="timeconv", official_ephem="DE200"),

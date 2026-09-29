@@ -572,6 +572,117 @@ class TestXMM:
             assert hdul["EVENTS"].header["CLOCKAPP"] is False
 
 
+class TestChandra:
+    """Chandra, the other mission HEASOFT cannot do, and the only one with two references.
+
+    ``barycorr`` fails on a Chandra orbit file -- "no bracketing sample found", then
+    "Invalid Observatory/Spacecraft position vector", on a file that brackets the time
+    comfortably -- because ``hdaxbary`` carries orbit readers for RXTE, NICER, Swift and
+    NuSTAR only. The mission's own tool is CIAO ``axbary``.
+
+    ``axbary`` picks the ephemeris from the reference frame and can reach only two
+    combinations, so both are committed: ``refframe=ICRS`` reads DE405 and
+    ``refframe=FK5`` reads DE200. That pair is the point of this class -- it is the only
+    place where the ephemeris/frame pairing is checked against a real tool rather than
+    against ourselves.
+
+    The dataset is ACIS-S observation 10026 (M82), decimated to 401 events spanning the
+    full 5.6 h, with the orbit ephemeris beside it at its own 300 s sampling.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_chandra_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_chandra_orb.fits.gz")
+        cls.de405 = os.path.join(datadir, "dummy_chandra_bary_DE405.evt.gz")
+        cls.de200 = os.path.join(datadir, "dummy_chandra_bary_DE200.evt.gz")
+        # RA_TARG/DEC_TARG of the observation, passed explicitly like everywhere else:
+        # RA_NOM is 324 arcsec away, which is 0.8 s of Roemer delay.
+        cls.ra, cls.dec = "148.959167", "69.679722"
+
+    def run(self, outfile, ephem):
+        return main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                self.ra,
+                "--dec",
+                self.dec,
+                "--ephem",
+                ephem,
+                "--clockfile",
+                "none",
+            ]
+        )
+
+    def test_agrees_with_axbary(self, tmp_path):
+        """Our DE405 times match CIAO axbary to better than 100 ns on Chandra.
+
+        Chandra's is a 63 h orbit reaching 113000 km, so the spacecraft term is much
+        larger than a low-Earth-orbit mission's -- and the event times are in a column
+        called ``time``, which is what makes this file worth having.
+        """
+        outfile = str(tmp_path / "chandra.evt")
+        assert self.run(outfile, "DE405") == outfile
+        with fits.open(outfile) as hdul, fits.open(self.de405) as ref:
+            assert_times_agree(hdul["EVENTS"].data["time"], ref["EVENTS"].data["time"])
+            assert hdul["EVENTS"].header["TIMESYS"] == "TDB"
+            assert hdul["EVENTS"].header["TIMEREF"] == "SOLARSYSTEM"
+
+    def test_de200_agrees_too_which_checks_the_frame_pairing(self, tmp_path):
+        """DE200 matches the FK5 reference, confirming the ephemeris/frame pairing.
+
+        DE200 is referred to FK5 and DE405 onwards to ICRS, and the code pairs them
+        automatically. Getting it wrong is not subtle -- DE405 read in FK5 is +11.2 us
+        and DE200 read in ICRS -11.1 us -- but no other reference can catch it, because
+        every other official tool here was run in one frame only.
+        """
+        outfile = str(tmp_path / "chandra200.evt")
+        self.run(outfile, "DE200")
+        with fits.open(outfile) as hdul, fits.open(self.de200) as ref:
+            assert_times_agree(hdul["EVENTS"].data["time"], ref["EVENTS"].data["time"])
+
+    def test_the_two_references_really_are_different_ephemerides(self):
+        """The DE405 and DE200 references differ by the 1.8 ms DE200 is known to cost.
+
+        Without this, two references accidentally made with the same settings would make
+        the test above pass while checking nothing.
+        """
+        with fits.open(self.de405) as a, fits.open(self.de200) as b:
+            diff = a["EVENTS"].data["time"] - b["EVENTS"].data["time"]
+        assert np.allclose(diff, -1.8003e-3, rtol=0, atol=1e-6)
+
+    def test_gtis_agree_with_axbary(self, tmp_path):
+        """The GTI boundaries match the reference as well as the events.
+
+        On this file the GTI columns are ``START``/``STOP`` in capitals while the events
+        are ``time`` in lower case, so a case-sensitive column lookup passes this test
+        and fails the one above -- which is exactly the failure this pair is here for.
+        """
+        outfile = str(tmp_path / "chandra.evt")
+        self.run(outfile, "DE405")
+        with fits.open(outfile) as hdul, fits.open(self.de405) as ref:
+            for column in ("START", "STOP"):
+                assert_times_agree(hdul["GTI"].data[column], ref["GTI"].data[column])
+
+    def test_the_lower_case_time_column_actually_moved(self, tmp_path):
+        """The events are shifted by the ~52 s the correction is worth, not left alone.
+
+        A column that is not found is not an error: it is simply not corrected. Asserting
+        agreement with the reference would catch that, but only as a mysterious 52 s
+        disagreement, so this says plainly what went wrong. The 0.6 s window is the
+        Roemer delay's own drift across the 5.6 h exposure.
+        """
+        outfile = str(tmp_path / "chandra.evt")
+        self.run(outfile, "DE405")
+        with fits.open(outfile) as hdul, fits.open(self.evfile) as orig:
+            shift = hdul["EVENTS"].data["time"] - orig["EVENTS"].data["time"]
+        assert np.all(np.abs(shift + 52.46) < 0.6)
+
+
 class TestCoordinateKeywords:
     """The header keywords we take the source position from, and HEASOFT's different order."""
 
