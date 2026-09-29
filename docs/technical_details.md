@@ -95,15 +95,24 @@ file rather than the events, which is a performance one (see
 
 **Step 5 — build the clock correction function.** Only NuSTAR has one implemented. If
 no `-c/--clockfile` is given and the mission is NuSTAR, `get_latest_clock_file` scrapes
-the CALDB HTML directory index and picks the highest-versioned `nuCclock*.fits`.
-`nustar_clock_correction_fun` then:
+the CALDB HTML directory index, picks the highest-versioned `nuCclock*.fits` and caches
+it under the user's cache directory — these files are about 12 MB, so they are fetched
+once per machine, not once per run. If the index cannot be reached, the newest cached
+file is used.
 
-1. reads the `NU_FINE_CLOCK` extension (columns `TIME`, `CLOCK_OFF_CORR`,
-   `CLOCK_FREQ_CORR`, `CLOCK_ERR_CORR`);
-2. interpolates it onto a 1-second grid with `interpolate_clock_function`, which uses
-   `cubic_interpolation` — a numba port of the `cubeterp` routine from HEASOFT's
-   `seekinterp.c`, so that we reproduce HEASOFT's Hermite interpolation exactly;
-3. wraps *that* grid in a second Akima spline.
+`nustar_clock_correction_fun` reads the `NU_FINE_CLOCK` extension (columns `TIME`,
+`CLOCK_OFF_CORR`, `CLOCK_FREQ_CORR`, `CLOCK_ERR_CORR`) and returns a function that
+evaluates `interpolate_clock_function` directly at whatever times it is asked for. That
+in turn uses `cubic_interpolation`, a numba port of the `cubeterp` routine from HEASOFT's
+`seekinterp.c`, so the Hermite interpolation through the tabulated offsets and their
+derivatives is HEASOFT's own. On the test observation the correction is 20–29 ms, on a
+grid sampled every 1000 s.
+
+Clock files from before 2019 carry a `CLOCK_CORRECT` extension instead — a per-interval
+C0/C1/C2 polynomial that HEASOFT documents as accurate only to the millisecond. Those are
+**refused**, with an error naming the extension found: a millisecond is four orders of
+magnitude worse than the target, and a file corrected with it would look clock-corrected
+while being nothing of the kind.
 
 Passing `--clockfile none` skips this entirely.
 
@@ -112,7 +121,8 @@ folded in: `TIMEZERO`, and the half-bin shift `(0.5 - TIMEPIXR) * TIMEDEL` that 
 timestamp from the start of its bin to its centre. Then `correct_times` computes
 
 ```
-t_out = t_in + clock_fun(t_in) + bary_fun(t_in)
+t_clk = t_in + clock_fun(t_in)
+t_out = t_clk + bary_fun(t_clk)
 ```
 
 for every `TIME`, `START`, `STOP`, `TSTART` and `TSTOP` **column**, and every `TSTART`
@@ -120,15 +130,17 @@ and `TSTOP` **keyword**, in *every* HDU of the file. Doing all the HDUs matters:
 left behind on the spacecraft clock while the events move to the barycentre would
 silently truncate up to ~500 s of data.
 
-:::{note}
-**The order in which the clock correction is applied differs from `barycorr`'s.**
-We evaluate both `clock_fun` and `bary_fun` at the raw mission time and add the two.
-HEASOFT `barycorr` corrects the clock *first* and then evaluates the barycentric
-correction — and the spacecraft position lookup — at the clock-corrected time. On
-NuSTAR, where the clock correction reaches a few milliseconds, the two orders differ by
-about **1.1 µs**, well above the 100 ns target. Matching `barycorr` means evaluating
-`bary_fun(t_in + clock_corr)`. This has not been changed yet; it is why the reference
-test runs with `--clockfile none`. See [Known issues](known_issues.md).
+:::{important}
+**The order matters, and it is not the obvious one.** The clock correction goes on first,
+and the barycentric correction is then evaluated *at the clock-corrected time* — which
+also means the spacecraft position is looked up there, since `bary_fun` interpolates the
+orbit at whatever time it is given. That is what `barycorr` does.
+
+Adding the two corrections independently, `t + clock(t) + bary(t)`, is what this package
+used to do, and it is wrong by the clock correction times the rate of change of the
+barycentric one. Measured against the reference generated with the clock file on:
+**+1146 ns mean, 1878 ns peak**, against **+22 ns mean, 60 ns peak** for the correct
+order. It is an order of magnitude above the target, from a line that looks harmless.
 :::
 
 **Step 7 — stamp the headers and write.** Every HDU gets `TIMESYS = TDB`,
@@ -421,6 +433,13 @@ official tools without installing HEASOFT, SAS or CIAO.
 |---|---|
 | `dummy_evt.evt` | 937 NuSTAR FPMA events, MJDREF 55197.00076601852 |
 | `dummy_orb.fits.gz` | the matching orbit file, 82800 rows at 1 s |
-| `dummy_clk.fits` | a NuSTAR clock file with the *old* `CLOCK_CORRECT` extension — the current code reads `NU_FINE_CLOCK` and cannot use it |
-| `dummy_par.par` | a minimal timing model for the same position |
-| `dummy_evt_bary_DE440_noclk.evt.gz` | the `barycorr` reference described above |
+| `dummy_fine_clk.fits` | 92 rows of `NU_FINE_CLOCK`, trimmed from CALDB `nuCclock20100101v230.fits.gz` (12 MB) to the span of the events plus 5000 s |
+| `dummy_clk.fits` | a NuSTAR clock file with the *old* `CLOCK_CORRECT` extension, kept so the test suite can prove it is refused |
+| `dummy_par.par` | a minimal timing model for the same position (`EPHEM DE436`) |
+| `dummy_evt_bary_DE440_noclk.evt.gz` | the `barycorr` reference described above, clock correction off |
+| `dummy_evt_bary_DE440_clk.evt.gz` | the same with `clockfile=dummy_fine_clk.fits`, which is what pins down the order the two corrections are applied in |
+
+`tools/make_test_data.py` regenerates all of them, including the trimming, and it now
+allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and
+abort with `ERROR: Device not configured` without one, and the old `script -q /dev/null`
+wrapper only worked when it already had a terminal to start from.

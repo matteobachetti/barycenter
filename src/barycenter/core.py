@@ -197,40 +197,42 @@ def get_barycentric_correction(
 
 
 def correct_times(times, bary_fun, clock_fun=None):
-    """Apply barycentric and clock corrections to times.
+    """Apply the clock and barycentric corrections to an array of times.
 
     Parameters
     ----------
     times : array-like
-        Array of times to correct.
+        Times to correct, in mission elapsed seconds.
     bary_fun : callable
-        Function to compute barycentric correction.
+        The barycentric correction, from :func:`get_barycentric_correction`.
     clock_fun : callable, optional
-        Function to compute clock correction. If None, no clock correction is applied.
+        The clock correction. If None, no clock correction is applied.
 
     Returns
     -------
     corrected_times : array-like
-        Array of corrected times.
 
     Notes
     -----
-    The clock correction is applied here *after* the barycentric correction has
-    been evaluated: both ``clock_fun`` and ``bary_fun`` see the raw mission
-    time.  HEASOFT ``barycorr`` does the opposite -- it corrects the clock
-    first and then evaluates the barycentric correction, and the spacecraft
-    position lookup, at the clock-corrected time.  On NuSTAR, where the clock
-    correction reaches a few milliseconds, the two orders differ by about
-    1.1 us, well above our 100 ns target.  Matching barycorr means calling
-    ``bary_fun(times + cl_corr)``; this is deliberately left for the clock-file
-    work, and is why the reference test runs with the clock correction off.
-    """
-    cl_corr = 0
-    if clock_fun is not None:
-        cl_corr = clock_fun(times)
-    bary_corr = bary_fun(times)
+    The clock correction is applied **first**, and the barycentric correction is then
+    evaluated at the clock-corrected time::
 
-    return times + cl_corr + bary_corr
+        t' = t + clock(t)
+        t_bary = t' + bary(t')
+
+    which is what HEASOFT ``barycorr`` does, and it also means the spacecraft position is
+    looked up at ``t'``, since ``bary_fun`` interpolates the orbit at whatever time it is
+    given. This package used to compute ``t + clock(t) + bary(t)``, evaluating both on the
+    raw mission time. On NuSTAR, where the clock correction reaches 25 ms, that was
+    measured at +1146 ns mean and 1878 ns peak against ``barycorr`` -- an order of
+    magnitude above the 100 ns target, and the reason the reference tests used to be run
+    with the clock correction switched off.
+    """
+    if clock_fun is None:
+        return times + bary_fun(times)
+
+    clock_corrected = times + clock_fun(times)
+    return clock_corrected + bary_fun(clock_corrected)
 
 
 def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt"):
@@ -411,9 +413,7 @@ def apply_barycenter_correction(
                 f"Clock correction for mission {mission} not implemented, skipping clock correction"
             )
         elif clockfile is not None:
-            clock_fun = nustar_clock_correction_fun(
-                clockfile, hdul[1].data["TIME"].min(), hdul[1].data["TIME"].max()
-            )
+            clock_fun = nustar_clock_correction_fun(clockfile)
 
         if only_columns is not None:
             hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)

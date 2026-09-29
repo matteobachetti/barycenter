@@ -11,13 +11,16 @@ import os
 import warnings
 
 import numpy as np
+from astropy.io import fits
 from astropy.table import Table
 from numba import vectorize
-from scipy.interpolate import Akima1DInterpolator
 
 from .utils import get_remote_directory_listing
 
 __all__ = [
+    "CLOCK_CALDB_URLS",
+    "FINE_CLOCK_EXTENSION",
+    "clock_cache_dir",
     "cubic_interpolation",
     "get_latest_clock_file",
     "interpolate_clock_function",
@@ -25,38 +28,81 @@ __all__ = [
 ]
 
 
+#: Where the CALDB keeps each mission's clock files.
+CLOCK_CALDB_URLS = {
+    "nustar": "https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/",
+}
+
+#: The extension a modern NuSTAR clock file keeps its fine correction in.
+FINE_CLOCK_EXTENSION = "NU_FINE_CLOCK"
+
+
+def clock_cache_dir():
+    """Where downloaded clock files are kept between runs.
+
+    Under the user's cache directory, not the working directory: NuSTAR clock files are
+    about 12 MB and there is no reason to fetch one per run, nor to drop it wherever the
+    command happened to be invoked.
+    """
+    from astropy.config.paths import get_cache_dir
+
+    path = os.path.join(get_cache_dir("barycenter"), "clock")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 def get_latest_clock_file(mission):
-    """Get the latest NuSTAR clock correction file from HEASARC.
+    """The newest clock correction file for a mission, downloading it if needed.
+
+    The CALDB directory index is scraped for the highest-versioned file, which is then
+    cached under :func:`clock_cache_dir`. If the network is unavailable, the newest
+    already-cached file is used instead.
+
+    Parameters
+    ----------
+    mission : str
 
     Returns
     -------
     clockfile : str
-        Path to the latest clock correction file.
+        Path to a local clock file.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the index cannot be read *and* nothing is cached locally.
     """
     from urllib.request import urlretrieve
 
-    if mission.lower() not in ["nustar"]:
+    mission = mission.lower()
+    if mission not in CLOCK_CALDB_URLS:
         raise ValueError(f"Mission {mission} not supported for automatic clock file retrieval")
 
+    cache = clock_cache_dir()
+    pattern = os.path.join(cache, "nuCclock*.fits*")
+
     try:
-        listing = get_remote_directory_listing(
-            "https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/"
-        )
+        listing = get_remote_directory_listing(CLOCK_CALDB_URLS[mission])
+        remote = sorted(f for f in listing if "nuCclock" in f)[-1]
+    except Exception as exc:
+        # The fallback that the original code intended but never reached, because the
+        # name it returned was only ever assigned on the success path.
+        warnings.warn(f"Could not read the {mission} clock file index: {exc}")
+        local = sorted(glob.glob(pattern))
+        if not local:
+            raise FileNotFoundError(
+                f"Could not reach the CALDB and no clock file is cached in {cache}. "
+                "Pass one with --clockfile, or --clockfile none to skip the correction."
+            ) from exc
+        logger.info(f"Falling back to the newest cached clock file {local[-1]}")
+        return local[-1]
 
-        clckfile = sorted([f for f in listing if "nuCclock" in f])[-1]
-
-        fname = clckfile.split("/")[-1]
-        if not os.path.exists(fname):
-            logger.info(f"Retrieving latest clock file {clckfile}")
-            urlretrieve(clckfile, fname)
-        else:
-            logger.info(f"Using existing local clock file {fname}")
-    except Exception as e:
-        warnings.warn(f"Could not retrieve latest clock file: {e}")
-
-        clckfile = sorted(glob.glob("nuCclock*.fits"))
-        if len(clckfile) == 0:
-            raise FileNotFoundError("Error retrieving clock file, and no clock file found locally")
+    fname = os.path.join(cache, remote.split("/")[-1])
+    if os.path.exists(fname):
+        logger.info(f"Using cached clock file {fname}")
+    else:
+        logger.info(f"Retrieving {remote} into {cache}")
+        urlretrieve(remote, fname)
     return fname
 
 
@@ -112,60 +158,101 @@ def cubic_interpolation(x, xtab, ytab, yptab):
     return _cubic_interpolation(x, xtab[0], xtab[1], ytab[0], ytab[1], yptab[0], yptab[1])
 
 
-def interpolate_clock_function(new_clock_table, mets):
-    """Interpolate clock correction table to given MET times.
+def interpolate_clock_function(clock_table, mets):
+    """The clock offset correction at arbitrary mission elapsed times.
+
+    The table gives an offset and its time derivative on a coarse grid (1000 s for
+    NuSTAR), so the interpolation is the cubic Hermite one HEASOFT uses -- a translation
+    of ``cubeterp`` from ``seekinterp.c``.
 
     Parameters
     ----------
-    new_clock_table : astropy.table.Table
-        Table with columns TIME, CLOCK_OFF_CORR, CLOCK_FREQ_CORR.
+    clock_table : astropy.table.Table
+        Columns ``TIME``, ``CLOCK_OFF_CORR``, ``CLOCK_FREQ_CORR``.
     mets : array-like
-        Array of MET times to interpolate to.
+        Times to evaluate at, in seconds.
 
     Returns
     -------
-    clock_off_corr : array-like
-        Interpolated clock offset corrections at the given MET times.
-    good_mets : array-like
-        Boolean array indicating which MET times are within the tabulated range.
+    clock_off_corr : ndarray
+        Seconds to add, one per requested time.
+
+    Notes
+    -----
+    Times outside the tabulated range are extrapolated from the nearest interval, with a
+    warning. The previous version returned a validity mask alongside a *shortened* array
+    of corrections; its only caller discarded the mask and then built a spline from a
+    full-length abscissa and a short ordinate, which raised a length mismatch for any
+    event outside the clock file's span.
     """
-    tab_times = new_clock_table["TIME"]
-    good_mets = (mets > tab_times.min()) & (mets < tab_times.max())
-    mets = mets[good_mets]
-    tab_idxs = np.searchsorted(tab_times, mets, side="right") - 1
+    tab_times = np.asarray(clock_table["TIME"], dtype=np.float64)
+    mets = np.asarray(mets, dtype=np.float64)
 
-    clock_off_corr = new_clock_table["CLOCK_OFF_CORR"]
-    clock_freq_corr = new_clock_table["CLOCK_FREQ_CORR"]
+    outside = (mets < tab_times.min()) | (mets > tab_times.max())
+    if np.any(outside):
+        worst = max(tab_times.min() - mets.min(), mets.max() - tab_times.max())
+        logger.warning(
+            f"{np.count_nonzero(outside)} times fall outside the clock file, by up to "
+            f"{worst:.1f} s; extrapolating from the nearest interval."
+        )
 
-    x = np.array(mets)
+    # Clamped so that a time outside the table uses the edge interval's cubic rather
+    # than indexing past the end.
+    tab_idxs = np.clip(np.searchsorted(tab_times, mets, side="right") - 1, 0, len(tab_times) - 2)
+
+    clock_off_corr = np.asarray(clock_table["CLOCK_OFF_CORR"], dtype=np.float64)
+    clock_freq_corr = np.asarray(clock_table["CLOCK_FREQ_CORR"], dtype=np.float64)
+
     xtab = [tab_times[tab_idxs], tab_times[tab_idxs + 1]]
     ytab = [clock_off_corr[tab_idxs], clock_off_corr[tab_idxs + 1]]
     yptab = [clock_freq_corr[tab_idxs], clock_freq_corr[tab_idxs + 1]]
 
-    return cubic_interpolation(x, xtab, ytab, yptab), good_mets
+    return cubic_interpolation(mets, xtab, ytab, yptab)
 
 
-def nustar_clock_correction_fun(clockfile, t_start, t_stop, t_res=1.0):
-    """Apply NuSTAR clock correction to times.
+def nustar_clock_correction_fun(clockfile):
+    """A function giving the NuSTAR clock correction at arbitrary times.
 
     Parameters
     ----------
-    times : array-like
-        Array of times to correct.
-    clock_table : astropy.table.Table
-        Table with columns TIME, CLOCK_OFF_CORR, CLOCK_FREQ_CORR.
+    clockfile : str
+        A NuSTAR clock file containing the ``NU_FINE_CLOCK`` extension.
 
     Returns
     -------
-    corrected_times : array-like
-        Array of corrected times.
+    callable
+        ``fun(met)`` gives the correction in seconds, with the shape it was given.
+
+    Raises
+    ------
+    ValueError
+        If the file has no fine clock extension. Older files carry a ``CLOCK_CORRECT``
+        extension instead, whose per-interval polynomial is only good to the millisecond
+        -- four orders of magnitude worse than the fine correction and than our target --
+        so it is refused rather than silently applied.
+
+    Notes
+    -----
+    The correction is evaluated directly at the times asked for. It used to be Hermite
+    interpolated onto a 1 s grid and then Akima interpolated from that grid onto the
+    events; one interpolation is both faster and more accurate than two.
     """
-    unique_times = np.arange(t_start - t_res, t_stop + t_res, t_res)
+    with fits.open(clockfile) as hdul:
+        names = [hdu.name for hdu in hdul[1:]]
+        if FINE_CLOCK_EXTENSION not in names:
+            raise ValueError(
+                f"{clockfile} has no {FINE_CLOCK_EXTENSION} extension (found {names}). "
+                "Clock files from before 2019 carry a CLOCK_CORRECT extension, which is "
+                "only accurate to the millisecond and is not supported; fetch a current "
+                "one from the CALDB, or pass --clockfile none."
+            )
+        clocktable = Table(hdul[FINE_CLOCK_EXTENSION].data)
 
-    hduname = "NU_FINE_CLOCK"
-    logger.info(f"Read extension {hduname}")
-    clocktable = Table.read(clockfile, hdu=hduname)
-    clock_corr, _ = interpolate_clock_function(clocktable, unique_times)
-    clock_fun = Akima1DInterpolator(unique_times, clock_corr, extrapolate=True)
+    logger.info(f"Read {len(clocktable)} rows from {FINE_CLOCK_EXTENSION} of {clockfile}")
 
-    return clock_fun
+    def correction(times):
+        asked = np.asarray(times, dtype=np.float64)
+        values = interpolate_clock_function(clocktable, np.atleast_1d(asked))
+        return values.reshape(asked.shape) if asked.ndim else values[0]
+
+    return correction

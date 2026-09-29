@@ -5,12 +5,6 @@ from this page as they are fixed, and each fix should arrive with a test.
 
 ## Accuracy
 
-**The clock correction is applied in the wrong order.** We compute
-`t + clock(t) + bary(t)`; HEASOFT `barycorr` computes `t' = t + clock(t)` and then
-`t' + bary(t')`, also looking up the spacecraft position at `t'`. On NuSTAR this is a
-~1.1 µs difference. Until it is fixed, comparisons against `barycorr` must be run with
-`--clockfile none`, which is what the test suite does.
-
 **`--engine pint` sits ~116 ns from `barycorr`.** PINT's solar-system Shapiro delay
 carries an extra `2·T☉·ln(r/AU)` annual term that `axBary` omits. Neither is wrong; they
 differ by a term a pulsar fit would absorb. The default native engine uses the `axBary`
@@ -41,14 +35,6 @@ rotating the source direction into the frame the ephemeris itself uses.
 
 ## Correctness
 
-**`get_latest_clock_file` raises `UnboundLocalError` on a network failure** instead of
-falling back to a local clock file, because `fname` is never assigned on that path.
-
-**`interpolate_clock_function` returns a validity mask that its only caller discards.**
-`nustar_clock_correction_fun` then builds an Akima spline from a full-length `x` and a
-possibly shorter `y`, which raises a length mismatch whenever an event falls outside
-the clock table's span.
-
 **`download_locally` corrupts astropy's download cache.** It calls
 `download_file(cache=True)` and then `shutil.move`s the cached file out of the cache
 directory, leaving the cache index pointing at nothing.
@@ -72,13 +58,11 @@ RXTE and reads `$LHEA_DATA/tdc.dat` instead. The measured effect is 5.97e-5 s, s
 matching `barycorr` on RXTE requires reading that file.
 
 **Only the new NuSTAR clock format is read.** `nustar_clock_correction_fun` reads the
-`NU_FINE_CLOCK` extension. Older clock files carry a `CLOCK_CORRECT` extension with
-C0/C1/C2 polynomial coefficients instead, and cannot be used — including the
-`dummy_clk.fits` file in the test data.
-
-**Clock files are re-downloaded every run.** `get_latest_clock_file` scrapes the CALDB
-HTML index and downloads the newest clock file each time, with no caching. NuSTAR clock
-files are ~11 MB.
+`NU_FINE_CLOCK` extension. Older files carry a `CLOCK_CORRECT` extension with C0/C1/C2
+polynomial coefficients, documented by HEASOFT as accurate only to the millisecond;
+they are refused with an explanatory error rather than supported, on the grounds that a
+millisecond is four orders of magnitude worse than the target. Fetch a current clock
+file from the CALDB instead.
 
 ## Performance
 
@@ -93,10 +77,6 @@ The native engine uses no grid at all.
 would take about a minute. `native_barycentric_correction` accepts a `dt` that puts a
 cubic spline through a grid instead -- measured cost 1.2 ns at 5 s -- and nothing passes
 it yet.
-
-**The clock correction is interpolated twice.** Hermite interpolation onto a 1-second
-grid, then an Akima spline from that grid onto the events. One interpolation evaluated
-directly at the event times would be both faster and more accurate.
 
 **The whole file is materialised in memory.** A 600 MB event file is read, modified and
 written as one `HDUList`.
