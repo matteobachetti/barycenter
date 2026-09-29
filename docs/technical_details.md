@@ -51,9 +51,9 @@ times our accuracy target. The position comes from, in order of preference:
 - a TEMPO/TEMPO2/PINT `.par` file given with `-p`, read by `pint.models.get_model`;
 - explicit `--ra` and `--dec` on the command line;
 - the event header, via `get_coordinates_from_fits_header`, which tries
-  `RA_OBJ`/`DEC_OBJ`, then `RA_NOM`/`DEC_NOM`, then `RA_PNT`/`DEC_PNT`, then plain
-  `RA`/`DEC`. That order is a deliberate departure from HEASOFT's — see
-  [below](#the-coordinate-keyword-order).
+  `RA_OBJ`/`DEC_OBJ`, then `RA_TARG`/`DEC_TARG`, then `RA_NOM`/`DEC_NOM`, then
+  `RA_PNT`/`DEC_PNT`, then plain `RA`/`DEC`. That order is a deliberate departure from
+  HEASOFT's — see [below](#the-coordinate-keyword-order).
 
 A `.par` file is the only thing on this path that needs PINT installed, since it is the
 one source of coordinates we do not parse ourselves. Its `EPHEM` also wins over
@@ -293,6 +293,18 @@ mission's [registry entry](#the-mission-registry):
 The units are declared in the spec, not read from `TUNITn`, because orbit files are
 unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
 The table that comes out is always in metres and metres per second.
+
+The column names in that table are what the spec asks for, not what the file wrote:
+every lookup goes through `utils.column_named`, which matches without regard to case.
+FITS column names are case-insensitive by standard and missions use that freedom —
+Chandra spells its orbit time `Time` and its velocities `Vx`, `Vy`, `Vz`, and its event
+times `time`. The reason to be careful about it is that neither failure is loud: on the
+orbit side a velocity that is not found is silently replaced by a numerical derivative of
+the position, and on the event side a `time` column that is not found leaves the events
+untouched while the capitalised `START`/`STOP` of the `GTI` extension beside them are
+corrected, so the file comes out with its events and its good-time intervals on
+different time scales. `core.TIME_COLUMNS` lists every column a correction must move:
+`TIME`, `START`, `STOP`, `TSTART`, `TSTOP`.
 
 Three cleanups are applied to **every** mission, not just to `FPorbit` files as PINT
 does: sort by time, drop rows repeated at the same time (a spline through a repeated
@@ -556,7 +568,7 @@ reference's own choice (`barycen`'s default is DE200, so it has to be asked for)
 ### The coordinate keyword order is deliberately not HEASOFT's
 
 When the position is not given explicitly, we read it from the header in the order
-`RA_OBJ` → `RA_NOM` → `RA_PNT` → `RA`. HEASOFT `barycorr` uses
+`RA_OBJ` → `RA_TARG` → `RA_NOM` → `RA_PNT` → `RA`. HEASOFT `barycorr` uses
 `RA_NOM` → `RA_PNT` → `RA_OBJ` → `RA` (its own `kwfallback` call, `barycorr` 2.19
 line 278). Both orders live in `barycenter.core` as `COORDINATE_KEYWORDS` and
 `HEASOFT_COORDINATE_KEYWORDS`.
@@ -568,6 +580,11 @@ direction only to within the pointing accuracy and is often written out rounded.
 barycentric correction refers arrival times to the source, so the source position is the
 right input; the pointing is a proxy for it that a mission-planning tool happened to
 record.
+
+`RA_TARG`/`DEC_TARG` sits second because it is the same thing as `RA_OBJ` under another
+name, and is what Chandra uses: a Chandra event file carries no `RA_OBJ` at all. Leaving
+it out would fall straight through to the pointing, and on the ACIS test file `RA_NOM` is
+324 arcsec from the target — 0.8 s of Roemer delay, not a rounding error.
 
 The two are not interchangeable: on the NuSTAR test file `RA_OBJ` and `RA_NOM` differ by
 0.1 arcsec, which is 172 µs of Roemer delay — a thousand times the accuracy target.
@@ -587,6 +604,7 @@ When a comparison disagrees, check these before looking for a bug:
 | Difference | Size (NuSTAR test file) |
 |---|---|
 | `RA_OBJ` vs `RA_NOM` (0.1 arcsec) — [our default differs from HEASOFT's](#the-coordinate-keyword-order) | 172 µs |
+| `RA_TARG` vs `RA_NOM` (324 arcsec, Chandra ACIS) | 0.8 s |
 | DE430 vs DE440 ephemeris | ~10 µs |
 | DE405 vs DE430 | 0.38 µs |
 | Clock correction applied before vs after | 1.1 µs |

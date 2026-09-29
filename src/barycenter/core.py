@@ -20,7 +20,7 @@ from .native import native_barycentric_correction
 from .official import apply_mission_specific_barycenter_correction
 from .orbit import read_orbit
 from .remote import download_locally
-from .utils import fits_open_including_remote, slim_down_hdu_list
+from .utils import column_named, fits_open_including_remote, slim_down_hdu_list
 
 #: The engines that can compute the correction. ``native`` is the default: it is exact
 #: in float64 on every platform, about 30 times faster, and matches HEASOFT ``barycorr``
@@ -32,6 +32,7 @@ __all__ = [
     "COORDINATE_KEYWORDS",
     "ENGINES",
     "HEASOFT_COORDINATE_KEYWORDS",
+    "TIME_COLUMNS",
     "apply_barycenter_correction",
     "correct_times",
     "extract_events_in_region",
@@ -41,6 +42,10 @@ __all__ = [
 ]
 
 
+#: Every column holding a time that a barycentric correction must move. Matched against
+#: a file's columns without regard to case; see :func:`barycenter.utils.column_named`.
+TIME_COLUMNS = ("TIME", "START", "STOP", "TSTART", "TSTOP")
+
 #: Our order of preference for the source position, when it is not given explicitly.
 #: ``RA_OBJ`` is the position of the object the observation was aimed at, which is the
 #: thing a barycentric correction is actually about; the others describe where the
@@ -49,6 +54,10 @@ __all__ = [
 #: :data:`HEASOFT_COORDINATE_KEYWORDS`.
 COORDINATE_KEYWORDS = (
     ("RA_OBJ", "DEC_OBJ"),
+    # Chandra's name for the same thing. It writes no RA_OBJ at all, and its RA_NOM can
+    # sit several arcminutes away -- 324 arcsec on the ACIS test file, worth 0.8 s of
+    # Roemer delay -- so leaving RA_TARG out is not a refinement but a blunder.
+    ("RA_TARG", "DEC_TARG"),
     ("RA_NOM", "DEC_NOM"),
     ("RA_PNT", "DEC_PNT"),
     ("RA", "DEC"),
@@ -488,11 +497,16 @@ def apply_barycenter_correction(
 
         for hdu in hdul:
             logger.info(f"Updating HDU {hdu.name}")
-            for keyname in ["TIME", "START", "STOP", "TSTART", "TSTOP"]:
-                if hdu.data is not None and keyname in hdu.data.names:
-                    logger.info(f"Updating column {keyname}")
-                    hdu.data[keyname] = correct_times(
-                        hdu.data[keyname] + timezero, bary_fun, clock_fun
+            for keyname in TIME_COLUMNS:
+                # Not ``keyname in hdu.data.names``: FITS column names are
+                # case-insensitive and Chandra writes ``time`` in lower case, so a
+                # case-sensitive test would skip its events while still correcting the
+                # capitalised START/STOP of the GTI beside them.
+                column = column_named(hdu.data, keyname)
+                if column is not None:
+                    logger.info(f"Updating column {column}")
+                    hdu.data[column] = correct_times(
+                        hdu.data[column] + timezero, bary_fun, clock_fun
                     )
                 if keyname in hdu.header:
                     logger.info(f"Updating header keyword {keyname}")

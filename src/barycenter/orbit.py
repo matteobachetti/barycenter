@@ -23,7 +23,7 @@ import astropy.units as u
 import numpy as np
 from astropy.table import Table, vstack
 
-from .utils import fits_open_including_remote
+from .utils import column_named, fits_open_including_remote
 
 __all__ = ["OrbitSpec", "read_orbit"]
 
@@ -143,8 +143,14 @@ def _read_one(fname, spec=None):
 
 
 def _has_columns(data, names):
+    """Whether every one of ``names`` is a column of ``data``, ignoring case.
+
+    Case matters here because the alternative to finding a velocity column is silently
+    differentiating the position instead -- a quiet degradation rather than an error.
+    Chandra spells its velocities ``Vx``, ``Vy``, ``Vz`` and its time ``Time``.
+    """
     names = (names,) if isinstance(names, str) else names
-    return all(n in data.names for n in names)
+    return all(column_named(data, n) is not None for n in names)
 
 
 def _clean(table):
