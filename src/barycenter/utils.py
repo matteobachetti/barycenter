@@ -4,12 +4,46 @@ import numpy as np
 from astropy.io import fits
 
 __all__ = [
+    "column_named",
     "fits_open_including_remote",
     "fits_open_remote",
     "high_precision_keyword_read",
     "high_precision_mjdref",
     "splitext_improved",
 ]
+
+
+def column_named(data, name):
+    """The column actually called ``name``, whatever case the file wrote it in.
+
+    FITS column names are case-insensitive by standard, and missions use that freedom:
+    Chandra writes its event times in a column called ``time`` and its orbit times in
+    ``Time``, where everyone else writes ``TIME``. A case-sensitive ``"TIME" in
+    data.names`` therefore finds nothing on a Chandra file -- and since the ``GTI``
+    extension beside it *does* spell ``START``/``STOP`` in capitals, the result is not a
+    failure but a file whose good-time intervals are barycentred and whose events are
+    not. Silently producing half-corrected times is the worst outcome available here, so
+    every lookup of a column by name goes through this.
+
+    Parameters
+    ----------
+    data : astropy.io.fits.FITS_rec or None
+        Table data, or ``None`` for an image or empty extension.
+    name : str
+        The name to look for, in any case.
+
+    Returns
+    -------
+    str or None
+        The column's name as the file spells it, or ``None`` if there is no such column.
+    """
+    if data is None:
+        return None
+    wanted = str(name).upper()
+    for actual in data.names:
+        if actual.upper() == wanted:
+            return actual
+    return None
 
 
 def fits_open_remote(filename, **kwargs):
@@ -98,10 +132,14 @@ def slim_down_hdu_list(hdul, additional_cols=None, ext=1):
     """
 
     data = hdul[1].data
-    cols = [data.columns["TIME"]]
+    time_col = column_named(data, "TIME")
+    if time_col is None:
+        raise ValueError("Extension 1 does not contain a TIME column.")
+    cols = [data.columns[time_col]]
     for col in additional_cols or []:
-        if col in data.columns.names:
-            cols.append(data.columns[col])
+        actual = column_named(data, col)
+        if actual is not None:
+            cols.append(data.columns[actual])
     if isinstance(ext, (int, str)):
         ext = [ext]
 
@@ -109,7 +147,7 @@ def slim_down_hdu_list(hdul, additional_cols=None, ext=1):
         hdu = hdul[e]
         if hdu.data is None:
             continue
-        if "TIME" not in hdu.data.names:
+        if column_named(hdu.data, "TIME") is None:
             raise ValueError(f"Extension {e} does not contain a TIME column.")
         logger.info(f"Slimming down extension {e} to columns {[c.name for c in cols]}")
         hdul[e].data = fits.BinTableHDU.from_columns(cols).data

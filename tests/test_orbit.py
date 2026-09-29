@@ -124,6 +124,24 @@ class TestCleaning:
         # cent out -- one more reason to prefer the tabulated velocity.
         assert np.allclose(got[1:-1], vel[1:-1, :2], rtol=2e-3)
 
+    def test_columns_are_found_whatever_case_they_are_written_in(self, tmp_path):
+        """A file spelling its columns in lower case is read, velocities included.
+
+        Chandra writes ``Time`` and ``Vx``; a case-sensitive lookup would find no
+        velocity and quietly differentiate the position instead, which is a degradation
+        rather than an error and so would never be noticed.
+        """
+        met = np.arange(0.0, 600.0, 30.0)
+        pos, vel = circular_orbit(met)
+        fname = write_fporbit(tmp_path / "lower.fits", met, pos, vel)
+        with fits.open(fname, mode="update") as hdul:
+            for column in hdul["ORBIT"].columns:
+                column.name = column.name.lower()
+        table = read_orbit(fname)
+        assert np.allclose(table["MET"].value, met)
+        # Exactly the tabulated velocity, not a numerical derivative of the position.
+        assert np.array_equal(table["Vx"].value, vel[:, 0])
+
 
 class TestSeveralFiles:
     def test_files_are_stacked_and_sorted(self, tmp_path):

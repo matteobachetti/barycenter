@@ -257,6 +257,39 @@ class TestExecution(object):
                 hdul["GTI"].data["STOP"], ref["GTI"].data["STOP"], rtol=0, atol=TOLERANCE_S
             )
 
+    def test_a_lower_case_time_column_is_still_corrected(self, tmp_path):
+        """A file spelling its time column ``time`` gets the same correction as ``TIME``.
+
+        FITS column names are case-insensitive, and Chandra uses that freedom. A
+        case-sensitive lookup skips such a column while still correcting the capitalised
+        START/STOP of the GTI beside it, so the failure mode is not an error but a file
+        whose events and good-time intervals are on different time scales.
+        """
+        lower = str(tmp_path / "lower.evt")
+        with fits.open(self.evfile) as hdul:
+            hdul[1].columns["TIME"].name = "time"
+            assert "START" in hdul["GTI"].data.names, "the GTI must stay capitalised"
+            hdul.writeto(lower)
+
+        outfile = str(tmp_path / "lower_bary.evt")
+        main_barycenter(
+            [
+                lower,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                REF_RA,
+                "--dec",
+                REF_DEC,
+                "--clockfile",
+                "none",
+            ]
+        )
+        with fits.open(outfile) as hdul, fits.open(self.bary_evfile) as ref:
+            assert_times_agree(hdul[1].data["time"], ref[1].data["TIME"])
+            assert_times_agree(hdul["GTI"].data["START"], ref["GTI"].data["START"])
+
     def test_several_orbit_files(self, tmp_path):
         """Passing a list of orbit files works, and repeated entries are dropped.
 
@@ -551,8 +584,19 @@ class TestCoordinateKeywords:
         hdr = self.header(RA_OBJ=294.91067, DEC_OBJ=21.58308, RA_NOM=294.9107, DEC_NOM=21.58308)
         assert get_coordinates_from_fits_header(hdr) == ("RA_OBJ", "DEC_OBJ")
 
+    def test_chandras_target_keywords_are_used(self):
+        """RA_TARG/DEC_TARG is taken when present: Chandra writes no RA_OBJ at all.
+
+        Its RA_NOM can sit arcminutes from the target -- 324 arcsec on the ACIS test
+        file, worth 0.8 s of Roemer delay -- so falling through to the pointing would be
+        a gross error, not a rounding one.
+        """
+        hdr = self.header(RA_TARG=148.959167, DEC_TARG=69.679722, RA_NOM=148.87, DEC_NOM=69.6)
+        assert get_coordinates_from_fits_header(hdr) == ("RA_TARG", "DEC_TARG")
+
     @pytest.mark.parametrize(
-        "ra_key,dec_key", [("RA_NOM", "DEC_NOM"), ("RA_PNT", "DEC_PNT"), ("RA", "DEC")]
+        "ra_key,dec_key",
+        [("RA_TARG", "DEC_TARG"), ("RA_NOM", "DEC_NOM"), ("RA_PNT", "DEC_PNT"), ("RA", "DEC")],
     )
     def test_falls_back_down_the_chain(self, ra_key, dec_key):
         """With no RA_OBJ, each remaining pair in turn is used, down to plain RA/DEC."""
