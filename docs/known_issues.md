@@ -35,15 +35,11 @@ taken.
 **`TELAPSE` is left stale.** `correct_times` updates `TIME`, `START`, `STOP`, `TSTART`
 and `TSTOP` but not `TELAPSE`, which is `TSTOP − TSTART` and changes by as much as the
 two ends' corrections differ — 1.6 s on the XMM test observation, where the Roemer delay
-moves by that much over 7.6 h. SAS `barycen` does update it. Nothing downstream in this
+moves by that much over 7.6 h, and 1.0 s on the Chandra one. SAS `barycen` does update it. Nothing downstream in this
 package reads `TELAPSE`, but a file leaving here claims a duration that no longer matches
 its own start and stop times.
 
 ## Missing features
-
-**Chandra is `--apply-official` only.** Native support would free Chandra timing from
-`axbary`'s hard-coded DE200/DE405 choice: the CIAO build has no `-jpleph` switch, so
-DE440 is simply not reachable through it.
 
 **Only the new NuSTAR clock format is read.** `nustar_clock_correction_fun` reads the
 `NU_FINE_CLOCK` extension. Older files carry a `CLOCK_CORRECT` extension with C0/C1/C2

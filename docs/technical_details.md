@@ -289,6 +289,7 @@ mission's [registry entry](#the-mission-registry):
 | NICER, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | RXTE | `XTE_PE` (or `ORBIT`) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | XMM-Newton | `ORBIT` | scalar `GEI_X`,`GEI_Y`,`GEI_Z` | scalar `VX`,`VY`,`VZ` | **km** |
+| Chandra | `ORBITEPHEM` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 
 The units are declared in the spec, not read from `TUNITn`, because orbit files are
 unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
@@ -564,6 +565,49 @@ reference's own choice (`barycen`'s default is DE200, so it has to be asked for)
 | DE440 | +95 µs |
 | DE200 | +1.8 ms |
 
+### Chandra
+
+`tests/data/dummy_chandra_bary_{DE405,DE200}.evt.gz` are CIAO `axbary` references made on
+401 ACIS-S events spanning the 5.6 h of observation 10026, with explicit coordinates.
+There are two of them because `axbary` chooses the ephemeris from the reference frame and
+can reach only these two combinations — `refframe=ICRS` reads `JPLEPH.405` and
+`refframe=FK5` reads `JPLEPH.200`. Measured with the native engine:
+
+| reference | mean | std | max abs |
+|---|---|---|---|
+| DE405, ICRS | **+47.0 ns** | 24.4 ns | 59.6 ns (1 ulp) |
+| DE200, FK5 | **+44.0 ns** | 26.2 ns | 59.6 ns (1 ulp) |
+| GTI `START`/`STOP` | +59.6 ns | — | 59.6 ns (1 ulp) |
+
+One unit in the last place is 59.6 ns at Chandra's 3.57e8 s, so the scatter is again the
+reference file's own granularity rather than ours.
+
+Having both is what makes the **ephemeris/frame pairing** testable against a real tool
+instead of against ourselves. DE200 is referred to FK5 and DE405 onwards to ICRS; the code
+pairs them in `native.ephemeris_frame`, and pairing them wrongly on this dataset costs
++11.2 µs (DE405 read in FK5) or −11.1 µs (DE200 read in ICRS) — a hundred times the
+target, from a mistake no file will ever warn about. Every other official tool here was
+run in one frame only, so no other reference can catch it.
+
+Ephemeris sensitivity, measured against the DE405 reference:
+
+| ephemeris | offset |
+|---|---|
+| DE405 | +47 ns |
+| DE421 | −1.2 µs |
+| DE430 | −1.5 µs |
+| DE440 | **+79.4 µs** |
+| DE200 | +1.8 ms |
+
+The DE440 figure is the one to note, because it is much larger than the ~10 µs DE430→DE440
+costs on the NuSTAR dataset, and it is not a Chandra effect: it is where the source is. The
+difference between DE405 and DE440 is dominated by the position of the solar-system
+barycentre, which moved when Jupiter's and Saturn's masses were revised, and 2009 is over a
+decade past the data DE405 was fitted to. Projected on M82's direction that comes to 79 µs
+— about 24 km — and it varies by less than one ulp across the exposure, so it is an
+offset, not noise. **DE440 is the package default**, so a comparison against an `axbary` product has to
+ask for DE405 explicitly; the tests do.
+
 (the-coordinate-keyword-order)=
 ### The coordinate keyword order is deliberately not HEASOFT's
 
@@ -625,9 +669,9 @@ When a comparison disagrees, check these before looking for a bug:
 | Fermi | FT2 | none needed | works |
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
+| Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
 | Swift | `sw*sao.fits` — spec not written, no test file | none needed | `--apply-official` only |
 | ASCA | — | — | `--apply-official` only, DE200 only |
-| Chandra | `primary/orbitf*_eph1.fits` — spec not written | none needed | `--apply-official` only, DE405 only |
 
 ## Test data
 
@@ -650,6 +694,10 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_xmm_evt.evt` | 401 EPIC-pn events, every 839th row of observation 0112290201, so the sample spans the whole 7.6 h, plus one `STDGTI` extension |
 | `dummy_xmm_orb.fits.gz` | 2832 rows of the matching PPS `ORBTSR` file, every 10th second over the events plus 600 s, with **all ten** columns kept |
 | `dummy_xmm_bary_DE430.evt.gz` | the SAS 22.1 `barycen` reference for those events, DE430, GTIs corrected too |
+| `dummy_chandra_evt.evt` | 401 ACIS-S events, every 164th row of observation 10026, so the sample spans the whole 5.6 h, plus its `GTI` extension |
+| `dummy_chandra_orb.fits.gz` | 71 rows of the matching `orbitf*_eph1.fits`, the file's own 300 s sampling over the events plus 1200 s |
+| `dummy_chandra_bary_DE405.evt.gz` | the CIAO `axbary` reference for those events, `refframe=ICRS` |
+| `dummy_chandra_bary_DE200.evt.gz` | the same with `refframe=FK5`, which is how the ephemeris/frame pairing gets checked against a real tool |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
 triples of identical length — `GEI_*` is geocentric equatorial and is the one the
@@ -657,6 +705,13 @@ ephemeris is referred to, `GSE_*` is the same vector rotated into the Earth-Sun 
 and reading the wrong one is a 160 ms error that nothing in the units or the column
 comments would give away. A committed file that still offers the wrong choice is a
 sharper test than a hand-built one.
+
+The Chandra files keep their column names exactly as Chandra writes them, for the same
+reason: `time` in the events, `Time` in the orbit file, `START`/`STOP` in capitals in the
+`GTI` extension beside them. That mixture is the only committed example of the
+case-insensitivity the FITS standard grants and most missions never use, and the failure
+it guards against is silent — a case-sensitive lookup corrects the GTIs and leaves the
+events alone.
 
 `tools/make_test_data.py` regenerates all of them, including the trimming, and it now
 allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and
@@ -689,3 +744,28 @@ wrapper only worked when it already had a terminal to start from.
 Regenerating the reference also needs the observation itself, which is not committed:
 `XMM_OBS` in the script names where it lives on the machine that made it, in the same way
 `RXTE_EVENTS` points at PINT's test data and `CALDB_CLOCK` at a local CALDB.
+
+### Driving CIAO `axbary` for the Chandra references
+
+`axbary` is easier than `barycen` — it writes a new file rather than editing in place, and
+needs no controlling terminal — but it has one trap and one limit:
+
+* **It fails silently without its calibration data.** It looks for `tai-utc.dat` and
+  `JPLEPH.*` under `$TIMING_DIR` or `$ASCDS_CALIB`. With neither set it prints
+  `Could not initialize bary stuff`, **exits 0**, and writes the times out unchanged — so
+  the output is a perfectly valid file that is bit-for-bit the input. `run_axbary` sets
+  `ASCDS_CALIB` and then checks that the times actually moved.
+* **It is a shell wrapper around `pset`/`pget`**, so CIAO's `bin` has to be on `PATH`, not
+  merely be where the executable came from. Without it the wrapper reads no parameters and
+  does nothing, again exiting 0.
+* **It can only reach DE200 and DE405**, chosen through `refframe=FK5` and `refframe=ICRS`
+  respectively — there is no ephemeris parameter. That is the main reason to prefer the
+  native engine on Chandra: DE405 is 79 µs from DE440 on this dataset.
+
+`barycorr` is **not** an option for Chandra, despite the mission appearing in its
+documentation. On a Chandra orbit file it reports `no bracketing sample found for time
+357377056.00505000` followed by `Invalid Observatory/Spacecraft position vector`, on a file
+that brackets that time comfortably — reproduced with both the trimmed and the full,
+uncompressed file. `strings` on `hdaxbary` shows readers for `xtescorbit`, `nicerscorbit`,
+`swiftscorbit` and NuSTAR, and nothing for Chandra. So `MISSIONS["chandra"].official` is
+`None`, not `"barycorr"`.

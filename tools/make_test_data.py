@@ -59,6 +59,35 @@ XMM_EVENTS = os.path.join(XMM_OBS, "event_cl", "xmm0112290201_pn_S003_imaging_cl
 XMM_ORBIT = os.path.join(XMM_OBS, "PPS", "P0112290201OBX000ORBTSR0000.FTZ")
 XMM_ODF = os.path.join(XMM_OBS, "event_cl", "odf")
 
+#: The Chandra dataset the ``axbary`` references are made with: the ACIS-S event list of
+#: observation 10026 (M82) and the orbit ephemeris beside it, both public Chandra archive
+#: data.  ``axbary`` writes a new file rather than editing in place, so nothing here is at
+#: risk, but it is still only ever read.
+CHANDRA_OBS = os.path.expanduser("~/tmp/m82_acis/10026/primary")
+CHANDRA_EVENTS = os.path.join(CHANDRA_OBS, "acisf10026N003_evt2.fits.gz")
+CHANDRA_ORBIT = os.path.join(CHANDRA_OBS, "orbitf356961902N001_eph1.fits.gz")
+
+#: Where CIAO lives.  ``axbary`` needs its own leap-second file and JPL ephemerides, which
+#: it looks for under ``$TIMING_DIR`` or ``$ASCDS_CALIB``; with neither set it reports
+#: "Could not initialize bary stuff" and then writes the times out *unchanged*, so this
+#: has to be right or the reference is silently the input.
+CIAO = os.path.expanduser("~/mamba/envs/ciao")
+
+#: How the Chandra references are made.  Two of them, because ``axbary`` chooses the
+#: ephemeris from the reference frame and can reach only these two combinations:
+#: ``FK5`` reads ``JPLEPH.200`` and ``ICRS`` reads ``JPLEPH.405``.  Having both is what
+#: makes the ephemeris/frame pairing testable against a real tool -- pairing DE405 with
+#: FK5, or DE200 with ICRS, is an 11 us error, and nothing in either file says so.
+#: ``ra``/``dec`` are RA_TARG/DEC_TARG, passed explicitly like everywhere else here.
+CHANDRA_REFERENCES = {
+    "dummy_chandra_bary_DE405.evt.gz": {
+        "args": {"ra": "148.959167", "dec": "69.679722", "refframe": "ICRS"},
+    },
+    "dummy_chandra_bary_DE200.evt.gz": {
+        "args": {"ra": "148.959167", "dec": "69.679722", "refframe": "FK5"},
+    },
+}
+
 #: Where SAS lives.  Globbed rather than pinned, so a SAS update does not silently stop
 #: the XMM reference from being regenerable.
 SAS_DIRS = sorted(glob.glob(os.path.expanduser("~/devel/SAS/xmmsas_*")))
@@ -314,6 +343,115 @@ def trim_xmm_inputs(nevents=400, orbit_step=10, margin=600.0):
     return evt_out, orb_out + ".gz"
 
 
+def trim_chandra_inputs(nevents=400, margin=1200.0):
+    """Cut the Chandra event and orbit files down to something committable.
+
+    The event list keeps ``time`` and ``pi`` only, decimated across the whole 5.6 h
+    exposure, plus the ``GTI`` extension.  The lower-case column names are kept exactly as
+    Chandra writes them -- ``time`` in the events, ``Time`` in the orbit file, against
+    ``START``/``STOP`` in the GTI -- because that mixture is the thing worth having a
+    committed file for: a case-sensitive column lookup leaves the events untouched while
+    correcting the GTIs, which is a wrong answer rather than an error.
+
+    The orbit file is kept at its own 300 s sampling.  Measured against the full file,
+    interpolating on that grid costs ~1e-11 s at Chandra's 86000-113600 km, so there is
+    nothing to gain from decimating and nothing to lose by not.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(DATA, "dummy_chandra_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_chandra_orb.fits")
+
+    with fits.open(CHANDRA_EVENTS) as hdul:
+        events = hdul["EVENTS"]
+        nrows = len(events.data)
+        step = max(1, nrows // nevents)
+        rows = slice(None, None, step)
+        trimmed = subset_table(events, rows, columns=("time", "pi"))
+        trimmed.header.add_history(
+            f"Every {step}th row of {os.path.basename(CHANDRA_EVENTS)}, by tools/make_test_data.py"
+        )
+        # Materialised, not a view: it is used after the file is closed.
+        times = np.array(events.data["time"][rows])
+        fits.HDUList([hdul[0].copy(), trimmed, hdul["GTI"].copy()]).writeto(evt_out, overwrite=True)
+    print(f"    wrote {evt_out} ({len(times)} of {nrows} rows)")
+
+    with fits.open(CHANDRA_ORBIT) as hdul:
+        orbit = hdul["ORBITEPHEM"]
+        t = orbit.data["Time"]
+        keep = np.flatnonzero((t > times.min() - margin) & (t < times.max() + margin))
+        trimmed = subset_table(orbit, keep)
+        trimmed.header["TSTART"] = float(t[keep].min())
+        trimmed.header["TSTOP"] = float(t[keep].max())
+        trimmed.header.add_history(
+            f"Rows of {os.path.basename(CHANDRA_ORBIT)} spanning "
+            f"{os.path.basename(evt_out)}, by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), trimmed]).writeto(orb_out, overwrite=True)
+    print(f"    wrote {orb_out} ({len(keep)} of {len(t)} rows)")
+    subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
+    return evt_out, orb_out + ".gz"
+
+
+def run_axbary(infile, orbitfile, outfile, args):
+    """Run CIAO ``axbary`` on ``infile``, writing an uncompressed ``outfile``.
+
+    Unlike ``barycorr`` this needs no HEASOFT environment and no terminal, but it does
+    need ``ASCDS_CALIB`` pointing at the directory holding ``tai-utc.dat`` and
+    ``JPLEPH.*``.  Without it the task prints "Could not initialize bary stuff" and
+    *still exits 0*, having copied the times through unchanged -- so the output is checked
+    for having actually moved.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    workdir = tempfile.mkdtemp(prefix="axbary_")
+    try:
+        local_in = os.path.join(workdir, os.path.basename(infile))
+        shutil.copy(infile, local_in)
+        shutil.copy(orbitfile, workdir)
+        pfiles = os.path.join(workdir, "pfiles")
+        os.makedirs(pfiles)
+
+        cmd = [
+            os.path.join(CIAO, "bin", "axbary"),
+            f"infile={os.path.basename(local_in)}",
+            f"orbitfile={os.path.basename(orbitfile)}",
+            f"outfile={os.path.basename(outfile)}",
+            "clobber=yes",
+            "mode=h",
+        ]
+        cmd += [f"{k}={v}" for k, v in args.items()]
+        env = dict(os.environ)
+        env["ASCDS_CALIB"] = os.path.join(CIAO, "data")
+        env["PFILES"] = pfiles + ";" + os.path.join(CIAO, "param")
+        # `axbary` is a shell wrapper around `pset`/`pget`, so CIAO's bin has to be on
+        # PATH as well as being where the executable came from.  Without it the wrapper
+        # reads no parameters at all and exits 0 having done nothing.
+        env["PATH"] = os.path.join(CIAO, "bin") + os.pathsep + env.get("PATH", "")
+        result = subprocess.run(
+            cmd, cwd=workdir, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        )
+        output = result.stdout.decode(errors="replace")
+        if result.returncode != 0 or "Could not" in output or "command not found" in output:
+            raise RuntimeError(f"axbary failed:\n{output}")
+        print(output.rstrip())
+
+        produced = os.path.join(workdir, os.path.basename(outfile))
+        with fits.open(local_in) as before, fits.open(produced) as after:
+            moved = np.abs(after["EVENTS"].data["time"] - before["EVENTS"].data["time"])
+        if moved.max() < 1.0:
+            raise RuntimeError(
+                f"axbary moved the times by at most {moved.max():g} s: it ran without "
+                "an ephemeris and the output is the input"
+            )
+        print(f"    times moved by {moved.mean():.3f} s")
+        shutil.move(produced, outfile)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
 def run_barycen(infile, outfile, args):
     """Run SAS ``barycen`` on a copy of ``infile``, writing an uncompressed ``outfile``.
 
@@ -461,6 +599,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_xmm_evt.evt")):
         print("--- dummy_xmm_evt.evt, dummy_xmm_orb.fits.gz")
         trim_xmm_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_chandra_evt.evt")):
+        print("--- dummy_chandra_evt.evt, dummy_chandra_orb.fits.gz")
+        trim_chandra_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target
@@ -474,6 +615,19 @@ def main():
         )
         if target.endswith(".gz"):
             subprocess.run(["gzip", "-9", "-f", raw], check=True)
+        print(f"    wrote {target}")
+
+    for name, spec in CHANDRA_REFERENCES.items():
+        target = os.path.join(DATA, name)
+        raw = target[: -len(".gz")]
+        print(f"--- {name}")
+        run_axbary(
+            os.path.join(DATA, "dummy_chandra_evt.evt"),
+            os.path.join(DATA, "dummy_chandra_orb.fits.gz"),
+            raw,
+            spec["args"],
+        )
+        subprocess.run(["gzip", "-9", "-f", raw], check=True)
         print(f"    wrote {target}")
 
     target = os.path.join(DATA, XMM_REFERENCE["outfile"])

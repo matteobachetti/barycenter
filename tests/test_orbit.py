@@ -18,6 +18,7 @@ datadir = os.path.join(curdir, "data")
 
 NUSTAR_ORBIT = os.path.join(datadir, "dummy_orb.fits.gz")
 XMM_ORBIT = os.path.join(datadir, "dummy_xmm_orb.fits.gz")
+CHANDRA_ORBIT = os.path.join(datadir, "dummy_chandra_orb.fits.gz")
 
 
 def write_fporbit(path, met, pos, vel=None, telescope="NICER", extname="ORBIT"):
@@ -93,6 +94,23 @@ class TestRealFile:
         ours = np.column_stack([table[c].value for c in "XYZ"])
         assert np.allclose(ours, gei * 1000.0, rtol=0, atol=1e-6)
         assert not np.allclose(ours, gse * 1000.0, rtol=0, atol=1.0)
+
+    def test_chandras_mixed_case_columns_are_read(self):
+        """Chandra's ORBITEPHEM extension is read, velocities and all.
+
+        It spells its columns ``Time``, ``X``, ``Vx``, so a case-sensitive lookup would
+        find no time column at all -- and if it somehow got past that, no velocity, and
+        would differentiate the position instead of using the tabulated one.
+        """
+        table = read_orbit(CHANDRA_ORBIT)
+        with fits.open(CHANDRA_ORBIT) as hdul:
+            orbit = hdul["ORBITEPHEM"].data
+            assert np.allclose(table["MET"].value, orbit["Time"])
+            assert np.allclose(table["X"].value, orbit["X"])
+            assert np.array_equal(table["Vx"].value, orbit["Vx"])
+        # Metres already, so nothing should have been scaled: 86000-113600 km.
+        radius = np.hypot(np.hypot(table["X"], table["Y"]), table["Z"])
+        assert np.all((radius > 8.0e7 * u.m) & (radius < 1.2e8 * u.m))
 
 
 class TestCleaning:
