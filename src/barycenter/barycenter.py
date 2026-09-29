@@ -8,26 +8,20 @@ import contextlib
 import tempfile
 import numpy as np
 from collections.abc import Iterable
+from numba import vectorize
 
 from astropy.io import fits
 from pint.observatory.satellite_obs import get_satellite_observatory
 from pint.models import get_model, StandardTimingModel
 import astropy.units as u
 from stingray.io import high_precision_keyword_read
-from pint.fits_utils import read_fits_event_mjds
-from astropy.table import Table, vstack
-
-
 from astropy.table import Table
-from scipy.interpolate import interp1d
+
+
 from scipy.interpolate import Akima1DInterpolator
 from pint.logging import log
-import pint.models
 import pint.toa as toa
-from pint.models import StandardTimingModel
-from pint.observatory.satellite_obs import get_satellite_observatory
 
-from astropy.io import fits
 from astropy.time import Time
 from astropy.coordinates import Angle
 import barycenter
@@ -193,9 +187,6 @@ def correct_times(times, bary_fun, clock_fun=None):
     bary_corr = bary_fun(times)
 
     return times + cl_corr + bary_corr
-
-
-from numba import vectorize, float64
 
 
 @vectorize("float64(float64, float64, float64, float64, float64, float64, float64)")
@@ -427,7 +418,6 @@ def apply_mission_specific_barycenter_correction(
     only_columns : list of str, optional
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
-    import tempfile
 
     if os.path.exists(outfile) and not overwrite:
         raise FileExistsError(
@@ -505,7 +495,7 @@ def apply_mission_specific_barycenter_correction(
             )
             _add_to_header_if_missing(hdul[1].header, "RA_BARY", ra, "Added by barycenter.py")
             _add_to_header_if_missing(hdul[1].header, "DEC_BARY", dec, "Added by barycenter.py")
-            hdul[1].header.add_history(f"TOOL: timeconv applied for barycentering")
+            hdul[1].header.add_history("TOOL: timeconv applied for barycentering")
             hdul.writeto(temp_outfile, overwrite=True, output_verify="ignore")
     else:
         raise NotImplementedError(f"Barycenter correction for mission {mission} not implemented")
@@ -634,7 +624,6 @@ def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt
     from astropy import units as u
 
     with fits_open_including_remote(fname, memmap=True) as hdul:
-
         data = hdul[1].data
         header = hdul[1].header
         refframe = header.get("RADECSYS", "icrs").lower()
@@ -705,7 +694,6 @@ def apply_barycenter_correction(
     only_columns : list of str, optional
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
-    import tempfile
 
     cloud = "SCISERVER_USER_ID" in os.environ or "/home/jovyan" in os.environ.get("HOME", "")
 
@@ -774,8 +762,7 @@ def apply_barycenter_correction(
             raise FileNotFoundError(f"Clock file {clockfile} not found")
         elif clockfile is not None and mission != "nustar":
             warnings.warn(
-                f"Clock correction for mission {mission} not implemented, "
-                "skipping clock correction"
+                f"Clock correction for mission {mission} not implemented, skipping clock correction"
             )
         elif clockfile is not None:
             clock_fun = nustar_clock_correction_fun(
@@ -898,7 +885,7 @@ def _default_out_file(args):
 def main_barycenter(args=None):
     import argparse
 
-    description = "Apply the barycenter correction to NuSTAR" "event files"
+    description = "Apply the barycenter correction to NuSTARevent files"
     parser = argparse.ArgumentParser(description=description)
 
     parser.add_argument("file", help="Uncorrected event file")
@@ -906,7 +893,7 @@ def main_barycenter(args=None):
     parser.add_argument(
         "-p",
         "--parfile",
-        help="Parameter file in TEMPO/TEMPO2/PINT " "format (for precise coordinates)",
+        help="Parameter file in TEMPO/TEMPO2/PINT format (for precise coordinates)",
         default=None,
         type=str,
     )

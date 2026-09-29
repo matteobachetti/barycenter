@@ -33,10 +33,24 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
 ]
-# TODO: add keywords
-keywords = []
-# TODO: add dependencies
-dependencies = []
+keywords = [
+    "astronomy",
+    "barycentric correction",
+    "pulsars",
+    "timing",
+    "X-ray",
+]
+# Everything imported at module level. The optional extras below cover the
+# imports that happen inside a function: s3/HTTP input, region filtering, the
+# CALDB index scrape, and the --apply-official shell-outs.
+dependencies = [
+    "astropy >= 5.0",
+    "numba",
+    "numpy",
+    "pint-pulsar",
+    "scipy",
+    "stingray >= 2.2.10",
+]
 
 
 [project.scripts]
@@ -46,22 +60,28 @@ barycenter = "barycenter:main_barycenter"
 dev = [
     "hatch",
     "pre-commit",
+    "ruff",
+    "towncrier",
 ]
 test = [
     "pytest",
     "pytest-astropy",
 ]
-recommended = [
-    "s3fs",
-    "astroquery>=0.4.11",
-    "stingray>=2.2.10",
-    "pint-pulsar",
-    "fsspec",
+# Reading input straight from HEASARC over https or s3.
+remote = [
+    "astroquery >= 0.4.11",
+    "beautifulsoup4",
     "boto3",
     "botocore",
-    "astroquery",
+    "fsspec",
+    "s3fs",
+]
+# --source-region-deg
+regions = [
     "regions",
-    "numba",
+]
+recommended = [
+    "barycenter[regions,remote]",
 ]
 
 ################################################################################
@@ -80,10 +100,66 @@ only-packages = true
 [tool.hatch.build.targets.wheel]
 packages = ["src/barycenter"]
 
+######## Linting and formatting ########
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["docs/_build", "docs/api"]
+
+[tool.ruff.lint]
+# A deliberately small, flake8-shaped surface: pycodestyle errors and warnings plus
+# pyflakes. Widen it only with a reason.
+select = ["E", "F", "W"]
+
+[tool.ruff.lint.pycodestyle]
+# `ruff format` wraps code at 100 columns, but it cannot split a string literal. Lines
+# that are long because of one -- a log message, a URL, an expected doctest output --
+# are tolerated up to 120 rather than being contorted by hand.
+max-line-length = 120
+
+######## Changelog ########
+[tool.towncrier]
+package = "barycenter"
+package_dir = "src"
+directory = "changes"
+filename = "CHANGELOG.md"
+start_string = "<!-- towncrier release notes start -->\n"
+underlines = ["", "", ""]
+title_format = "## [{version}](https://github.com/matteobachetti/barycenter/tree/{version}) - {project_date}"
+issue_format = "[#{issue}](https://github.com/matteobachetti/barycenter/pull/{issue})"
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Backwards-incompatible changes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "New features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "bugfix"
+name = "Bug fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "maintenance"
+name = "Internal changes"
+showcontent = true
+
 ######## Configure pytest for your test suite ########
 [tool.pytest.ini_options]
 testpaths = ["tests"] # Tells pytest what directory tests are in
-markers = ["raises"] # Tells pytest to not raise a warning if you use @pytest.mark.raises
+# raises: pytest-raises. remote_data: pytest-astropy, for tests that hit the network.
+markers = ["raises"]
+# Network tests are opt-in, with --remote-data.
+addopts = "--strict-markers"
 
 [tool.coverage.paths]
 source = [
@@ -139,16 +215,37 @@ check = [
     "twine check dist/*",
 ]
 
+#--------------- Lint and format ---------------#
+
+[tool.hatch.envs.lint]
+description = """Check style and formatting."""
+detached = true
+dependencies = [
+    "ruff",
+]
+
+[tool.hatch.envs.lint.scripts]
+check = [
+    "ruff check {args:.}",
+    "ruff format --check --diff {args:.}",
+]
+fix = [
+    "ruff check --fix {args:.}",
+    "ruff format {args:.}",
+]
+
 #--------------- Run tests ---------------#
 
 
 [tool.hatch.envs.test]
 description = """Run the test suite."""
+features = ["regions", "remote"]
 extra-dependencies = [
     "pytest",
+    # pytest-astropy provides the remote_data marker the network tests use.
+    "pytest-astropy",
     "pytest-cov",
     "pytest-raises",
-    "pytest-randomly",
     "pytest-xdist",
 ]
 

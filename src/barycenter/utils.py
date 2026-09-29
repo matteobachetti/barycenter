@@ -38,7 +38,7 @@ def fits_open_remote(filename, **kwargs):
     try:
         # This will work for local files and remote files with proper permissions
         hdul = fits.open(filename, **kwargs)
-    except (PermissionError, botocore.exceptions.NoCredentialsError) as e:
+    except (PermissionError, botocore.exceptions.NoCredentialsError):
         if "://" in filename:
             logger.info(f"Permission denied for {filename}, trying with fsspec.")
             hdul = fits.open(filename, use_fsspec=True, fsspec_kwargs={"anon": True}, **kwargs)
