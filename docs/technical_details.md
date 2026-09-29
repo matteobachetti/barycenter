@@ -93,8 +93,15 @@ file rather than the events, which is a performance one (see
 [Known issues](known_issues.md)). The native engine has no grid, and takes an optional
 `dt` if one is ever wanted for speed.
 
-**Step 5 — build the clock correction function.** Only NuSTAR has one implemented. If
-no `-c/--clockfile` is given and the mission is NuSTAR, `get_latest_clock_file` scrapes
+**Step 5 — build the clock correction function.** `clock_correction_fun` is the single
+entry point: it is given the mission, whatever the user passed as `-c/--clockfile` and the
+`INSTRUME` keyword, and returns the correction function together with the file it came
+from, or `(None, None)` for a mission with no clock correction of its own. Keeping that
+decision in `clock.py` is what lets `core.py` stay mission-agnostic.
+
+### NuSTAR
+
+If no `-c/--clockfile` is given, `get_latest_clock_file` scrapes
 the CALDB HTML directory index, picks the highest-versioned `nuCclock*.fits` and caches
 it under the user's cache directory — these files are about 12 MB, so they are fetched
 once per machine, not once per run. If the index cannot be reached, the newest cached
@@ -114,11 +121,57 @@ C0/C1/C2 polynomial that HEASOFT documents as accurate only to the millisecond. 
 magnitude worse than the target, and a file corrected with it would look clock-corrected
 while being nothing of the kind.
 
-Passing `--clockfile none` skips this entirely.
+### RXTE
 
-**Step 6 — correct the times.** Before anything is added, two header quantities are
-folded in: `TIMEZERO`, and the half-bin shift `(0.5 - TIMEPIXR) * TIMEDEL` that moves a
-timestamp from the start of its bin to its centre. Then `correct_times` computes
+RXTE's coefficients are not in a FITS file at all but in `tdc.dat`, 800 sets of quadratic
+coefficients in free-format ASCII. HEASOFT's `barycorr` **ignores its own `clockfile`
+parameter** for RXTE and always reads `$LHEA_DATA/tdc.dat`, so reproducing it means
+reading the same file. A copy ships with this package, under `src/barycenter/data/`: RXTE
+stopped observing in January 2012 and the file is final, it is 53 kB, and bundling it is
+what makes an RXTE run work without HEASOFT installed. `TIMING_DIR` and `LHEA_DATA` are
+still checked first, so an installation's own copy wins.
+
+`read_tdc_file` is translated from
+[`xCC.c`](https://heasarc.gsfc.nasa.gov/docs/xte/abc/xCC.c) by A. Rots, the reader
+`axBary` itself uses, and the format is worth spelling out because nothing else documents
+it. The file is a stream of rows of four numbers, in two kinds:
+
+* a row whose fourth number is negative starts a block — its first number is the mission
+  day the block's polynomials are measured from, its second the value of `TIMEZERO` there;
+* any other row gives `C0`, `C1`, `C2` of a quadratic in days since that day, valid until
+  the fourth number (also in days since that day).
+
+The first set whose end is later than the time asked for wins. The original reader walks
+the file from the top to find it; since the ends never go backwards, that is a
+`searchsorted`. The trailing comment block is what terminates the file — the C reader's
+`fscanf` loop stops at the first row that fails to parse, which is why the comments are at
+the *end* of `tdc.dat` and not the beginning.
+
+Two things are deliberately left out and one is added:
+
+* `TIMEZERO` is not applied here. The event file's header already carries it, and step 6
+  folds that in.
+* Anything whose `INSTRUME` is not `HEXTE` — in practice the PCA — has a further 16 µs of
+  detector delay subtracted, which is what `hdaxbary` does.
+* HEASOFT evaluates the correction **once**, at the middle of the observation, and folds
+  that one number into `TIMEZERO`. This package evaluates it at each event time instead.
+  The coefficients drift by about 25 ns per hour, so on a short observation the difference
+  is far below the float64 granularity of the stored times (119 ns at RXTE's 5.4e8 s) and
+  on a long one ours is the better answer.
+
+On the test observation the correction is 17.4 µs: small, but 170 times the target.
+
+Passing `--clockfile none` skips all of this. Passing a clock file for RXTE warns and uses
+`tdc.dat` anyway, which is also what HEASOFT does with that parameter.
+
+**Step 6 — correct the times.** `TIMEZERO` is folded in first. `TIMEPIXR` deliberately is
+not: this step used to add `(0.5 - TIMEPIXR) * TIMEDEL` as well, moving a timestamp from
+the start of its bin to its centre. `barycorr` does not do that, and on RXTE PCA data,
+where `TIMEDEL` is one 954 ns clock tick and `TIMEPIXR` is 0, it put every event 477 ns
+away from the reference — five times the target, from a single line. It also left
+`TIMEPIXR` itself untouched in the output header, so the file went on claiming a
+convention its times no longer followed. Where a timestamp sits inside its bin is not the
+barycentring tool's business. Then `correct_times` computes
 
 ```
 t_clk = t_in + clock_fun(t_in)
@@ -172,7 +225,7 @@ It requires a working HEASOFT installation and is not exercised in CI.
 | `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
 | `native.py` | The engine: the correction from astropy + ERFA + a JPL ephemeris. |
 | `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
-| `clock.py` | Spacecraft clock corrections, and the CALDB clock file fetcher. NuSTAR only so far. |
+| `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which decides which applies. |
 | `official.py` | Shelling out to HEASOFT `barycorr` and `timeconv` under `--apply-official`. |
 | `remote.py` | `download_locally`: local paths, `https://` and `s3://`. |
 | `utils.py` | FITS I/O that also works on `http(s)://` and `s3://` URLs (`fits_open_including_remote`), column slimming (`slim_down_hdu_list`), HTML directory listing for the CALDB scrape, the `MJDREFI`+`MJDREFF` reader, and `splitext_improved`. |
@@ -332,7 +385,6 @@ in metres at 10 s sampling), a different ephemeris and a different frame:
 
 Two incidental findings from that comparison:
 
-* `barycorr` does **not** apply the `TIMEPIXR` half-bin shift, but this package does.
   On NICER that is 20 ns; on a mission with a coarser `TIMEDEL` it would matter much
   more.
 * `barycorr` **does** apply `TIMEZERO` (−1 s here), and so must we.
@@ -396,6 +448,35 @@ than as a difference of two big ones.
 The test suite reflects this: it asserts 200 ns where extended precision is available
 and 2 µs where it is not.
 
+### The reference file's own granularity
+
+A reference file stores times as float64 seconds since `MJDREF`, so it cannot record a
+difference finer than one unit in the last place: **29.8 ns** at NuSTAR's 1.8e8 s and
+**119.2 ns** at RXTE's 5.4e8 s. Asserting a flat 100 ns on RXTE would be asserting
+something the file is physically unable to express, so `assert_times_agree` in the test
+suite adds that step to the tolerance, and reports the mean — which averages the
+quantisation away — when it fails.
+
+It also means a difference of tens of nanoseconds between two *derived* quantities can be
+invisible. The RXTE clock correction is 17.4 µs on a 5.4e8 s timestamp, and the difference
+between two such timestamps can only come out as a multiple of 119 ns, so the test that
+pins down `tdc.dat` compares the correction function against the constant HEASOFT froze,
+not the output files.
+
+### RXTE
+
+`tests/data/dummy_xte_bary_DE440_{noclk,clk}.evt.gz` are the same thing for RXTE PCA,
+made from a decimated PSR B1509-58 observation with DE440, ICRS and explicit coordinates.
+Measured on 404 events, native engine:
+
+| reference | mean | std | max abs |
+|---|---|---|---|
+| `clockfile=NONE` | +25.4 ns | 48.8 ns | 119.2 ns (1 ulp) |
+| `tdc.dat` applied | +24.8 ns | 48.4 ns | 119.2 ns (1 ulp) |
+
+The two agreeing to 0.6 ns is the point: the clock correction is reproduced well enough
+to leave the solar-system residual untouched.
+
 ### Things that will move the answer by more than 100 ns
 
 When a comparison disagrees, check these before looking for a bug:
@@ -406,6 +487,8 @@ When a comparison disagrees, check these before looking for a bug:
 | DE430 vs DE440 ephemeris | ~10 µs |
 | DE405 vs DE430 | 0.38 µs |
 | Clock correction applied before vs after | 1.1 µs |
+| `(0.5 − TIMEPIXR) · TIMEDEL` half-bin shift (RXTE PCA) | 477 ns |
+| RXTE PCA 16 µs detector delay | 16 µs |
 | PINT's extra Shapiro `2T·ln(r/AU)` term | ~100 ns |
 | `numpy.longdouble` being float64 (arm64, Windows) | up to 1.1 µs of scatter |
 | GPS→UTC correction on/off | ~0.1 ns |
@@ -416,7 +499,7 @@ When a comparison disagrees, check these before looking for a bug:
 |---|---|---|---|
 | NuSTAR | `nu<obsid>A.attorb` | `nuCclock*.fits`, `NU_FINE_CLOCK` extension | validated to 100 ns |
 | NICER | `ni<obsid>.orb` | none needed | works |
-| RXTE | `orbit/FPorbit_*` | HEASOFT `tdc.dat` — **not implemented** | works, clock missing |
+| RXTE | `orbit/FPorbit_*` | HEASOFT `tdc.dat`, bundled with the package | validated to 100 ns |
 | IXPE, Swift | `FPorbit`-style | none needed | works |
 | Fermi | FT2 | none needed | works |
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
@@ -438,6 +521,10 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_par.par` | a minimal timing model for the same position (`EPHEM DE436`) |
 | `dummy_evt_bary_DE440_noclk.evt.gz` | the `barycorr` reference described above, clock correction off |
 | `dummy_evt_bary_DE440_clk.evt.gz` | the same with `clockfile=dummy_fine_clk.fits`, which is what pins down the order the two corrections are applied in |
+| `dummy_xte_evt.evt` | 404 events, every 64th row of PINT's `B1509_RXTE_short.fits` (public RXTE PCA data), so the sample spans the whole hour |
+| `dummy_xte_orb.fits.gz` | 78 rows of the matching `FPorbit_Day6223`, the observation plus 600 s either side |
+| `dummy_xte_bary_DE440_noclk.evt.gz` | the `barycorr` reference for those events, `clockfile=NONE` |
+| `dummy_xte_bary_DE440_clk.evt.gz` | the same with `tdc.dat` applied, which barycorr does whatever `clockfile` says |
 
 `tools/make_test_data.py` regenerates all of them, including the trimming, and it now
 allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and

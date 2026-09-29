@@ -23,11 +23,6 @@ answers on both.
 0.1 arcsec on the NuSTAR test file, which is 172 µs of light travel time. Always pass
 `--ra`/`--dec` explicitly when the answer must match another tool.
 
-**The `TIMEPIXR` half-bin shift is applied, but `barycorr` does not apply one.**
-Measured on a NICER observation: `barycorr` shifts by `TIMEZERO` only, while this
-package also adds `(0.5 - TIMEPIXR) * TIMEDEL`. That is 20 ns on NICER, but it scales
-with `TIMEDEL` and would be much larger on a coarsely binned mission.
-
 **`--radecsys` does not reach the computation with `--engine pint`.** PINT treats the
 coordinates as ICRS whatever the keyword says, so asking for FK5 changes only the output
 header. Getting this wrong is worth 45 µs. The default native engine handles it, by
@@ -52,10 +47,6 @@ natively would remove the need for a full SAS installation.
 **Chandra is `--apply-official` only.** Native support would free Chandra timing from
 `axbary`'s hard-coded DE200/DE405 choice: the CIAO build has no `-jpleph` switch, so
 DE440 is simply not reachable through it.
-
-**No RXTE clock correction.** `barycorr` ignores its own `clockfile` parameter for
-RXTE and reads `$LHEA_DATA/tdc.dat` instead. The measured effect is 5.97e-5 s, so
-matching `barycorr` on RXTE requires reading that file.
 
 **Only the new NuSTAR clock format is read.** `nustar_clock_correction_fun` reads the
 `NU_FINE_CLOCK` extension. Older files carry a `CLOCK_CORRECT` extension with C0/C1/C2
