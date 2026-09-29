@@ -39,7 +39,82 @@ class TestExecution(object):
         cls.parfile = os.path.join(datadir, "dummy_par.par")
         cls.evfile = os.path.join(datadir, "dummy_evt.evt")
         cls.clkfile = os.path.join(datadir, "dummy_clk.fits")
+        cls.fine_clkfile = os.path.join(datadir, "dummy_fine_clk.fits")
         cls.bary_evfile = os.path.join(datadir, "dummy_evt_bary_DE440_noclk.evt.gz")
+        cls.bary_clk_evfile = os.path.join(datadir, "dummy_evt_bary_DE440_clk.evt.gz")
+
+    def test_agrees_with_barycorr_with_the_clock_correction(self, tmp_path):
+        """With the clock correction on, we still match barycorr to better than 100 ns.
+
+        The clock correction is 25 ms here, and it has to be applied *before* the
+        barycentric one -- barycorr evaluates the barycentric correction, and the
+        spacecraft position, at the clock-corrected time. Computing
+        ``t + clock(t) + bary(t)`` instead was measured at +1146 ns mean and 1878 ns peak
+        against this same reference, so this test is what pins the order down.
+        """
+        outfile = str(tmp_path / "clk.evt")
+        main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                REF_RA,
+                "--dec",
+                REF_DEC,
+                "--ephem",
+                "DE440",
+                "-c",
+                self.fine_clkfile,
+            ]
+        )
+        with fits.open(outfile) as hdul, fits.open(self.bary_clk_evfile) as ref:
+            diff = hdul[1].data["TIME"] - ref[1].data["TIME"]
+            assert np.max(np.abs(diff)) < TOLERANCE_S, (
+                f"max |difference| = {np.max(np.abs(diff)) * 1e9:.1f} ns "
+                f"(mean {diff.mean() * 1e9:+.1f} ns, std {diff.std() * 1e9:.1f} ns)"
+            )
+            assert hdul[1].header["CLOCKAPP"] is True
+
+    def test_the_clock_correction_moves_the_times_by_milliseconds(self, tmp_path):
+        """Sanity check that the clock file is actually being used.
+
+        Without this, a clock correction silently evaluating to zero would make the test
+        above pass for the wrong reason.
+        """
+        with_clk = str(tmp_path / "with.evt")
+        without = str(tmp_path / "without.evt")
+        common = [self.evfile, self.orbfile, "--ra", REF_RA, "--dec", REF_DEC, "--ephem", "DE440"]
+        main_barycenter([*common, "-o", with_clk, "-c", self.fine_clkfile])
+        main_barycenter([*common, "-o", without, "--clockfile", "none"])
+
+        with fits.open(with_clk) as a, fits.open(without) as b:
+            shift = a[1].data["TIME"] - b[1].data["TIME"]
+            assert np.all((0.019 < shift) & (shift < 0.030)), (shift.min(), shift.max())
+            assert b[1].header["CLOCKAPP"] is False
+
+    def test_an_old_format_clock_file_is_refused(self, tmp_path):
+        """A pre-2019 NuSTAR clock file stops the run rather than degrading it silently.
+
+        Its polynomial correction is only good to the millisecond, so a file produced
+        with it would look clock-corrected while being 10000 times off target.
+        """
+        with pytest.raises(ValueError, match="NU_FINE_CLOCK"):
+            main_barycenter(
+                [
+                    self.evfile,
+                    self.orbfile,
+                    "-o",
+                    str(tmp_path / "old.evt"),
+                    "--ra",
+                    REF_RA,
+                    "--dec",
+                    REF_DEC,
+                    "-c",
+                    self.clkfile,
+                ]
+            )
 
     def test_agrees_with_barycorr(self, tmp_path):
         """Our barycentred times match HEASOFT barycorr to better than 100 ns.
