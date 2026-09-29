@@ -444,6 +444,101 @@ class TestRXTE:
             assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])
 
 
+class TestXMM:
+    """XMM-Newton, the mission HEASOFT cannot do at all.
+
+    ``barycorr`` refuses an XMM file outright ("Invalid Observatory/Spacecraft position
+    vector"), and SAS ``barycen`` needs a full SAS installation and an ingested ODF, so
+    this is the first mission where the native engine is not a convenience but the only
+    practical route. The reference was made with SAS 22.1 ``barycen`` and DE430; see
+    ``tools/make_test_data.py``.
+
+    The dataset is EPIC-pn observation 0112290201 (M82), decimated to 401 events spanning
+    the full 7.6 h, with its PPS orbit file thinned to one sample every 10 s.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_xmm_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_xmm_orb.fits.gz")
+        cls.reference = os.path.join(datadir, "dummy_xmm_bary_DE430.evt.gz")
+        # M82 X-2, which matches none of the file's own RA_/DEC_ keywords: reading a
+        # keyword instead of these would be a 100 us error rather than no error at all.
+        cls.ra, cls.dec = "148.96267", "69.67931"
+
+    def run(self, outfile, *extra):
+        return main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                self.ra,
+                "--dec",
+                self.dec,
+                # Not the default: DE405 would be 1.7 us out here and DE200 1.8 ms out.
+                "--ephem",
+                "DE430",
+                *extra,
+            ]
+        )
+
+    def test_agrees_with_barycen(self, tmp_path):
+        """Our barycentred times match SAS barycen to better than 100 ns on XMM.
+
+        The orbit comes from the PPS ``ORBTSR`` product while barycen reads the ODF's
+        ``ROS.ASC``, so passing this also says the two describe the same orbit -- and
+        since XMM's is a 48 h eccentric orbit reaching 110000 km, the spacecraft term is
+        0.37 s here rather than the 20 ms of a low Earth orbit.
+        """
+        outfile = str(tmp_path / "xmm.evt")
+        assert self.run(outfile) == outfile
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            assert_times_agree(hdul["EVENTS"].data["TIME"], ref["EVENTS"].data["TIME"])
+            assert hdul["EVENTS"].header["TIMESYS"] == "TDB"
+            assert hdul["EVENTS"].header["TIMEREF"] == "SOLARSYSTEM"
+
+    def test_gtis_agree_with_barycen(self, tmp_path):
+        """The GTI boundaries match too, not just the events.
+
+        ``barycen`` corrects its GTI tables when ``processgtis=yes``, so the reference has
+        a corrected copy to compare against -- which no other mission's reference gives
+        us, because ``barycorr`` folds its correction into ``TIMEZERO`` instead.
+        """
+        outfile = str(tmp_path / "xmm.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            for column in ("START", "STOP"):
+                assert_times_agree(hdul["STDGTI01"].data[column], ref["STDGTI01"].data[column])
+
+    def test_tstart_and_tstop_agree_to_barycens_keyword_precision(self, tmp_path):
+        """TSTART and TSTOP agree to a microsecond, which is all the reference can say.
+
+        SAS writes a floating-point keyword with 15 significant digits, and at XMM's
+        1.06e8 s that leaves six decimals -- so the reference's ``TSTART`` is quantised at
+        1 us, a hundred times coarser than the binary ``TIME`` column beside it. The two
+        keywords come out 373 ns and -179 ns from ours, both inside half a step, so
+        asserting 100 ns here would be asserting something the file cannot record.
+        """
+        outfile = str(tmp_path / "xmm.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            for keyword in ("TSTART", "TSTOP"):
+                assert abs(hdul["EVENTS"].header[keyword] - ref["EVENTS"].header[keyword]) < 1e-6
+
+    def test_no_clock_correction_is_applied(self, tmp_path):
+        """XMM needs none: the time correlation is applied when the ODF is ingested.
+
+        So ``CLOCKAPP`` comes out false without ``--clockfile none`` having to be asked
+        for, and the times still match a reference that had no clock correction either.
+        """
+        outfile = str(tmp_path / "xmm.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul:
+            assert hdul["EVENTS"].header["CLOCKAPP"] is False
+
+
 class TestCoordinateKeywords:
     """The header keywords we take the source position from, and HEASOFT's different order."""
 

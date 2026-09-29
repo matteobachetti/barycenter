@@ -32,12 +32,14 @@ directory, leaving the cache index pointing at nothing.
 **`fits_open_remote` can return an unbound variable** if the fallback branch is not
 taken.
 
-## Missing features
+**`TELAPSE` is left stale.** `correct_times` updates `TIME`, `START`, `STOP`, `TSTART`
+and `TSTOP` but not `TELAPSE`, which is `TSTOP − TSTART` and changes by as much as the
+two ends' corrections differ — 1.6 s on the XMM test observation, where the Roemer delay
+moves by that much over 7.6 h. SAS `barycen` does update it. Nothing downstream in this
+package reads `TELAPSE`, but a file leaving here claims a duration that no longer matches
+its own start and stop times.
 
-**No XMM-Newton support.** `barycorr` refuses XMM data outright ("Invalid
-Observatory/Spacecraft position vector"), and XMM event files carry no spacecraft
-position at all — it has to come from the ODF or from the SAS `orbit` task. Doing this
-natively would remove the need for a full SAS installation.
+## Missing features
 
 **Chandra is `--apply-official` only.** Native support would free Chandra timing from
 `axbary`'s hard-coded DE200/DE405 choice: the CIAO build has no `-jpleph` switch, so

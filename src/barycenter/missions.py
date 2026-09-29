@@ -14,13 +14,15 @@ Three columns of :data:`MISSIONS` deserve a word:
 ``orbit``
     ``None`` means there is no native orbit reader, either because the mission does not
     distribute a spacecraft position in a format we read (ASCA) or because nobody has had
-    a file to test against (Swift, Chandra, XMM). Such a mission still works through
+    a file to test against (Swift, Chandra). Such a mission still works through
     ``--apply-official``.
 ``clock``
     ``None`` means the mission needs no clock correction -- which for most of them is
     because the correction is already applied in the pipeline that produced the event file.
 ``official``
-    The tool ``--apply-official`` hands the file to, or ``None`` if there is none.
+    The tool ``--apply-official`` hands the file to, or ``None`` if there is none -- which
+    for XMM means the native engine is the only way in, since ``barycorr`` refuses the
+    mission and ``barycen`` needs all of SAS.
 """
 
 from collections.abc import Callable
@@ -123,10 +125,35 @@ MISSIONS = {
         telescop=("svom",),
         orbit=OrbitSpec(pos="POSITION", vel="VELOCITY"),
     ),
+    "xmm": Mission(
+        name="xmm",
+        # The PPS `P*OBX000ORBTSR0000.FTZ` file offers two position triples: GEI is
+        # geocentric equatorial, which is what the ephemeris is referred to, and GSE is
+        # geocentric solar-ecliptic, which is the same vector rotated into the
+        # Earth-Sun frame. Both have the same length, so picking the wrong one is not a
+        # small error but a 160 ms one, and nothing in the file's units or comments
+        # would give it away. Velocities have no such prefix; there is only one triple.
+        orbit=OrbitSpec(
+            pos=("GEI_X", "GEI_Y", "GEI_Z"),
+            vel=("VX", "VY", "VZ"),
+            pos_unit=u.km,
+            vel_unit=u.km / u.s,
+            expected_extnames=("ORBIT",),
+        ),
+        telescop=("xmm",),
+        # `barycorr` refuses XMM outright ("Invalid Observatory/Spacecraft position
+        # vector"), and the mission's own tool, SAS `barycen`, will not take an orbit
+        # file on the command line: it reaches the spacecraft position through SAS's
+        # observation access layer, so it needs a full SAS installation and an ingested
+        # ODF. Wrapping that is not worth it when the native engine agrees with it to a
+        # constant 40 ns; `tools/make_test_data.py` drives it for the reference file and
+        # nowhere else.
+        official=None,
+    ),
     # No native orbit reader yet. Swift's position is in the `sw*sao.fits` attitude file,
     # whose layout nobody here has a file to check; Chandra's is in
-    # `primary/orbitf*_eph1.fits`; XMM's is in the PPS `*ORBTSR*.FTZ`. All three are on the
-    # list, and each needs a reference dataset before it can be claimed.
+    # `primary/orbitf*_eph1.fits`. Both are on the list, and each needs a reference
+    # dataset before it can be claimed.
     "swift": Mission(name="swift", telescop=("swift",), official="barycorr"),
     "chandra": Mission(
         name="chandra",
@@ -134,7 +161,6 @@ MISSIONS = {
         official="barycorr",
         official_ephem="DE405",
     ),
-    "xmm": Mission(name="xmm", telescop=("xmm",)),
     # ASCA is the odd one: barycorr refuses it, and the only tool is `timeconv`, which
     # needs a downloaded earth.dat and frf.orbit file and can only do DE200.
     "asca": Mission(name="asca", telescop=("asca",), official="timeconv", official_ephem="DE200"),
