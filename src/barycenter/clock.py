@@ -40,8 +40,10 @@ __all__ = [
     "cubic_interpolation",
     "get_latest_clock_file",
     "interpolate_clock_function",
+    "nustar_clock_builder",
     "nustar_clock_correction_fun",
     "read_tdc_file",
+    "rxte_clock_builder",
     "rxte_clock_correction_fun",
     "rxte_tdc_file",
 ]
@@ -419,11 +421,39 @@ def rxte_clock_correction_fun(tdcfile=None, instrument=None):
     return correction
 
 
+def nustar_clock_builder(clockfile=None, instrument=None):
+    """The ``clock`` entry for NuSTAR in :data:`barycenter.missions.MISSIONS`.
+
+    Fetches the newest CALDB file when none is named. ``instrument`` is unused: the
+    correction is to the spacecraft clock, which both focal planes share.
+    """
+    if clockfile is None:
+        clockfile = get_latest_clock_file("nustar")
+        logger.info(f"Using latest NuSTAR clock file: {clockfile}")
+    return nustar_clock_correction_fun(clockfile), clockfile
+
+
+def rxte_clock_builder(clockfile=None, instrument=None):
+    """The ``clock`` entry for RXTE in :data:`barycenter.missions.MISSIONS`.
+
+    A named clock file is refused with a warning rather than an error, because HEASOFT
+    ``barycorr`` also ignores its ``clockfile`` parameter for RXTE, and a pipeline that
+    passes one for every mission should not break on this one.
+    """
+    if clockfile is not None:
+        warnings.warn(
+            f"RXTE clock corrections come from tdc.dat, not from {clockfile}; "
+            "HEASOFT barycorr ignores its clockfile parameter for RXTE too."
+        )
+    tdcfile = rxte_tdc_file()
+    return rxte_clock_correction_fun(tdcfile, instrument=instrument), tdcfile
+
+
 def clock_correction_fun(mission, clockfile=None, instrument=None):
     """The clock correction for a mission, and the file it was read from.
 
-    This is the only place that knows which missions have a clock correction and how each
-    one is obtained, so the rest of the package stays mission-agnostic.
+    Which missions have one, and what builds it, is the registry's business; this only
+    looks it up and checks that a named file exists before handing it over.
 
     Parameters
     ----------
@@ -447,28 +477,24 @@ def clock_correction_fun(mission, clockfile=None, instrument=None):
     FileNotFoundError
         If a named clock file does not exist.
     """
-    mission = str(mission).lower()
+    from .missions import mission_for
 
     if clockfile is not None and not os.path.exists(clockfile):
         raise FileNotFoundError(f"Clock file {clockfile} not found")
 
-    if "nustar" in mission:
-        if clockfile is None:
-            clockfile = get_latest_clock_file("nustar")
-            logger.info(f"Using latest NuSTAR clock file: {clockfile}")
-        return nustar_clock_correction_fun(clockfile), clockfile
+    try:
+        builder = mission_for(mission).clock
+    except ValueError:
+        # An unrecognised mission is not fatal here: the orbit reader will say so first
+        # if it matters, and a file with a garbled TELESCOP but usable columns should
+        # still be correctable.
+        builder = None
 
-    if "xte" in mission:
+    if builder is None:
         if clockfile is not None:
             warnings.warn(
-                f"RXTE clock corrections come from tdc.dat, not from {clockfile}; "
-                "HEASOFT barycorr ignores its clockfile parameter for RXTE too."
+                f"No clock correction is implemented for mission {mission}; ignoring {clockfile}."
             )
-        tdcfile = rxte_tdc_file()
-        return rxte_clock_correction_fun(tdcfile, instrument=instrument), tdcfile
+        return None, None
 
-    if clockfile is not None:
-        warnings.warn(
-            f"No clock correction is implemented for mission {mission}; ignoring {clockfile}."
-        )
-    return None, None
+    return builder(clockfile, instrument)

@@ -4,7 +4,8 @@ Every mission tabulates the same thing -- time, geocentric position, geocentric
 velocity -- and differs only in which extension it lives in, what the columns are
 called, whether the position is one vector column or three scalars, and whether the
 units are metres or kilometres. So there is one reader, driven by an
-:class:`OrbitSpec`, and adding a mission is one entry in :data:`ORBIT_SPECS`.
+:class:`OrbitSpec`, and adding a mission is one entry in
+:data:`barycenter.missions.MISSIONS`.
 
 The result is a single table that both engines consume, always in metres and metres per
 second: the ``MJD_TT``/``X``...``Vz`` columns are the contract PINT's ``SatelliteObs``
@@ -24,7 +25,7 @@ from astropy.table import Table, vstack
 
 from .utils import fits_open_including_remote
 
-__all__ = ["OrbitSpec", "ORBIT_SPECS", "read_orbit", "spec_for_mission"]
+__all__ = ["OrbitSpec", "read_orbit"]
 
 
 @dataclass(frozen=True)
@@ -61,43 +62,6 @@ class OrbitSpec:
     expected_extnames: tuple = field(default_factory=tuple)
 
 
-#: One entry per mission, keyed by a substring of the ``TELESCOP`` keyword.
-ORBIT_SPECS = {
-    "fermi": OrbitSpec(
-        pos="SC_POSITION",
-        vel="SC_VELOCITY",
-        time_col="START",
-        expected_extnames=("SC_DATA",),
-    ),
-    # NuSTAR is the only one in kilometres.
-    "nustar": OrbitSpec(pos="POSITION", vel="VELOCITY", pos_unit=u.km, vel_unit=u.km / u.s),
-    "svom": OrbitSpec(pos="POSITION", vel="VELOCITY"),
-    # The FPorbit shape, shared by NICER, RXTE and IXPE: three scalar columns.
-    "nicer": OrbitSpec(pos=("X", "Y", "Z"), vel=("Vx", "Vy", "Vz"), expected_extnames=("ORBIT",)),
-    "xte": OrbitSpec(
-        pos=("X", "Y", "Z"), vel=("Vx", "Vy", "Vz"), expected_extnames=("ORBIT", "XTE_PE")
-    ),
-    "ixpe": OrbitSpec(pos=("X", "Y", "Z"), vel=("Vx", "Vy", "Vz"), expected_extnames=("ORBIT",)),
-}
-
-
-def spec_for_mission(telescope):
-    """The :class:`OrbitSpec` for a ``TELESCOP`` keyword value.
-
-    Matching is by substring, because the keyword is written inconsistently
-    (``XTE``, ``RXTE``, ``NuSTAR``, ``NUSTAR``).
-    """
-    name = str(telescope).lower()
-    for key, spec in ORBIT_SPECS.items():
-        if key in name:
-            return spec
-    raise ValueError(
-        f"No orbit file specification for mission {telescope!r}. "
-        f"Known missions: {', '.join(sorted(ORBIT_SPECS))}. "
-        "Adding one is a single entry in barycenter.orbit.ORBIT_SPECS."
-    )
-
-
 def _columns(data, names, unit):
     """Pull an (N, 3) array out of either one vector column or three scalar ones."""
     if isinstance(names, str):
@@ -118,7 +82,18 @@ def _read_one(fname, spec=None):
         header, data = hdu.header, hdu.data
         telescope = header.get("TELESCOP", "unknown")
         if spec is None:
-            spec = spec_for_mission(telescope)
+            # Imported here rather than at module level: the registry describes missions in
+            # terms of OrbitSpec, so importing it the other way round would be circular.
+            from .missions import mission_for
+
+            mission = mission_for(telescope)
+            if mission.orbit is None:
+                raise ValueError(
+                    f"{fname} is a {telescope} orbit file, and there is no native reader "
+                    f"for {mission.name} yet. Use --apply-official, or add an OrbitSpec to "
+                    "its entry in barycenter.missions.MISSIONS."
+                )
+            spec = mission.orbit
             hdu = hdul[spec.hdu]
             header, data = hdu.header, hdu.data
 
@@ -205,7 +180,7 @@ def read_orbit(orbit_files, spec=None):
         lists them one per line. Names may be local paths, ``https://`` or ``s3://``
         URLs. Several files are stacked and sorted, so a stack of daily orbit files can
         be passed straight through.
-    spec : OrbitSpec, optional
+    spec : ~barycenter.orbit.OrbitSpec, optional
         Override the specification. By default it is looked up from the ``TELESCOP``
         keyword of the first file.
 

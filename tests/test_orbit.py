@@ -9,10 +9,9 @@ import os
 
 import astropy.units as u
 import numpy as np
-import pytest
 from astropy.io import fits
 
-from barycenter.orbit import ORBIT_SPECS, OrbitSpec, read_orbit, spec_for_mission
+from barycenter.orbit import OrbitSpec, read_orbit
 
 curdir = os.path.abspath(os.path.dirname(__file__))
 datadir = os.path.join(curdir, "data")
@@ -76,19 +75,6 @@ class TestRealFile:
         table = read_orbit(NUSTAR_ORBIT)
         assert "nustar" in str(table.meta["telescope"]).lower()
         assert 55196 < table.meta["mjdref"] < 55198
-
-
-class TestSpecLookup:
-    def test_matching_is_by_substring(self):
-        """``TELESCOP`` is written inconsistently: XTE/RXTE, NuSTAR/NUSTAR."""
-        assert spec_for_mission("RXTE") is ORBIT_SPECS["xte"]
-        assert spec_for_mission("NuSTAR") is ORBIT_SPECS["nustar"]
-        assert spec_for_mission("nicer") is ORBIT_SPECS["nicer"]
-
-    def test_unknown_mission_says_how_to_add_one(self):
-        """The error is the documentation: it names the registry to extend."""
-        with pytest.raises(ValueError, match="ORBIT_SPECS"):
-            spec_for_mission("EINSTEIN PROBE")
 
 
 class TestCleaning:
