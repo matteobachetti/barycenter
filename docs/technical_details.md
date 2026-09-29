@@ -68,17 +68,15 @@ Without a `.par` file the code builds a timing model by mutating PINT's module-l
 **Step 4 — build the barycentric correction function.** This is
 `get_barycentric_correction`, and it is the heart of the package:
 
-1. The orbit file's `TELESCOP` keyword and `MJDREF` are read (via stingray's
-   `high_precision_keyword_read`, which reconstructs `MJDREF` from `MJDREFI`+`MJDREFF`
-   without losing digits).
-2. `pint.observatory.satellite_obs.get_satellite_observatory` registers the spacecraft
-   with PINT as a moving observatory. This is where [`monkeypatch.py`](#the-monkey-patch)
-   comes in: it replaces PINT's `load_orbit` so that missions PINT does not know about
-   (NuSTAR, SVOM, ...) can be read, and so that several orbit files can be given at once.
-   PINT fits cubic splines through the position table; the correction is only valid
-   where those splines are.
-3. The spline knots give the valid time span. A **grid of TOAs is laid down every
-   5 seconds** across that whole span, one `pint.toa.TOA` object per grid point.
+1. [`orbit.read_orbit`](#the-orbit-reader) reads the orbit file (or the list of them)
+   into one cleaned table, taking `MJDREF` from `MJDREFI`+`MJDREFF` in extended
+   precision.
+2. [`pintengine.TableSatelliteObs`](#the-pint-engine) registers that table with PINT as
+   a moving observatory. PINT fits cubic splines through the position columns; the
+   correction is only valid where those splines are.
+3. A **grid of TOAs is laid down every 5 seconds** across the span, one
+   `pint.toa.TOA` object per grid point. With `met_range` the grid is clipped to the
+   events plus one step of margin.
 4. `model.get_barycentric_toas(ts)` computes, for each grid point, the barycentric
    arrival time. Internally that is `tdbld - delay`, where PINT's delay chain contains
    the geometric (Roemer) delay, the solar-system Shapiro delay, and whatever else the
@@ -155,36 +153,74 @@ It requires a working HEASOFT installation and is not exercised in CI.
 
 | Module | Role |
 |---|---|
-| `barycenter.py` | Everything: CLI, both workflows, the correction, the clock correction, region extraction, downloads. |
-| `utils.py` | FITS I/O that also works on `http(s)://` and `s3://` URLs (`fits_open_including_remote`), column slimming (`slim_down_hdu_list`), and HTML directory listing for the CALDB scrape. |
-| `monkeypatch.py` | Replaces two PINT internals so PINT can read orbit files it does not natively support. Imported for its side effects by `barycenter.py`. |
+| `barycenter.py` | CLI, both workflows, the clock correction, region extraction, downloads. |
+| `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
+| `native.py` | The default engine: the correction from astropy + ERFA + a JPL ephemeris. |
+| `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
+| `utils.py` | FITS I/O that also works on `http(s)://` and `s3://` URLs (`fits_open_including_remote`), column slimming (`slim_down_hdu_list`), HTML directory listing for the CALDB scrape, and the `MJDREFI`+`MJDREFF` reader. |
 
-(the-monkey-patch)=
-## The monkey patch
+(the-orbit-reader)=
+## The orbit reader
 
-`monkeypatch.py` replaces, at import time:
+Every mission tabulates the same three things — time, geocentric position, geocentric
+velocity — and differs only in the dialect. So [`orbit.py`](../src/barycenter/orbit.py)
+has one reader driven by a declarative `OrbitSpec`, and adding a mission is a single
+entry in `ORBIT_SPECS`:
 
-- **`pint.observatory.satellite_obs.load_orbit`** — PINT's version handles Fermi FT2,
-  NICER/RXTE/IXPE `FPorbit`, and a couple of others. Ours adds NuSTAR and SVOM, accepts
-  a *list* of orbit file names (or an `@metafile`) and stacks them, and applies
-  `FPorbit`'s cleanup (sort by time, drop duplicate and zero rows) to every mission
-  rather than only to `FPorbit` files.
-- **`pint.observatory.satellite_obs.SatelliteObs._check_bounds`** — PINT refuses to
-  extrapolate outside the orbit table. In practice an orbit file often stops a fraction
-  of a second short of the last event, so ours warns instead of raising.
-
-Every loader in the file is the same function with different column names and units:
-
-| Mission | Extension | Position column | Velocity column | Units |
+| Mission | Extension | Position column | Velocity column | Units in the file |
 |---|---|---|---|---|
 | Fermi | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
-| NuSTAR | 1 | `POSITION` | `VELOCITY` | km |
+| NuSTAR | 1 | `POSITION` | `VELOCITY` | **km** |
 | SVOM | 1 | `POSITION` | `VELOCITY` | m |
-| NICER, RXTE, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
+| NICER, RXTE, IXPE | `ORBIT` (`XTE_PE` for RXTE) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 
-Monkey-patching a library's internals is fragile — it breaks whenever PINT
-reorganises — and it is global, so importing `barycenter` changes PINT's behaviour for
-everything else in the process. It is on the list to remove.
+The units are declared in the spec, not read from `TUNITn`, because orbit files are
+unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
+The table that comes out is always in metres and metres per second.
+
+Three cleanups are applied to **every** mission, not just to `FPorbit` files as PINT
+does: sort by time, drop rows repeated at the same time (a spline through a repeated
+abscissa is undefined, and repeats are common where two files overlap), and drop
+all-zero placeholder rows (a zero position is a 6400 km error).
+
+The output table carries both time bases — `MJD_TT`, which is what PINT's
+`SatelliteObs` expects, and `MET`, which is what the native engine uses. Reading the
+orbit file once, in one place, is what makes the native-versus-PINT comparison
+meaningful: the two engines cannot disagree about where the spacecraft was.
+
+(the-pint-engine)=
+## The PINT engine
+
+PINT's `SatelliteObs` takes a *file name* and calls its own `load_orbit` on it. That is
+not usable here: we need SVOM, which PINT has no loader for, remote `https://` and
+`s3://` input, lists of orbit files, and the cleanup above on every mission.
+
+The package used to obtain all of that by **monkey-patching** PINT at import time,
+replacing `pint.observatory.satellite_obs.load_orbit` and
+`SatelliteObs._check_bounds`. That has been removed, for three reasons:
+
+- It was global. Importing `barycenter` changed PINT's behaviour for everything else in
+  the interpreter — including silently disabling PINT's own extrapolation guard.
+- It had already drifted. PINT has since grown its own NuSTAR loader, so part of the
+  patch was dead weight that nobody noticed.
+- It made the two engines read the orbit file through different code, which makes a
+  comparison between them uninterpretable.
+
+[`pintengine.TableSatelliteObs`](../src/barycenter/pintengine.py) does the same job by
+subclassing: it takes an already-parsed table from `orbit.py`, calls
+`SpecialLocation.__init__` directly, builds the same six splines, and overrides
+`_check_bounds` to *warn* about a short extrapolation and *log an error* about one five
+times longer, rather than raising. Nothing outside the class is modified.
+
+Verified against PINT's own NuSTAR loader: the spacecraft position agrees to 5 mm. That
+is not exact and cannot be — PINT indexes the orbit by absolute MJD in float64, whose
+step at MJD 57263 is 0.6 µs, and 0.6 µs at 7.6 km/s is 5 mm. It is 17 picoseconds of
+Roemer delay.
+
+The remaining coupling is to PINT's internal attribute names (`FT2`, `X`…`Vz`,
+`_geocenter`, `_maxextrap`). That is narrower than a monkey patch, not absent: if PINT
+renames them this class breaks — but it breaks visibly, in one place, and only for the
+optional engine.
 
 ## The native engine
 

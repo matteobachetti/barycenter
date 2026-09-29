@@ -97,8 +97,9 @@ files are ~11 MB.
 
 **The TOA grid spans the whole orbit file, not the events.** A 5-second grid across a
 multi-day `.attorb` file, or across a stack of orbit files, costs tens of thousands of
-PINT TOAs that are then never used. Clipping the grid to `TSTART`/`TSTOP` plus a margin
-is the single biggest available speed-up.
+PINT TOAs that are then never used. `pint_barycentric_correction` now accepts a
+`met_range` that clips the grid to the events plus one step of margin, but
+`apply_barycenter_correction` does not yet pass it.
 
 **The clock correction is interpolated twice.** Hermite interpolation onto a 1-second
 grid, then an Akima spline from that grid onto the events. One interpolation evaluated
@@ -109,8 +110,3 @@ written as one `HDUList`.
 
 **`numba` is imported unconditionally** halfway down the module and compiles eagerly,
 for a single small interpolation routine.
-
-## Packaging
-
-**`pyproject.toml` declares no runtime dependencies at all.** `pip install barycenter`
-installs nothing the package actually imports.
