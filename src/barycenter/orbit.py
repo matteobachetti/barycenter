@@ -25,7 +25,7 @@ from astropy.table import Table, vstack
 
 from .utils import column_named, fits_open_including_remote
 
-__all__ = ["OrbitSpec", "read_orbit"]
+__all__ = ["OrbitCoverage", "OrbitSpec", "read_orbit"]
 
 
 @dataclass(frozen=True)
@@ -213,3 +213,85 @@ def read_orbit(orbit_files, spec=None):
     stacked = vstack(tables, metadata_conflicts="silent")
     stacked.meta.update(tables[0].meta)
     return _clean(stacked)
+
+
+@dataclass(frozen=True)
+class OrbitCoverage:
+    """Where an orbit file actually knows the spacecraft position.
+
+    Interpolating splines answer every time they are asked about, extrapolating past
+    their last knot and coasting straight through an interior gap without complaint.
+    That is the right behaviour for the sub-second shortfalls orbit files routinely
+    have, and the wrong one for a file that is missing half an orbit: the answer is
+    then a guess presented as a measurement. This class is what lets a caller tell the
+    two apart.
+
+    Parameters
+    ----------
+    samples : ndarray
+        Sorted times of the tabulated positions, in mission elapsed seconds.
+    cadence : float
+        The file's own sampling interval.
+
+    Notes
+    -----
+    A tabulated position is taken to describe the spacecraft for one sampling interval
+    either side of itself, because that is exactly what interpolating between two
+    samples already assumes. Without that allowance a mission which tabulates its
+    position every 30 s, as Fermi does, would have a third of its perfectly good events
+    counted as uncovered purely for sitting between two samples.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> cov = OrbitCoverage.from_met(np.arange(0.0, 100.0, 10.0))
+    >>> float(cov.cadence)
+    10.0
+    >>> cov.uncovered([45.0])            # between two samples: covered
+    array([0.])
+    >>> cov.uncovered([200.0])           # 110 s past the last sample, less the allowance
+    array([100.])
+    """
+
+    samples: np.ndarray
+    cadence: float
+
+    @classmethod
+    def from_met(cls, met):
+        """Build the coverage of a set of sample times.
+
+        The cadence is the median spacing rather than the mean: an orbit file with a
+        few long gaps in it still has a well defined normal sampling interval, and the
+        median is what reports it.
+        """
+        met = np.unique(np.asarray(met, dtype=np.float64))
+        steps = np.diff(met)
+        cadence = float(np.median(steps)) if len(steps) else 0.0
+        return cls(samples=met, cadence=cadence)
+
+    @classmethod
+    def from_table(cls, table):
+        """Build the coverage of a table from :func:`read_orbit`."""
+        return cls.from_met(np.asarray(table["MET"].value, dtype=np.float64))
+
+    def uncovered(self, times):
+        """Seconds by which each time falls outside the tabulated positions.
+
+        Zero where the orbit file has something to say, whether the time sits between
+        two samples or within one sampling interval of the ends. Positive where it does
+        not: past either end, or far enough into an interior gap that the position
+        there is an extrapolation rather than an interpolation. The value is how far
+        the time reaches beyond what the file covers, so it can be compared against a
+        tolerance in seconds.
+        """
+        times = np.asarray(times, dtype=np.float64)
+        if len(self.samples) == 0:
+            return np.full(times.shape, np.inf)
+        if len(self.samples) == 1:
+            nearest = np.abs(times - self.samples[0])
+        else:
+            right = np.clip(np.searchsorted(self.samples, times), 1, len(self.samples) - 1)
+            nearest = np.minimum(
+                np.abs(self.samples[right] - times), np.abs(self.samples[right - 1] - times)
+            )
+        return np.maximum(nearest - self.cadence, 0.0)
