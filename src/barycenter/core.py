@@ -23,7 +23,7 @@ from .native import (
     native_barycentric_correction,
 )
 from .official import apply_mission_specific_barycenter_correction
-from .orbit import read_orbit
+from .orbit import OrbitCoverage, read_orbit
 from .remote import download_locally
 from .utils import (
     column_named,
@@ -59,6 +59,12 @@ __all__ = [
     "met_range_for_file",
     "pre_bary_shift",
     "update_derived_keywords",
+    "COVERAGE_TOLERANCE_S",
+    "clamp_uncovered_keyword",
+    "enforce_orbit_coverage",
+    "gti_intervals",
+    "good_time_span",
+    "inside_gti",
 ]
 
 
@@ -380,7 +386,10 @@ def get_barycentric_correction(
     Returns
     -------
     bary_fun : callable
-        ``bary_fun(met)`` gives the correction in seconds.
+        ``bary_fun(met)`` gives the correction in seconds. Its ``coverage`` attribute is
+        the :class:`~barycenter.orbit.OrbitCoverage` of the orbit file it was built from,
+        so a caller can ask which of the times it is about to hand over are answered from
+        a tabulated position and which from an extrapolation.
     """
     if engine not in ENGINES:
         raise ValueError(f"Unknown engine {engine!r}. Choose one of {ENGINES}.")
@@ -398,10 +407,15 @@ def get_barycentric_correction(
     if model is not None:
         ra, dec, ephem = position_from_model(model, ephem)
 
+    # Carried on the returned callable rather than returned beside it, because every
+    # caller wants the correction and only one wants the coverage -- and that one would
+    # otherwise have to read the orbit file a second time to find out where it ends.
+    coverage = OrbitCoverage.from_met(met)
+
     if engine == "native":
         if ra is None or dec is None:
             raise ValueError("The native engine needs ra and dec, or a timing model")
-        return native_barycentric_correction(
+        bary_fun = native_barycentric_correction(
             orbit_table,
             ra,
             dec,
@@ -410,6 +424,8 @@ def get_barycentric_correction(
             dt=dt,
             met_range=met_range,
         )
+        bary_fun.coverage = coverage
+        return bary_fun
 
     from .pintengine import pint_barycentric_correction, timing_model_for_position
 
@@ -424,9 +440,11 @@ def get_barycentric_correction(
         model = timing_model_for_position(ra, dec, ephem)
     # A model read from a .par file is left alone: its astrometry is in the frame the
     # model was fitted in, and ``radecsys`` describes the event file's keywords, not it.
-    return pint_barycentric_correction(
+    bary_fun = pint_barycentric_correction(
         orbit_table, model, dt=5.0 if dt is None else dt, met_range=met_range
     )
+    bary_fun.coverage = coverage
+    return bary_fun
 
 
 def _mission_counts_utc_seconds(telescope):
@@ -524,6 +542,183 @@ def _warn_outside_grid(bary_fun, times, where, timezero=0.0, clock_fun=None, lea
             f"{where}: times fall up to {short:.3f} s outside the interpolation grid and "
             f"are extrapolated. Pass dt=0 to evaluate the correction at every event."
         )
+
+
+#: How far a time may reach beyond the orbit file's coverage before it is refused.
+#: Coverage already allows one sampling interval past the last position (see
+#: :class:`~barycenter.orbit.OrbitCoverage`), so this is a further grace on top of that,
+#: for the ragged ends real files have. A time inside a good time interval that misses by
+#: more than this is an error rather than a warning: the position there is a guess, and a
+#: guess silently written into an event list is indistinguishable from a measurement.
+COVERAGE_TOLERANCE_S = 10.0
+
+
+def gti_intervals(hdul):
+    """The good time intervals of a file, raw and unsorted, or ``None`` if it has none.
+
+    A GTI extension is one carrying ``START`` and ``STOP`` but no ``TIME``: that is what
+    separates it from an event list, whose own start and stop are header keywords rather
+    than columns. Several extensions are concatenated, because XMM writes one per CCD and
+    an event is in a good time if it is in any of them.
+    """
+    starts, stops = [], []
+    for hdu in hdul:
+        data = getattr(hdu, "data", None)
+        if data is None or column_named(data, "TIME") is not None:
+            continue
+        start, stop = column_named(data, "START"), column_named(data, "STOP")
+        if start is None or stop is None:
+            continue
+        starts.append(np.asarray(data[start], dtype=np.float64))
+        stops.append(np.asarray(data[stop], dtype=np.float64))
+    if not starts:
+        return None
+    return np.concatenate(starts), np.concatenate(stops)
+
+
+def inside_gti(times, gti):
+    """Whether each time falls in one of the good time intervals.
+
+    ``gti`` of ``None`` means the file declared none, in which case every time counts as
+    good: a file that does not say which of its times are trustworthy is not thereby
+    saying that none of them are.
+    """
+    times = np.asarray(times, dtype=np.float64)
+    if gti is None:
+        return np.ones(times.shape, dtype=bool)
+    start, stop = gti
+    order = np.argsort(start)
+    start, stop = start[order], stop[order]
+    previous = np.searchsorted(start, times, side="right") - 1
+    return (previous >= 0) & (times <= stop[np.clip(previous, 0, None)])
+
+
+def good_time_span(hdul):
+    """The span to pull an out-of-range ``TSTART``/``TSTOP`` back to.
+
+    The GTIs where there are any, and the event times otherwise -- both being statements
+    about where the data actually is, as opposed to the requested range a ``TSTART``
+    keyword often holds. ``None`` when the file offers neither.
+    """
+    gti = gti_intervals(hdul)
+    if gti is not None and len(gti[0]):
+        return float(np.min(gti[0])), float(np.max(gti[1]))
+    times = [
+        np.asarray(hdu.data[column], dtype=np.float64)
+        for hdu in hdul
+        if (column := column_named(getattr(hdu, "data", None), "TIME")) is not None
+        and len(hdu.data)
+    ]
+    if not times:
+        return None
+    return float(min(t.min() for t in times)), float(max(t.max() for t in times))
+
+
+def clamp_uncovered_keyword(
+    value,
+    keyname,
+    coverage,
+    span,
+    timezero=0.0,
+    clock_fun=None,
+    leap_fun=None,
+    tolerance=COVERAGE_TOLERANCE_S,
+):
+    """Pull a ``TSTART``/``TSTOP`` the orbit file cannot place back to where the data is.
+
+    These two keywords routinely hold the range that was *asked* for rather than the one
+    that was delivered -- a Fermi LAT extraction returns a ``TSTART`` set to the start of
+    the requested window, while the GTIs and the spacecraft file begin whenever the data
+    really does. Correcting such a keyword means extrapolating the spacecraft position to
+    a time no observation covers, so it is moved to the edge of the good time intervals
+    first, which is the earliest (or latest) moment the file actually describes.
+
+    Only these two keywords are treated this way, and only when they miss by more than
+    ``tolerance``; anything else is left exactly as it is.
+    """
+    if coverage is None or span is None or keyname not in ("TSTART", "TSTOP"):
+        return value
+    shifted = pre_bary_shift([value], timezero, clock_fun, leap_fun)
+    missing = float(coverage.uncovered(shifted)[0])
+    if missing <= tolerance:
+        return value
+    first = keyname == "TSTART"
+    replacement = span[0] if first else span[1]
+    logger.warning(
+        f"{keyname}={value!r} is {missing:.3f} s outside the orbit file, which only covers "
+        f"{coverage.samples[0]:.3f} to {coverage.samples[-1]:.3f}. It is the requested "
+        f"range rather than the observed one, and barycentring it would extrapolate the "
+        f"spacecraft position; moving it to {replacement!r}, where the data actually "
+        f"{'starts' if first else 'ends'}."
+    )
+    return replacement
+
+
+def enforce_orbit_coverage(
+    hdul,
+    coverage,
+    timezero=0.0,
+    clock_fun=None,
+    leap_fun=None,
+    tolerance=COVERAGE_TOLERANCE_S,
+):
+    """Drop rows the orbit file cannot place, and refuse the ones that matter.
+
+    Times are tested where the correction is actually evaluated -- after ``TIMEZERO``,
+    the leap seconds and the clock correction -- because that, and not the raw column, is
+    what the orbit file is asked about.
+
+    Rows outside every good time interval that the orbit file cannot place are dropped
+    with a warning: they are junk the orbit file also happens not to cover, and keeping
+    them would mean writing an extrapolated time into an event list. Rows *inside* a good
+    time interval that miss by more than ``tolerance`` raise instead, because there is no
+    honest thing to write for them and quietly dropping real events would be worse than
+    refusing the file.
+
+    Returns
+    -------
+    int
+        How many rows were dropped.
+    """
+    if coverage is None:
+        return 0
+
+    gti = gti_intervals(hdul)
+    dropped = 0
+    for hdu in hdul:
+        data = getattr(hdu, "data", None)
+        for keyname in TIME_COLUMNS:
+            column = column_named(data, keyname)
+            if column is None or not len(data):
+                continue
+            raw = np.asarray(data[column], dtype=np.float64)
+            missing = coverage.uncovered(pre_bary_shift(raw, timezero, clock_fun, leap_fun))
+            if not np.any(missing > tolerance):
+                continue
+
+            good = inside_gti(raw, gti)
+            fatal = (missing > tolerance) & good
+            if np.any(fatal):
+                raise ValueError(
+                    f"{hdu.name}/{column}: {np.count_nonzero(fatal)} times inside the good "
+                    f"time intervals are up to {missing[fatal].max():.3f} s outside the "
+                    f"orbit file, which only covers "
+                    f"{coverage.samples[0]:.3f} to {coverage.samples[-1]:.3f}. The "
+                    "spacecraft position there would be an extrapolation, so these times "
+                    "cannot be barycentred. Supply an orbit file covering the observation."
+                )
+
+            drop = (missing > tolerance) & ~good
+            logger.warning(
+                f"{hdu.name}/{column}: dropping {np.count_nonzero(drop)} rows that fall "
+                f"outside every good time interval AND up to {missing[drop].max():.3f} s "
+                f"outside the orbit file. The spacecraft position there is unknown, so "
+                f"these times cannot be barycentred."
+            )
+            hdu.data = data[~drop]
+            data = hdu.data
+            dropped += int(np.count_nonzero(drop))
+    return dropped
 
 
 def correct_times(times, bary_fun, clock_fun=None, leap_fun=None):
@@ -822,6 +1017,14 @@ def apply_barycenter_correction(
             met_range=met_range,
         )
 
+        # Before anything is written: refuse the file if the orbit does not reach the
+        # data, and drop the rows it does not reach that were never good times anyway.
+        # The span is read afterwards, so that a TSTART pulled back to the start of the
+        # data is pulled back to data that survived.
+        coverage = getattr(bary_fun, "coverage", None)
+        enforce_orbit_coverage(hdul, coverage, timezero, clock_fun, leap_fun)
+        span = good_time_span(hdul)
+
         for hdu in hdul:
             logger.info(f"Updating HDU {hdu.name}")
             for keyname in TIME_COLUMNS:
@@ -845,8 +1048,17 @@ def apply_barycenter_correction(
                     )
                 if keyname in hdu.header:
                     logger.info(f"Updating header keyword {keyname}")
+                    raw_keyword = clamp_uncovered_keyword(
+                        hdu.header[keyname],
+                        keyname,
+                        coverage,
+                        span,
+                        timezero,
+                        clock_fun,
+                        leap_fun,
+                    )
                     corrected_time = correct_times(
-                        hdu.header[keyname] + timezero, bary_fun, clock_fun, leap_fun
+                        raw_keyword + timezero, bary_fun, clock_fun, leap_fun
                     )
                     if not np.isfinite(corrected_time):
                         logger.error(
