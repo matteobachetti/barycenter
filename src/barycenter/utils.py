@@ -79,14 +79,16 @@ def fits_open_remote(filename, **kwargs):
 
     try:
         # This will work for local files and remote files with proper permissions
-        hdul = fits.open(filename, **kwargs)
+        return fits.open(filename, **kwargs)
     except (PermissionError, botocore.exceptions.NoCredentialsError):
-        if "://" in filename:
-            logger.info(f"Permission denied for {filename}, trying with fsspec.")
-            hdul = fits.open(filename, use_fsspec=True, fsspec_kwargs={"anon": True}, **kwargs)
-
-    # print(hdul[1].data["TIME"])
-    return hdul
+        # Anonymous access is only a thing for a URL. On a local path there is nothing
+        # to retry, and the permission error is the answer -- so re-raise it rather
+        # than fall through to an unassigned name, which used to turn "you cannot read
+        # this file" into an UnboundLocalError pointing at this function.
+        if "://" not in filename:
+            raise
+        logger.info(f"Permission denied for {filename}, trying with fsspec.")
+        return fits.open(filename, use_fsspec=True, fsspec_kwargs={"anon": True}, **kwargs)
 
 
 def fits_open_including_remote(filename, **kwargs):
