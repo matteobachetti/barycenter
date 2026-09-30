@@ -78,8 +78,8 @@ from barycenter import get_barycentric_correction, read_orbit
 orbit = "nu30702012003A.attorb"
 correction = get_barycentric_correction(orbit, ra=148.9584, dec=69.6794, ephem="DE440")
 
-met = read_orbit(orbit)["MET"].value          # the times the orbit file covers
-barycentred = met + correction(met)           # correction is in seconds, about +309 here
+met = read_orbit(orbit)["MET"].value  # the times the orbit file covers
+barycentred = met + correction(met)  # correction is in seconds, about +309 here
 ```
 
 The returned object is a cubic spline over the orbit file's own time span, so ask it only
