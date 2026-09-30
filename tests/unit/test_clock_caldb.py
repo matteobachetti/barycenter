@@ -164,7 +164,7 @@ class TestHeasoftDataDirs:
         shutil.copy(os.path.join(source, "dummy_swift_clk.fits"), directory / "named_clk.fits")
         monkeypatch.setenv("TIMING_DIR", str(directory))
         monkeypatch.delenv("LHEA_DATA", raising=False)
-        _, used = clock.clock_correction_fun("swift", "named_clk.fits")
+        _, used, _ = clock.clock_correction_fun("swift", "named_clk.fits")
         assert used == str(directory / "named_clk.fits")
 
     def test_a_name_nowhere_says_where_it_looked(self, tmp_path, monkeypatch):

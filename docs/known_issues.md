@@ -44,6 +44,20 @@ seconds. Resolving it needs an FT1/FT2 pair and a `gtbary` reference.
 
 ## Missing features
 
+**`TIERRELA` is not written.** HEASOFT `barycorr` writes the *relative* clock accuracy
+alongside `TIERABSO` — 1e-9 for NuSTAR — and writes it even with `clockfile=NONE`. We
+write neither, because nothing here measures a relative accuracy and copying a constant
+out of a reference file for a quantity we do not compute would be asserting something we
+have no evidence for. `TIERABSO`, which we do write, is documented in
+[technical_details](technical_details.md).
+
+**`CLOCKAPP` disagrees with `barycorr` on Swift with no clock file.** `barycorr` sets
+`CLOCKAPP = T` for a Swift run with `clockfile=NONE`; we set `F`, because no clock file
+was applied. The argument for HEASOFT's choice is that the UTCF already in the header has
+been folded in, which is a clock correction of a sort; the argument for ours is that the
+keyword should say whether the run did what it was asked not to do. Nothing downstream is
+known to depend on it, so it is recorded rather than changed.
+
 **Only the new NuSTAR clock format is read.** `nustar_clock_correction_fun` reads the
 `NU_FINE_CLOCK` extension. Older files carry a `CLOCK_CORRECT` extension with C0/C1/C2
 polynomial coefficients, documented by HEASOFT as accurate only to the millisecond;

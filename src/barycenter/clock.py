@@ -38,6 +38,7 @@ from numba import vectorize
 from .utils import get_remote_directory_listing
 
 __all__ = [
+    "CLOCK_ACCURACY_S",
     "CLOCK_CALDB",
     "ClockSource",
     "FINE_CLOCK_EXTENSION",
@@ -46,10 +47,12 @@ __all__ = [
     "RXTE_DETECTOR_DELAY",
     "clock_cache_dir",
     "clock_correction_fun",
+    "constant_clock_accuracy",
     "cubic_interpolation",
     "get_latest_clock_file",
     "in_heasoft_data_dirs",
     "interpolate_clock_function",
+    "nustar_clock_accuracy_fun",
     "nustar_clock_builder",
     "nustar_clock_correction_fun",
     "read_tdc_file",
@@ -588,6 +591,71 @@ def rxte_clock_correction_fun(tdcfile=None, instrument=None):
     return correction
 
 
+#: The absolute accuracy a mission's clock correction achieves, in seconds, for the
+#: missions where it is a property of the correction itself rather than something the
+#: clock file records per interval. Both numbers are the ones HEASOFT ``hdaxbary`` writes
+#: into ``TIERABSO``, read off the committed references: 10 us for Swift once the UTCF is
+#: applied and 5 us for RXTE once ``tdc.dat`` is. NuSTAR is absent because its clock file
+#: carries a ``CLOCK_ERR_CORR`` column and the answer varies along the observation; see
+#: :func:`nustar_clock_accuracy_fun`.
+CLOCK_ACCURACY_S = {"swift": 1e-5, "rxte": 5e-6}
+
+
+def constant_clock_accuracy(value):
+    """An accuracy function for a mission whose clock accuracy does not vary with time.
+
+    The accuracy protocol is ``accuracy(met_start, met_stop) -> float``: the worst
+    absolute accuracy of the clock correction anywhere in that span, in seconds. For
+    these missions the span is irrelevant.
+    """
+
+    def accuracy(met_start, met_stop):
+        return float(value)
+
+    return accuracy
+
+
+def nustar_clock_accuracy_fun(clockfile):
+    """NuSTAR's clock accuracy over a span, from the clock file's own error column.
+
+    The ``NU_FINE_CLOCK`` extension tabulates ``CLOCK_ERR_CORR`` beside the offset, so
+    unlike Swift and RXTE the answer is measured rather than a constant of the mission:
+    on the test file it runs from 122.5 to 131.8 us.
+
+    The worst value anywhere in the span is returned, because ``TIERABSO`` describes the
+    whole file with one number and its own comment calls it the absolute precision of the
+    clock correction. ``hdaxbary`` instead appears to write the value near ``TSTOP`` --
+    122.9 us on the test observation against our 131.8 us -- but its exact recipe is in
+    the ``heasarc`` C source, which is not in the distributed source tarballs, and none of
+    the candidates tried (linear or spline interpolation at the raw or corrected
+    ``TSTOP``, at the last event, or the span's mean, minimum or maximum) reproduces its
+    seven significant figures. The two differ by 7 per cent of a quantity that is itself
+    an error estimate, so ours is the conservative reading of the same number rather than
+    a different one.
+
+    Returns
+    -------
+    callable
+        ``accuracy(met_start, met_stop)`` giving seconds. The file is read when it is
+        called, which happens once per run.
+    """
+
+    def accuracy(met_start, met_stop):
+        with fits.open(clockfile) as hdul:
+            table = Table(hdul[FINE_CLOCK_EXTENSION].data)
+        times = np.asarray(table["TIME"], dtype=np.float64)
+        errors = np.asarray(table["CLOCK_ERR_CORR"], dtype=np.float64)
+        # The rows inside the span, plus the interpolated ends, so a span shorter than
+        # one tabulated step still gets an answer.
+        inside = (times >= met_start) & (times <= met_stop)
+        candidates = [np.interp([met_start, met_stop], times, errors).max()]
+        if np.any(inside):
+            candidates.append(errors[inside].max())
+        return float(max(candidates))
+
+    return accuracy
+
+
 def nustar_clock_builder(clockfile=None, instrument=None):
     """The ``clock`` entry for NuSTAR in :data:`barycenter.missions.MISSIONS`.
 
@@ -597,7 +665,11 @@ def nustar_clock_builder(clockfile=None, instrument=None):
     if clockfile is None:
         clockfile = get_latest_clock_file("nustar")
         logger.info(f"Using latest NuSTAR clock file: {clockfile}")
-    return nustar_clock_correction_fun(clockfile), clockfile
+    return (
+        nustar_clock_correction_fun(clockfile),
+        clockfile,
+        nustar_clock_accuracy_fun(clockfile),
+    )
 
 
 def swift_clock_builder(clockfile=None, instrument=None):
@@ -609,7 +681,11 @@ def swift_clock_builder(clockfile=None, instrument=None):
     if clockfile is None:
         clockfile = get_latest_clock_file("swift")
         logger.info(f"Using latest Swift clock file: {clockfile}")
-    return swift_clock_correction_fun(clockfile), clockfile
+    return (
+        swift_clock_correction_fun(clockfile),
+        clockfile,
+        constant_clock_accuracy(CLOCK_ACCURACY_S["swift"]),
+    )
 
 
 def rxte_clock_builder(clockfile=None, instrument=None):
@@ -625,11 +701,15 @@ def rxte_clock_builder(clockfile=None, instrument=None):
             "HEASOFT barycorr ignores its clockfile parameter for RXTE too."
         )
     tdcfile = rxte_tdc_file()
-    return rxte_clock_correction_fun(tdcfile, instrument=instrument), tdcfile
+    return (
+        rxte_clock_correction_fun(tdcfile, instrument=instrument),
+        tdcfile,
+        constant_clock_accuracy(CLOCK_ACCURACY_S["rxte"]),
+    )
 
 
 def clock_correction_fun(mission, clockfile=None, instrument=None):
-    """The clock correction for a mission, and the file it was read from.
+    """The clock correction for a mission, the file it came from, and its accuracy.
 
     Which missions have one, and what builds it, is the registry's business; this only
     looks it up and checks that a named file exists before handing it over.
@@ -650,6 +730,10 @@ def clock_correction_fun(mission, clockfile=None, instrument=None):
         ``None`` for a mission with no clock correction of its own.
     clockfile : str or None
         The file actually used, for the history record.
+    accuracy : callable or None
+        ``accuracy(met_start, met_stop)`` giving the worst absolute accuracy of the
+        correction over that span, in seconds -- the ``TIERABSO`` keyword. ``None``
+        alongside a ``None`` correction.
 
     Raises
     ------
@@ -684,6 +768,6 @@ def clock_correction_fun(mission, clockfile=None, instrument=None):
             warnings.warn(
                 f"No clock correction is implemented for mission {mission}; ignoring {clockfile}."
             )
-        return None, None
+        return None, None, None
 
     return builder(clockfile, instrument)

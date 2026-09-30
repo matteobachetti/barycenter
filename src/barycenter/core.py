@@ -610,21 +610,29 @@ def apply_barycenter_correction(
         mission = hdul[1].header.get("TELESCOP", "unknown").lower()
         logger.info(f"Mission: {mission}")
 
-        clock_fun = None
+        clock_fun, clock_accuracy = None, None
         if isinstance(clockfile, str) and clockfile.lower() == "none":
             logger.info("Clock correction explicitly disabled")
             clockfile = None
         else:
             # Which missions have a clock correction, and where each one comes from, is
             # barycenter.clock's business; this function stays mission-agnostic.
-            clock_fun, clockfile = clock_correction_fun(
+            clock_fun, clockfile, clock_accuracy = clock_correction_fun(
                 mission, clockfile, instrument=hdul[1].header.get("INSTRUME")
             )
 
-        # Not part of the clock correction, and so not switched off with it: a mission
-        # whose MET counts UTC seconds needs the leap seconds since MJDREF added whatever
-        # --clockfile said. Leaving them out is a whole-second error, which is not the
-        # kind of thing a flag should be able to cause.
+        # The accuracy the clock correction achieves, for TIERABSO, measured over the
+        # file's own span before anything moves. Left as None when no clock correction
+        # was applied, in which case the keyword is not touched: the honest figure would
+        # then be the size of the correction we did not apply, which is exactly the thing
+        # we cannot know without the clock file.
+        tierabso = None
+        if clock_fun is not None and clock_accuracy is not None:
+            tierabso = clock_accuracy(
+                hdul[1].header.get("TSTART", 0.0), hdul[1].header.get("TSTOP", 0.0)
+            )
+            logger.info(f"Clock correction accurate to {tierabso * 1e6:.1f} us (TIERABSO)")
+
         # Needed by the leap-second term below and by the DATE-OBS/DATE-END/MJD-OBS
         # keywords at the end of the loop. A file with no MJDREF at all gets None and
         # keeps its date keywords, rather than the whole run failing over metadata.
@@ -637,6 +645,10 @@ def apply_barycenter_correction(
                 "recomputed and are left as they are."
             )
 
+        # Not part of the clock correction, and so not switched off with it: a mission
+        # whose MET counts UTC seconds needs the leap seconds since MJDREF added whatever
+        # --clockfile said. Leaving them out is a whole-second error, which is not the
+        # kind of thing a flag should be able to cause.
         leap_fun = None
         if _mission_counts_utc_seconds(mission):
             if mjdref is None:
@@ -687,6 +699,13 @@ def apply_barycenter_correction(
                 if keyname in hdu.header:
                     logger.info(f"Removing {keyname}, now folded into the times")
                     del hdu.header[keyname]
+
+            if tierabso is not None:
+                # Written even where the input had no such keyword, as hdaxbary does: it
+                # is the accuracy of a correction this run applied, so it is measured
+                # rather than invented. Where no clock correction was applied it is left
+                # alone, which is what HEASOFT does for NuSTAR and RXTE.
+                hdu.header["TIERABSO"] = (tierabso, "Absolute precision of clock correction")
 
             hdu.header["CREATOR"] = f"Barycenter - v. {version}"
             hdu.header["RA_OBJ"] = (ra, "Coordinate used for barycentering")

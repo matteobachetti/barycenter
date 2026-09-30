@@ -81,15 +81,35 @@ class TestConsistency:
 
 
 class TestBuilders:
-    def test_the_rxte_builder_returns_a_correction_and_its_file(self):
-        """A clock entry is a callable with a fixed contract: ``(function, path)``."""
-        function, path = MISSIONS["rxte"].clock(None, "PCA")
+    def test_the_rxte_builder_returns_a_correction_its_file_and_its_accuracy(self):
+        """A clock entry has a fixed contract: ``(function, path, accuracy)``."""
+        function, path, accuracy = MISSIONS["rxte"].clock(None, "PCA")
         assert path.endswith("tdc.dat")
         assert 17e-6 < function(537723471.0) < 18e-6
+        # A constant of the mission, so the span it is asked about is irrelevant.
+        assert accuracy(0.0, 1.0) == accuracy(5e8, 6e8) == 5e-6
 
     def test_the_nustar_builder_uses_the_file_it_is_given(self):
         """Given a clock file, no CALDB lookup happens -- which is what keeps CI offline."""
         clockfile = os.path.join(datadir, "dummy_fine_clk.fits")
-        function, path = MISSIONS["nustar"].clock(clockfile, None)
+        function, path, accuracy = MISSIONS["nustar"].clock(clockfile, None)
         assert path == clockfile
         assert np.all(function(np.array([178574700.0, 178656500.0])) > 0.019)
+        # NuSTAR's accuracy is read from the file's own CLOCK_ERR_CORR column, so unlike
+        # RXTE's it depends on the span asked about.
+        assert 1.2e-4 < accuracy(178574700.0, 178656500.0) < 1.4e-4
+
+    @pytest.mark.parametrize("name", ["nustar", "rxte", "swift"])
+    def test_every_builder_returns_the_same_three_things(self, name):
+        """One contract for all of them, so core.py needs no per-mission special case."""
+        clockfiles = {
+            "nustar": os.path.join(datadir, "dummy_fine_clk.fits"),
+            "swift": os.path.join(datadir, "dummy_swift_clk.fits"),
+            "rxte": None,
+        }
+        result = MISSIONS[name].clock(clockfiles[name], None)
+        assert len(result) == 3
+        function, path, accuracy = result
+        assert callable(function) and callable(accuracy)
+        assert isinstance(path, str)
+        assert 0.0 < accuracy(0.0, 1e9) < 1.0
