@@ -536,9 +536,67 @@ Sampling it on a grid and interpolating with a cubic spline costs:
 | 20 s | 1.3 ns |
 | 60 s | 2.6 µs |
 
-So the 5-second grid the package already uses is a good choice, and the problem with
-it is not its spacing but its extent — it spans the whole orbit file rather than the
-events.
+So the 5-second grid is a good choice, and it is what the package now uses above
+`core.AUTO_GRID_EVENTS` events.
+
+#### When the grid is used, and what it costs
+
+`apply_barycenter_correction` decides from the file's size, in `core.grid_spacing_for`:
+below 100 000 events the correction is evaluated at **every event**, which is exact and
+already costs well under a second; above it, a 5 s grid is used. `--dt` overrides the
+decision either way, and `--dt 0` forces the exact path whatever the size. The threshold
+means every reference comparison in the test suite runs on the unapproximated code, since
+the committed test files all hold a few hundred events.
+
+Measured end to end, on `dummy_evt.evt` blown up to 3 000 000 events (858 MB), with
+identical code:
+
+| | wall | peak RSS |
+|---|---|---|
+| `--dt 0`, exact per event | 23.0 s | 3.76 GB |
+| `--dt 5` | **2.3 s** | **1.98 GB** |
+
+and the two answers, on those three million events:
+
+* **99.03 % of the stored times are bit-identical**
+* the largest difference is 29.802 ns, which is **exactly one float64 step** at this MET
+* mean +0.005 ns, std 2.9 ns — and that std is the storage quantisation, not
+  interpolation error, which is 1.6 ns at most
+
+So at the precision a FITS `D` column can hold, the grid is indistinguishable from the
+exact path. The memory halving is discussed under
+[Memory](#memory-where-the-factor-of-four-goes).
+
+#### The grid has to be padded by two steps, not one
+
+When the grid is clipped to the events — which is what makes it cheap on a multi-day
+orbit file — the events must sit clear of the interpolant's **end conditions**. A spline's
+first and last intervals are not the same function as its interior, so a grid padded by
+one step puts those intervals exactly where the events are. Clipped against unclipped,
+inside the span:
+
+| margin | PINT (`Akima1DInterpolator`) | native (`CubicSpline`) |
+|---|---|---|
+| 1 step | **46.2 ns** | 0.045 ns |
+| 2 steps | 0.000 ns | 0.013 ns |
+
+The whole difference lives at the end of the span, confirming it is the boundary and not
+interpolation error. PINT's is 1000× worse because `Akima1DInterpolator` builds the slopes
+at its boundary knots from *extrapolated* points, and because its knots carry PINT's own
+noise for that construction to amplify, while the native engine's knots hold exact values.
+Both engines now pad by `2 * dt`, and `tests/test_native.py::TestGridClipping` and
+`tests/test_pintengine.py::test_clipping_the_grid_does_not_move_the_answer` assert that
+clipping is free.
+
+The range itself comes from `core.met_range_for_file`: the widest `TSTART`/`TSTOP` over
+every extension, padded by `MET_RANGE_PAD_S` (1000 s), and then **shifted by the clock and
+leap-second terms**, because the barycentric correction is evaluated at the clock-corrected
+time and not the raw one. On Swift that shift is nearly 20 s, so a grid clipped to the raw
+span would leave every event outside it. The range is taken from the headers rather than
+from the data because reading a strided time column out of a memory-mapped table pages in
+the whole file; all five committed reference files keep their times inside their own
+`TSTART`/`TSTOP` (the widest slack being Chandra's 823 s), and a file that does not is
+caught by a coverage check that logs a warning naming how far outside it went.
 
 ## Accuracy
 
