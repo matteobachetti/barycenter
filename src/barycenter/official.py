@@ -14,7 +14,7 @@ import warnings
 
 from astropy.io import fits
 
-from .clock import get_latest_clock_file
+from .clock import CLOCK_CALDB, get_latest_clock_file
 from .missions import mission_for
 from .remote import download_locally
 from .utils import fits_open_including_remote, slim_down_hdu_list
@@ -143,7 +143,7 @@ def apply_mission_specific_barycenter_correction(
     if isinstance(clockfile, str) and clockfile.lower() == "none":
         # barycorr takes "NONE" (upper case) to mean "no clock correction".
         clockfile = "NONE"
-    elif clockfile is None and mission.name == "nustar":
+    elif clockfile is None and mission.name in CLOCK_CALDB:
         clockfile = get_latest_clock_file(mission.name)
         logger.info(f"Using latest {mission.name} clock file: {clockfile}")
 

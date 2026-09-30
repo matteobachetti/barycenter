@@ -4,7 +4,7 @@ A spacecraft's own clock drifts. Missions publish a table of the offset against 
 reference, and the correction has to be applied before -- or strictly speaking,
 together with -- the barycentric one.
 
-Two missions are covered:
+Three missions are covered, and no two of them do it the same way:
 
 * **NuSTAR**, whose ``NU_FINE_CLOCK`` CALDB extension is a table of the offset and its
   derivative every 1000 s, reaching 25 ms. Files from before 2019 carry a coarser
@@ -13,6 +13,10 @@ Two missions are covered:
   package. HEASOFT's ``barycorr`` ignores its own ``clockfile`` parameter for RXTE and
   always reads that file, so reproducing it means reading it too. The correction is tens
   of microseconds -- small, but several hundred times our accuracy target.
+* **Swift**, whose CALDB file has a ``CLOCK_CORRECT`` extension -- the same *name* as the
+  old NuSTAR one, and nothing like it. It holds a quadratic per interval, in the same
+  spirit as RXTE's ``tdc.dat``, and the correction it gives is the mission's UTCF:
+  **tens of seconds**, drifting by hundreds of microseconds a day.
 
 :func:`clock_correction_fun` is the one entry point: give it the mission and whatever the
 user asked for, and it returns the correction function and the file it came from, or
@@ -23,6 +27,8 @@ import glob
 import logging as logger
 import os
 import warnings
+from dataclasses import dataclass
+from fnmatch import fnmatch
 
 import numpy as np
 from astropy.io import fits
@@ -32,7 +38,8 @@ from numba import vectorize
 from .utils import get_remote_directory_listing
 
 __all__ = [
-    "CLOCK_CALDB_URLS",
+    "CLOCK_CALDB",
+    "ClockSource",
     "FINE_CLOCK_EXTENSION",
     "RXTE_DETECTOR_DELAY",
     "clock_cache_dir",
@@ -49,9 +56,41 @@ __all__ = [
 ]
 
 
-#: Where the CALDB keeps each mission's clock files.
-CLOCK_CALDB_URLS = {
-    "nustar": "https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/",
+@dataclass(frozen=True)
+class ClockSource:
+    """Where a mission's clock files live in the CALDB, and what they are called.
+
+    The two belong together. The directory index has to be filtered by name -- it also
+    lists ``swco.dat``, parent-directory links and column headings -- and the cache has to
+    be searched by the same name when the network is down. Keeping the pattern beside the
+    URL is what stops those two from drifting apart.
+
+    Parameters
+    ----------
+    url : str
+        The CALDB directory index to scrape.
+    pattern : str
+        A glob matching the clock files there, and nothing else. The newest is taken to be
+        the last in sorted order, which works because every mission here versions its
+        files in the name.
+    """
+
+    url: str
+    pattern: str
+
+
+#: Where the CALDB keeps each mission's clock files. A mission absent from here has either
+#: no clock correction or one that does not come from the CALDB, like RXTE's bundled
+#: ``tdc.dat``.
+CLOCK_CALDB = {
+    "nustar": ClockSource(
+        url="https://heasarc.gsfc.nasa.gov/FTP/caldb/data/nustar/fpm/bcf/clock/",
+        pattern="nuCclock*.fits*",
+    ),
+    "swift": ClockSource(
+        url="https://heasarc.gsfc.nasa.gov/FTP/caldb/data/swift/mis/bcf/clock/",
+        pattern="swclockcor*.fits*",
+    ),
 }
 
 #: The extension a modern NuSTAR clock file keeps its fine correction in.
@@ -82,6 +121,7 @@ def get_latest_clock_file(mission):
     Parameters
     ----------
     mission : str
+        A key of :data:`CLOCK_CALDB`, in any case.
 
     Returns
     -------
@@ -90,21 +130,29 @@ def get_latest_clock_file(mission):
 
     Raises
     ------
+    ValueError
+        If the mission has no CALDB clock directory listed.
     FileNotFoundError
         If the index cannot be read *and* nothing is cached locally.
     """
     from urllib.request import urlretrieve
 
     mission = mission.lower()
-    if mission not in CLOCK_CALDB_URLS:
+    if mission not in CLOCK_CALDB:
         raise ValueError(f"Mission {mission} not supported for automatic clock file retrieval")
 
+    source = CLOCK_CALDB[mission]
     cache = clock_cache_dir()
-    pattern = os.path.join(cache, "nuCclock*.fits*")
+    pattern = os.path.join(cache, source.pattern)
 
     try:
-        listing = get_remote_directory_listing(CLOCK_CALDB_URLS[mission])
-        remote = sorted(f for f in listing if "nuCclock" in f)[-1]
+        listing = get_remote_directory_listing(source.url)
+        matching = sorted(f for f in listing if fnmatch(f.split("/")[-1], source.pattern))
+        if not matching:
+            # The index was readable but held nothing we recognise, which means the
+            # pattern is wrong rather than the network being down. Say which.
+            raise FileNotFoundError(f"nothing matching {source.pattern} at {source.url}")
+        remote = matching[-1]
     except Exception as exc:
         # The fallback that the original code intended but never reached, because the
         # name it returned was only ever assigned on the success path.

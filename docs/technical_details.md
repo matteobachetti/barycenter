@@ -95,7 +95,8 @@ decision in `clock.py` is what lets `core.py` stay mission-agnostic.
 ### NuSTAR
 
 If no `-c/--clockfile` is given, `get_latest_clock_file` scrapes
-the CALDB HTML directory index, picks the highest-versioned `nuCclock*.fits` and caches
+the CALDB HTML directory index, picks the highest-versioned file matching that mission's
+`ClockSource.pattern` (`nuCclock*.fits*` for NuSTAR) and caches
 it under the user's cache directory — these files are about 12 MB, so they are fetched
 once per machine, not once per run. If the index cannot be reached, the newest cached
 file is used.
