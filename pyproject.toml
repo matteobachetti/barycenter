@@ -45,7 +45,6 @@ keywords = [
 # CALDB index scrape, and the --apply-official shell-outs.
 dependencies = [
     "astropy >= 5.0",
-    "numba",
     "numpy",
     "pint-pulsar",
     "scipy",
@@ -78,6 +77,13 @@ remote = [
 # --source-region-deg
 regions = [
     "regions",
+]
+# Compiles the clock-file interpolation kernel, which is about six times faster than
+# the numpy expression it falls back to. Optional because compiling it costs 0.52 s at
+# first use while the routine itself is under half a per cent of a run, so it does not
+# pay for itself below roughly 50 million events. Results are bit-identical either way.
+speed = [
+    "numba",
 ]
 recommended = [
     "barycenter[regions,remote]",

@@ -33,7 +33,6 @@ from fnmatch import fnmatch
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table
-from numba import vectorize
 
 from .utils import get_remote_directory_listing
 
@@ -189,7 +188,51 @@ def get_latest_clock_file(mission):
     return fname
 
 
-@vectorize("float64(float64, float64, float64, float64, float64, float64, float64)")
+#: The elementwise kernel, compiled on first use if numba is installed. See
+#: :func:`_cubic_kernel`.
+_CUBIC_KERNEL = None
+
+#: The signature the kernel is compiled for. Everything reaching it has already been
+#: cast to float64 by :func:`interpolate_clock_function`.
+_CUBIC_SIGNATURE = "float64(float64, float64, float64, float64, float64, float64, float64)"
+
+
+def _cubic_kernel():
+    """The interpolation kernel: numba's if it is installed, plain numpy's otherwise.
+
+    numba is an **optional** dependency and is imported here rather than at module
+    level, because compiling this one function eagerly at import cost 0.52 s -- half of
+    ``barycenter.clock``'s entire import time, and paid by every run including the many
+    that never open a clock file. Compiled, it is about six times faster than the numpy
+    expression on arrays, but this routine is only 0.3 to 0.4 per cent of a correction
+    run, so the saving is around 13 ms per million events against a fixed 0.65 s: numba
+    does not pay for itself below roughly 50 million events.
+
+    It is kept, lazily, because *that arithmetic is not the reason to have numba* -- if
+    more of the hot path were compiled the import would justify itself easily. The
+    obstacle is that the hot path is not ours: at 6.7 us per event the native engine
+    spends almost all of its time inside astropy's and ERFA's JPL ephemeris evaluation,
+    which numba cannot touch. What is ours is the vector arithmetic in
+    :func:`barycenter.native.barycentric_correction` -- an ``einsum``, a matrix product,
+    a ``log1p`` and half a dozen (N, 3) temporaries, all memory-bound numpy that a single
+    fused kernel would do in one pass and in a fraction of the memory. That, not this,
+    is the change that would make numba worth its import, and it is recorded in
+    ``docs/known_issues.md``.
+
+    The two paths give bit-identical results; ``tests/test_clock.py`` asserts it.
+    """
+    global _CUBIC_KERNEL
+    if _CUBIC_KERNEL is None:
+        try:
+            from numba import vectorize
+        except ImportError:
+            logger.debug("numba is not installed; interpolating the clock file with numpy")
+            _CUBIC_KERNEL = _cubic_interpolation
+        else:
+            _CUBIC_KERNEL = vectorize(_CUBIC_SIGNATURE)(_cubic_interpolation)
+    return _CUBIC_KERNEL
+
+
 def _cubic_interpolation(x, xtab0, xtab1, ytab0, ytab1, yptab0, yptab1):
     """Cubic interpolation of tabular data.
 
@@ -200,8 +243,8 @@ def _cubic_interpolation(x, xtab0, xtab1, ytab0, ytab1, yptab0, yptab1):
     ordinate ytab[] (+derivative yptab[]) at the same abcissae, estimate
     the ordinate and derivative at requested point "x"
 
-    Works for numbers or arrays for x. If x is an array,
-    xtab, ytab and yptab are arrays of shape (2, x.size).
+    Written as scalar arithmetic so that it is both a valid numba
+    ``@vectorize`` kernel and, unchanged, a numpy expression over arrays.
     """
     dx = x - xtab0
     # Distance between adjoining tabulated abcissae and ordinates
@@ -238,7 +281,8 @@ def cubic_interpolation(x, xtab, ytab, yptab):
     Works for numbers or arrays for x. If x is an array,
     xtab, ytab and yptab are arrays of shape (2, x.size).
     """
-    return _cubic_interpolation(x, xtab[0], xtab[1], ytab[0], ytab[1], yptab[0], yptab[1])
+    kernel = _cubic_kernel()
+    return kernel(x, xtab[0], xtab[1], ytab[0], ytab[1], yptab[0], yptab[1])
 
 
 def interpolate_clock_function(clock_table, mets):

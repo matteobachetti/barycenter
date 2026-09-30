@@ -206,3 +206,50 @@ class TestRXTETdc:
         # xCC.c walks the file and stops at the first block whose end is past the time
         # asked for, which is only a searchsorted if the ends never go backwards.
         assert np.all(np.diff(table["DAY_END"]) >= 0)
+
+
+class TestInterpolationKernel:
+    """numba is optional, so the compiled and pure-numpy kernels must agree exactly.
+
+    The kernel is written as scalar arithmetic so that the same source is both a valid
+    ``@vectorize`` kernel and a numpy expression over arrays. That only buys anything if
+    the two really do produce the same numbers.
+    """
+
+    @staticmethod
+    def arguments(n=10_000):
+        rng = np.random.default_rng(42)
+        x = np.sort(rng.random(n)) * 100
+        left = np.floor(x)
+        return (x, left, left + 1.0, rng.random(n), rng.random(n), rng.random(n), rng.random(n))
+
+    def test_the_two_kernels_are_bit_identical(self):
+        """Compiled and interpreted give the same float64s, not merely close ones."""
+        numba = pytest.importorskip("numba")
+        from barycenter.clock import _CUBIC_SIGNATURE, _cubic_interpolation
+
+        compiled = numba.vectorize(_CUBIC_SIGNATURE)(_cubic_interpolation)
+        args = self.arguments()
+        assert np.array_equal(np.asarray(compiled(*args)), _cubic_interpolation(*args))
+
+    def test_numba_is_not_imported_just_by_importing_the_module(self):
+        """``barycenter.clock`` must not pull numba in at import time.
+
+        Compiling this one function eagerly cost 0.52 s, half of the module's whole
+        import time, on every run including those that never open a clock file. The
+        kernel is therefore built on first use instead, and this asserts the import
+        itself stays clean.
+        """
+        import subprocess
+        import sys
+
+        code = "import sys; import barycenter.clock; sys.exit(1 if 'numba' in sys.modules else 0)"
+        assert subprocess.run([sys.executable, "-c", code]).returncode == 0
+
+    def test_the_kernel_is_built_once_and_cached(self):
+        """Repeated calls reuse the kernel rather than recompiling it every time."""
+        from barycenter import clock
+
+        clock._CUBIC_KERNEL = None
+        first = clock._cubic_kernel()
+        assert clock._cubic_kernel() is first
