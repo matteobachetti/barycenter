@@ -20,13 +20,6 @@ answers on both.
 
 ## Correctness
 
-**`TELAPSE` is left stale.** `correct_times` updates `TIME`, `START`, `STOP`, `TSTART`
-and `TSTOP` but not `TELAPSE`, which is `TSTOP − TSTART` and changes by as much as the
-two ends' corrections differ — 1.6 s on the XMM test observation, where the Roemer delay
-moves by that much over 7.6 h, and 1.0 s on the Chandra one. SAS `barycen` does update it. Nothing downstream in this
-package reads `TELAPSE`, but a file leaving here claims a duration that no longer matches
-its own start and stop times.
-
 **A Swift time within ~15 s of a leap second can be a second out.** The leap-second term
 is a step function, and it is evaluated on the raw MET, where the step falls at the MET of
 the leap instant (457401600 for 2015-07-01). The clock file's own −1 s step falls at the

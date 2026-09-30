@@ -857,3 +857,241 @@ class TestCoordinateKeywords:
         """The error names every keyword pair tried, and points at --ra/--dec."""
         with pytest.raises(ValueError, match=r"RA_OBJ/DEC_OBJ.*--ra"):
             get_coordinates_from_fits_header(self.header(TELESCOP="NUSTAR"))
+
+
+#: ``(label, event file, orbit file, reference, ra, dec, ephem, extra arguments)`` for
+#: every mission with a committed reference, so one fixture can barycentre all of them
+#: once and several tests can then read the headers.
+DERIVED_CASES = [
+    (
+        "nustar",
+        "dummy_evt.evt",
+        "dummy_orb.fits.gz",
+        "dummy_evt_bary_DE440_noclk.evt.gz",
+        REF_RA,
+        REF_DEC,
+        "DE440",
+        ("--clockfile", "none"),
+    ),
+    (
+        "rxte",
+        "dummy_xte_evt.evt",
+        "dummy_xte_orb.fits.gz",
+        "dummy_xte_bary_DE440_noclk.evt.gz",
+        "228.481995",
+        "-59.136002",
+        "DE440",
+        ("--clockfile", "none"),
+    ),
+    (
+        "swift",
+        "dummy_swift_evt.evt",
+        "dummy_swift_orb.fits.gz",
+        "dummy_swift_bary_DE440_noclk.evt.gz",
+        "182.635833",
+        "39.405833",
+        "DE440",
+        ("--clockfile", "none"),
+    ),
+    (
+        "chandra",
+        "dummy_chandra_evt.evt",
+        "dummy_chandra_orb.fits.gz",
+        "dummy_chandra_bary_DE405.evt.gz",
+        "148.959167",
+        "69.679722",
+        "DE405",
+        ("--clockfile", "none"),
+    ),
+    (
+        "xmm",
+        "dummy_xmm_evt.evt",
+        "dummy_xmm_orb.fits.gz",
+        "dummy_xmm_bary_DE430.evt.gz",
+        "148.96267",
+        "69.67931",
+        "DE430",
+        (),
+    ),
+]
+
+#: The missions whose official tool recomputes the date keywords from the corrected
+#: TSTART: HEASOFT ``barycorr`` and CIAO ``axbary``. SAS ``barycen`` shifts the existing
+#: string instead, so XMM is handled by its own test.
+RECOMPUTING_MISSIONS = ["nustar", "rxte", "swift", "chandra"]
+
+
+@pytest.fixture(scope="module")
+def corrected(tmp_path_factory):
+    """Barycentre every mission's test file once; yields ``{label: (ours, reference)}``."""
+    outdir = tmp_path_factory.mktemp("derived")
+    out = {}
+    for label, evt, orb, ref, ra, dec, ephem, extra in DERIVED_CASES:
+        outfile = str(outdir / f"{label}.evt")
+        main_barycenter(
+            [
+                os.path.join(datadir, evt),
+                os.path.join(datadir, orb),
+                "-o",
+                outfile,
+                "--ra",
+                ra,
+                "--dec",
+                dec,
+                "--ephem",
+                ephem,
+                *extra,
+            ]
+        )
+        out[label] = (outfile, os.path.join(datadir, ref))
+    return out
+
+
+class TestDerivedKeywords:
+    """The keywords that are not times but are computed from TSTART and TSTOP.
+
+    Every official tool rewrites some of these and none rewrites all of them, so there
+    is no single reference to copy: SAS ``barycen`` updates ``TELAPSE`` where HEASOFT
+    ``barycorr`` leaves it 3.4 s stale, and CIAO ``axbary`` updates ``MJD-OBS`` where
+    ``barycorr`` does not. What they do agree on is that a file must not leave claiming a
+    duration, or a calendar date, that its own corrected ``TSTART`` and ``TSTOP``
+    contradict.
+    """
+
+    @staticmethod
+    def truncate(date):
+        """A FITS date string cut back to whole seconds, as the official tools write it."""
+        return date.split(".")[0]
+
+    @pytest.mark.parametrize("label", [c[0] for c in DERIVED_CASES])
+    def test_telapse_is_the_corrected_span(self, corrected, label):
+        """TELAPSE equals the corrected TSTOP minus the corrected TSTART, in every HDU.
+
+        It moves by as much as the two ends' corrections differ -- 3.4 s on the NuSTAR
+        test file, 1.6 s on the XMM one -- so leaving it alone makes the file contradict
+        itself.
+        """
+        ours, _ = corrected[label]
+        with fits.open(ours) as hdul:
+            seen = 0
+            for hdu in hdul:
+                hdr = hdu.header
+                if "TELAPSE" not in hdr:
+                    continue
+                seen += 1
+                assert hdr["TELAPSE"] == pytest.approx(hdr["TSTOP"] - hdr["TSTART"], abs=1e-6)
+            if label in ("nustar", "xmm"):
+                assert seen > 0, "the test file was supposed to carry TELAPSE"
+
+    def test_barycorr_leaves_telapse_stale_where_we_do_not(self, corrected):
+        """The NuSTAR reference itself disagrees with its own TSTART and TSTOP.
+
+        This is the evidence for not copying ``barycorr`` here: its output keeps the
+        uncorrected TELAPSE while moving TSTART by 309.5 s and TSTOP by 306.1 s, so the
+        keyword is 3.4 s away from the span it claims to describe.
+        """
+        ours, reference = corrected["nustar"]
+        with fits.open(reference) as ref:
+            hdr = ref[1].header
+            stale = hdr["TELAPSE"] - (hdr["TSTOP"] - hdr["TSTART"])
+        assert abs(stale) > 3.0
+        with fits.open(ours) as hdul:
+            assert hdul[1].header["TELAPSE"] == pytest.approx(
+                hdul[1].header["TSTOP"] - hdul[1].header["TSTART"], abs=1e-6
+            )
+
+    def test_telapse_matches_barycen(self, corrected):
+        """On XMM, where the official tool does update TELAPSE, we land on its value.
+
+        To a microsecond, which is all SAS's 15-significant-digit keyword can record at
+        XMM's 1.06e8 s -- the same limit as the TSTART/TSTOP comparison above.
+        """
+        ours, reference = corrected["xmm"]
+        with fits.open(ours) as hdul, fits.open(reference) as ref:
+            assert hdul["EVENTS"].header["TELAPSE"] == pytest.approx(
+                ref["EVENTS"].header["TELAPSE"], abs=1e-6
+            )
+
+    @pytest.mark.parametrize("label", RECOMPUTING_MISSIONS)
+    def test_dates_match_the_official_tool_to_the_second(self, corrected, label):
+        """DATE-OBS and DATE-END reproduce barycorr's and axbary's strings exactly.
+
+        Both recompute the date from ``MJDREF + TSTART/86400`` rather than shifting the
+        string the file came in with, and both truncate to whole seconds. We keep the
+        milliseconds, so the comparison is against our string cut back the same way --
+        which still pins the formula down completely.
+        """
+        ours, reference = corrected[label]
+        with fits.open(ours) as hdul, fits.open(reference) as ref:
+            checked = 0
+            for keyword in ("DATE-OBS", "DATE-END"):
+                if keyword not in ref[1].header:
+                    continue
+                checked += 1
+                assert self.truncate(hdul[1].header[keyword]) == ref[1].header[keyword]
+            assert checked == 2
+
+    def test_mjd_obs_matches_axbary(self, corrected):
+        """MJD-OBS is recomputed too, and matches the one tool that also updates it.
+
+        ``axbary`` writes ``MJDREF + TSTART/86400``; ``barycorr`` leaves MJD-OBS at its
+        uncorrected value, which on the NuSTAR reference is 3.6 ms wrong.
+        """
+        ours, reference = corrected["chandra"]
+        with fits.open(ours) as hdul, fits.open(reference) as ref:
+            assert hdul[1].header["MJD-OBS"] == pytest.approx(ref[1].header["MJD-OBS"], abs=1e-11)
+
+    def test_xmm_dates_differ_from_barycen_by_xmms_own_utc_offset(self, corrected):
+        """On XMM we deliberately disagree with barycen, and by a knowable amount.
+
+        XMM writes DATE-OBS in UTC while counting MET in TT seconds since MJDREF, so the
+        two were already 63 s apart on the way in. ``barycen`` shifts the string by
+        however far TSTART moved and so keeps that inconsistency; we recompute, as the
+        other two tools do, which makes the date the date of the time the file actually
+        records now that TIMESYS is TDB. The difference is the file's own UTC-to-TT
+        offset and nothing else, which is what this pins down.
+        """
+        from astropy.time import Time
+
+        ours, reference = corrected["xmm"]
+        raw_name = os.path.join(datadir, "dummy_xmm_evt.evt")
+        with fits.open(ours) as hdul, fits.open(reference) as ref, fits.open(raw_name) as raw:
+            for keyword, met_keyword in (("DATE-OBS", "TSTART"), ("DATE-END", "TSTOP")):
+                # How far the input's own date string sat from the date of its own MET.
+                # The string is truncated to whole seconds, so this has to be taken per
+                # keyword rather than once for the file.
+                offset = (
+                    Time(raw[1].header[keyword], scale="tai").mjd
+                    - (raw[1].header["MJDREF"] + raw[1].header[met_keyword] / 86400)
+                ) * 86400
+                assert -64.2 < offset < -62.0, f"{keyword}: {offset:.3f} s"
+                theirs = Time(ref[1].header[keyword], scale="tai")
+                mine = Time(hdul[1].header[keyword], scale="tai")
+                assert (theirs - mine).sec == pytest.approx(offset, abs=0.001)
+
+    def test_nothing_is_invented_where_the_file_had_nothing(self, corrected):
+        """A keyword the input never carried is not added on the way out.
+
+        The Chandra GTI extension has no MJD-OBS and the file has no TELAPSE at all;
+        writing either would be making metadata up.
+        """
+        ours, _ = corrected["chandra"]
+        with fits.open(ours) as hdul:
+            assert "MJD-OBS" not in hdul["GTI"].header
+            assert all("TELAPSE" not in hdu.header for hdu in hdul)
+
+    def test_the_exposure_keywords_are_left_alone(self, corrected):
+        """ONTIME, LIVETIME and EXPOSURE are untouched, as every official tool leaves them.
+
+        They are sums of good-time interval lengths, not differences of the file's ends,
+        and the corrections at the two edges of one interval differ by microseconds.
+        """
+        ours, reference = corrected["nustar"]
+        with (
+            fits.open(ours) as hdul,
+            fits.open(os.path.join(datadir, "dummy_evt.evt")) as raw,
+            fits.open(reference) as ref,
+        ):
+            for keyword in ("ONTIME", "LIVETIME", "EXPOSURE"):
+                assert hdul[1].header[keyword] == raw[1].header[keyword]
+                assert ref[1].header[keyword] == raw[1].header[keyword]
