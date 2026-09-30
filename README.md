@@ -40,12 +40,16 @@ barycenter nu30702012003A06_cl.evt nu30702012003A.attorb \
     --ra 148.9584 --dec 69.6794 --ephem DE440
 ```
 
-The position can come from a pulsar parameter file instead, which is usually the more
-accurate route because it carries proper motion and parallax:
+The position can come from a pulsar parameter file instead, which saves copying
+coordinates by hand and also picks up the ephemeris the model was fitted with:
 
 ```bash
 barycenter ni1013010101_0mpu7_cl.evt ni1013010101.orb --parfile Crab.par
 ```
+
+The default engine takes the static `RAJ`/`DECJ` out of the model. If the source's proper
+motion or parallax matters, add `--engine pint`, which hands the whole timing model over
+and so applies them.
 
 Several orbit files can be given at once, for an observation split across them, and
 `--clockfile` names a spacecraft clock file (NuSTAR's is fetched from the CALDB

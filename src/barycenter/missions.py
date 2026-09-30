@@ -58,8 +58,11 @@ class Mission:
     orbit : ~barycenter.orbit.OrbitSpec or None
         How to read the orbit file. ``None`` if there is no native reader.
     clock : callable or None
-        ``clock(clockfile, instrument)`` returning ``(correction_function, path)``.
-        ``None`` if the mission needs no clock correction.
+        ``clock(clockfile, instrument)`` returning
+        ``(correction_function, path, accuracy)``, where ``accuracy`` is a callable of the
+        MET span giving the clock's absolute accuracy in seconds, which ``core.py`` writes
+        into every extension as ``TIERABSO``. ``None`` if the mission needs no clock
+        correction.
     official : str or None
         The mission's own tool: ``"barycorr"``, ``"timeconv"``, or ``None``.
     official_ephem : str or None

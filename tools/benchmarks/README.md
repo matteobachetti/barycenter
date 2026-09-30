@@ -97,11 +97,11 @@ which is the fix working, not the measurement failing. To reproduce the 1-step r
 change `2 * dt` back to `dt` in `native.native_barycentric_correction` and
 `pintengine.pint_barycentric_correction`.
 
-`bench_edge.py` localises it: the whole difference is in the **last third** of the probe,
-i.e. at the end of the clipped grid — it is the cubic spline's not-a-knot end condition,
-not an interpolation error. Both engines currently pad by `dt`; **the pad must be `2*dt`.**
-The native engine barely notices because its knots hold exact values, while PINT's carry
-its own noise, which the end condition amplifies.
+`bench_edge.py` localises it: the whole difference was in the **last third** of the probe,
+i.e. at the end of the clipped grid — it was the cubic spline's not-a-knot end condition,
+not an interpolation error. Both engines padded by `dt`, and **the pad had to be `2*dt`**,
+which is what they both now do. The native engine barely noticed because its knots hold
+exact values, while PINT's carry its own noise, which the end condition amplifies.
 
 ## 4. Memory
 

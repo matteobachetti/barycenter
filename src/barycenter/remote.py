@@ -86,6 +86,12 @@ def download_locally(fname, outdir="."):
             s3_resource = boto3.resource("s3", config=config)
             s3_client = s3_resource.meta.client
             path = fname.replace(f"s3://{bucket_name}/", "")
+            # Deliberately a prefix match rather than an exact key: HEASARC stores its
+            # event files gzipped, and observation logs and papers quote the uncompressed
+            # name, so asking for ``..._cl.evt`` has to find ``..._cl.evt.gz``. The local
+            # name below is taken from the key that was actually found, so the suffix that
+            # arrives is the suffix on disk. The cost is that a prefix matching several
+            # keys silently takes the first; give the full key when that matters.
             response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=path)
             objects = response.get("Contents", [])
             if len(objects) == 0:

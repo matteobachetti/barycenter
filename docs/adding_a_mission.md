@@ -23,7 +23,7 @@ MISSIONS["nustar"] = Mission(
 | `name` | canonical short name; must match the dictionary key |
 | `telescop` | lower-case *substrings* of the `TELESCOP` keyword that identify the mission — substrings, because the keyword is written `XTE` and `RXTE`, `NuSTAR` and `NUSTAR`, `AXAF` and `CHANDRA` |
 | `orbit` | an [`OrbitSpec`](technical_details.md#the-orbit-reader), or `None` for no native reader |
-| `clock` | `clock(clockfile, instrument) -> (function, path)`, or `None` for a mission needing no correction |
+| `clock` | `clock(clockfile, instrument) -> (function, path, accuracy)`, or `None` for a mission needing no correction. `accuracy` is a callable of the MET span returning the clock's absolute accuracy in seconds, which `core.py` writes as `TIERABSO` |
 | `official` | `"barycorr"`, `"timeconv"` or `None` — which branch of `official.py` `--apply-official` takes |
 | `official_ephem` | the only ephemeris that tool can manage, if it is stuck on one: DE200 for ASCA's `timeconv`. The native engine has no such limit, which is the main reason to prefer it for such a mission. |
 | `met_is_utc` | `True` if the mission's elapsed time counts **UTC** seconds rather than TT seconds, so leap seconds must be added. Currently Swift alone; see the warning below. |
@@ -57,8 +57,12 @@ picking the wrong one is a 160 ms error that nothing in the units or the comment
 
 Two questions, and the second one is the one people forget.
 
-**Does the onboard clock need a correction?** If so, `clock` is a builder returning a
-function of mission elapsed time. The three existing ones span three orders of magnitude
+**Does the onboard clock need a correction?** If so, `clock` is a builder returning
+`(function, path, accuracy)`: a function of mission elapsed time, the file the correction
+came from, and a callable of the MET span giving the clock's absolute accuracy in seconds,
+which is written into every extension as `TIERABSO`. A mission whose accuracy is a
+constant can use `constant_clock_accuracy`; NuSTAR's is read out of the clock file's own
+`CLOCK_ERR_CORR` column. The three existing ones span three orders of magnitude
 — NuSTAR tens of milliseconds, Swift tens of seconds, RXTE tens of microseconds — and
 all three matter at the 100 ns level.
 

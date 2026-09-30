@@ -74,8 +74,10 @@ def main_barycenter(args=None):
         "--clockfile",
         default=None,
         help=(
-            "Clock correction file. If not provided, the latest clock file will be used for NuSTAR."
-            " Specify 'none' to skip clock correction."
+            "Clock correction file. If not provided, the latest one is fetched from the "
+            "CALDB for the missions that publish it there (NuSTAR and Swift); RXTE always "
+            "uses the tdc.dat shipped with the package. Specify 'none' to skip the clock "
+            "correction."
         ),
     )
     parser.add_argument(
