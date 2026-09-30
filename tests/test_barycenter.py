@@ -1117,3 +1117,105 @@ class TestDerivedKeywords:
             for keyword in ("ONTIME", "LIVETIME", "EXPOSURE"):
                 assert hdul[1].header[keyword] == raw[1].header[keyword]
                 assert ref[1].header[keyword] == raw[1].header[keyword]
+
+
+class TestClockAccuracyKeyword:
+    """``TIERABSO``, the absolute accuracy of the clock correction.
+
+    ``hdaxbary`` rewrites it on every run that applies a clock correction, and leaves it
+    alone otherwise. It is the one keyword here whose value is not derivable from the
+    times, so each mission's number needs its own justification: Swift's and RXTE's are
+    constants of the correction, NuSTAR's comes out of the clock file's own
+    ``CLOCK_ERR_CORR`` column.
+    """
+
+    @staticmethod
+    def run(mission, clockfile, outfile):
+        args = {
+            "nustar": ("dummy_evt.evt", "dummy_orb.fits.gz", REF_RA, REF_DEC),
+            "swift": ("dummy_swift_evt.evt", "dummy_swift_orb.fits.gz", "182.635833", "39.405833"),
+            "rxte": ("dummy_xte_evt.evt", "dummy_xte_orb.fits.gz", "228.481995", "-59.136002"),
+        }[mission]
+        evt, orb, ra, dec = args
+        argv = [
+            os.path.join(datadir, evt),
+            os.path.join(datadir, orb),
+            "-o",
+            outfile,
+            "--ra",
+            ra,
+            "--dec",
+            dec,
+            "--ephem",
+            "DE440",
+        ]
+        # ``None`` means "say nothing about clocks", which is how RXTE gets its bundled
+        # coefficients applied: naming a file there is refused.
+        if clockfile is not None:
+            argv += ["--clockfile", clockfile]
+        return main_barycenter(argv)
+
+    @pytest.mark.parametrize(
+        "mission, clockfile, reference",
+        [
+            ("swift", "dummy_swift_clk.fits", "dummy_swift_bary_DE440_clk.evt.gz"),
+            ("rxte", None, "dummy_xte_bary_DE440_clk.evt.gz"),
+        ],
+    )
+    def test_the_constant_accuracies_match_hdaxbary_exactly(
+        self, tmp_path, mission, clockfile, reference
+    ):
+        """On Swift and RXTE the value is a constant, and it is HEASOFT's constant.
+
+        10 us for Swift once the UTCF is applied, 5 us for RXTE once ``tdc.dat`` is.
+        Both are read off the committed references, which is the only evidence for them
+        there is -- the recipe lives in ``hdaxbary``'s C source, which the distributed
+        HEASOFT source tarballs do not include. RXTE is run with no ``--clockfile`` at
+        all, since its coefficients are bundled and naming a file is refused.
+        """
+        outfile = str(tmp_path / f"{mission}.evt")
+        given = clockfile if clockfile is None else os.path.join(datadir, clockfile)
+        self.run(mission, given, outfile)
+        with fits.open(outfile) as hdul, fits.open(os.path.join(datadir, reference)) as ref:
+            assert hdul[1].header["TIERABSO"] == ref[1].header["TIERABSO"]
+
+    def test_nustars_accuracy_comes_from_the_clock_file(self, tmp_path):
+        """NuSTAR's is measured, and is the worst value over the observation.
+
+        ``hdaxbary`` writes 122.9 us, which is ``CLOCK_ERR_CORR`` near ``TSTOP``; we
+        write the maximum over the span, 131.8 us, because ``TIERABSO`` describes the
+        whole file with one number. The two are the same quantity read two ways and
+        differ by 7 per cent, so this asserts ours is in the column's range, is no
+        smaller than HEASOFT's, and is within 10 per cent of it -- not that it is equal,
+        which it deliberately is not.
+        """
+        outfile = str(tmp_path / "nustar.evt")
+        self.run("nustar", os.path.join(datadir, "dummy_fine_clk.fits"), outfile)
+        column = fits.getdata(os.path.join(datadir, "dummy_fine_clk.fits"), 1)["CLOCK_ERR_CORR"]
+        theirs = fits.getheader(os.path.join(datadir, "dummy_evt_bary_DE440_clk.evt.gz"), 1)[
+            "TIERABSO"
+        ]
+        with fits.open(outfile) as hdul:
+            ours = hdul[1].header["TIERABSO"]
+            assert np.min(column) <= ours <= np.max(column)
+            assert ours >= theirs
+            assert abs(ours - theirs) / theirs < 0.10, f"{ours:.6g} vs {theirs:.6g}"
+            # And in every extension, as hdaxbary writes it.
+            assert all(hdu.header["TIERABSO"] == ours for hdu in hdul)
+
+    @pytest.mark.parametrize("mission", ["nustar", "swift"])
+    def test_no_clock_correction_leaves_the_keyword_alone(self, tmp_path, mission):
+        """With ``--clockfile none`` the keyword is not written, and not invented.
+
+        HEASOFT does the same for NuSTAR, whose ``clockfile=NONE`` reference has no
+        ``TIERABSO`` at all. For Swift it instead writes 100 s, a constant we do not
+        copy: our Swift times still carry the leap-second term, so the figure that would
+        describe them is the size of the UTCF we were told not to read -- 15.56 s here,
+        not 100 s -- and it is exactly the thing this run cannot know.
+        """
+        outfile = str(tmp_path / f"{mission}_noclk.evt")
+        self.run(mission, "none", outfile)
+        source = {"nustar": "dummy_evt.evt", "swift": "dummy_swift_evt.evt"}[mission]
+        before = fits.getheader(os.path.join(datadir, source), 1).get("TIERABSO")
+        with fits.open(outfile) as hdul:
+            assert hdul[1].header.get("TIERABSO") == before

@@ -830,6 +830,56 @@ leave them. They are sums of good-time interval lengths rather than differences 
 the file's ends, and the corrections at the two edges of one interval differ by
 microseconds — far below the precision those keywords are used at.
 
+### `TIERABSO`, how well the clock is known
+
+`TIERABSO` is "the absolute accuracy of the time, in seconds". Unlike everything above it
+cannot be derived from the times in the file: it is a property of the clock correction
+that was applied, so it is written only on a run that applies one, and each mission's
+number needs its own justification. `barycenter.clock` supplies it alongside the
+correction itself — every mission's clock-function builder now returns a triple of
+`(correction, filename, accuracy)`, where `accuracy(met_start, met_stop)` is a callable
+so that a mission whose accuracy varies with time can say so. `core` calls it once per
+file, with the uncorrected `TSTART` and `TSTOP`, and writes the result into every
+extension, as `hdaxbary` does.
+
+Two of the three are constants, held in `clock.CLOCK_ACCURACY_S`:
+
+| mission | value | where it comes from |
+|---|---|---|
+| Swift | 10 µs | constant, once the UTCF is applied |
+| RXTE | 5 µs | constant, once `tdc.dat` is applied |
+| NuSTAR | ~132 µs | the clock file's own `CLOCK_ERR_CORR` column |
+
+The two constants are read off the committed references and match `hdaxbary` exactly.
+They are read off rather than derived because the recipe lives in `hdaxbary`'s C source,
+which is in `heasarc` — a component the distributed HEASOFT source tarballs do not
+include — so the reference files are the only evidence for them that exists here.
+
+NuSTAR's is measured rather than constant. `nustar_clock_accuracy_fun` reads
+`CLOCK_ERR_CORR` from the fine clock file and returns the **largest** value anywhere in
+the observation, including the two interpolated endpoints. On the test observation that
+is 131.8 µs, where `hdaxbary` writes 122.9 µs — the value of the column near `TSTOP`.
+Both are the same quantity read two different ways and they differ by 7 %; we take the
+maximum because `TIERABSO` is one number describing the whole file, and the worst case
+over the file is the honest reading of that. The exact recipe `hdaxbary` uses could not
+be reproduced to its seven significant figures — neither linear nor spline interpolation
+at the raw or corrected `TSTOP`, at the last event, nor the span's mean, minimum or
+maximum lands on it — so the test asserts that ours is inside the column's range, is no
+smaller than HEASOFT's, and is within 10 % of it, rather than that it is equal.
+
+With `--clockfile none` nothing is written and any existing value is left untouched.
+HEASOFT does the same for NuSTAR, but for Swift it writes `TIERABSO = 100` even when
+told to apply no clock file. We deliberately do not copy that: our Swift times still
+carry the leap-second term (see [Missions whose MET counts UTC
+seconds](#missions-whose-met-counts-utc-seconds)), so the figure that would honestly
+describe them is the size of the UTCF we were told not to read — 15.56 s on the test
+file, not 100 s — and that is precisely the thing such a run cannot know.
+
+Two related HEASOFT behaviours are knowingly not reproduced. `barycorr` also writes
+`TIERRELA` (the *relative* accuracy, 1e-9 for NuSTAR) and writes it even with
+`clockfile=NONE`; and it sets `CLOCKAPP = T` for Swift with `clockfile=NONE`, where we
+write `F` because no clock file was applied. Both are recorded in the known issues.
+
 ### Things that will move the answer by more than 100 ns
 
 When a comparison disagrees, check these before looking for a bug:
