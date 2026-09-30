@@ -564,9 +564,11 @@ and the two answers, on those three million events:
   interpolation error, which is 1.6 ns at most
 
 So at the precision a FITS `D` column can hold, the grid is indistinguishable from the
-exact path. Why the peak memory nearly halved too is discussed under
-[Performance](known_issues.md#performance): about half of it was never astropy's
-read-modify-write, but this function's own `(N, 3)` temporaries.
+exact path. The peak memory nearly halves as well, because the exact path runs
+`barycentric_correction` over every event at once and a grid asks it for 16 560 points
+instead of three million. Which phase holds that memory — 865 MB of the 905 MB total is
+astropy's JPL ephemeris evaluation — is tabulated under
+[Performance](known_issues.md#performance).
 
 #### The grid has to be padded by two steps, not one
 

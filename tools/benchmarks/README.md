@@ -20,6 +20,8 @@ run the first one.
 | `bench_metrange.py` | what clipping the PINT TOA grid is worth |
 | `bench_margin.py` | how much grid margin a clipped spline needs |
 | `bench_edge.py` | is the clipping error an edge effect? |
+| `bench_split.py` | how much of the per-event cost a numba kernel could reach |
+| `bench_memsplit.py` | which phase of the native engine holds the memory |
 | `make_big.py` | blow `dummy_evt.evt` up to N events for the memory test |
 
 ## 1. numba
@@ -137,3 +139,38 @@ Accuracy on those 3e6 real events, gridded vs exact:
 
 So at the precision a FITS float64 time column can store, the grid is indistinguishable
 from the exact path.
+
+## 6. Would a fused numba kernel be worth it? No.
+
+`bench_split.py` times `barycentric_correction` phase by phase, separating what a numba
+kernel could replace (our own vector arithmetic) from what it could not (astropy `Time`
+construction, the JPL ephemeris, `erfa.dtdb`):
+
+| N | orbit + Time | JPL ephem | erfa.dtdb | our maths | ours % |
+|---|---|---|---|---|---|
+| 1e5 | 0.006 s | 0.429 s | 0.275 s | 0.006 s | 0.8 % |
+| 1e6 | 0.076 s | 4.058 s | 2.707 s | 0.042 s | **0.6 %** |
+
+`bench_memsplit.py` does the same for peak memory with `tracemalloc`, at 1e6 events:
+
+| phase | peak |
+|---|---|
+| **astropy JPL ephemeris** | **865 MB** |
+| our own vector arithmetic | 104 MB |
+| `met_to_time` | 89 MB |
+| unpacking `.xyz.to_value(u.m).T` | 72 MB |
+| spacecraft interpolation | 24 MB |
+| `erfa.dtdb` | 8 MB |
+| whole function in one go | 905 MB |
+
+**Conclusion: do not write it.** A perfect fusion of our arithmetic would buy under 1 %
+of the runtime and about a tenth of a peak it does not control, in exchange for a
+compiled dependency and a second code path to keep bit-identical.
+
+**This also corrects an earlier claim in these notes and in the docs.** Section 5 first
+attributed the memory that vanished with the grid to `barycentric_correction`'s own
+`(N, 3)` temporaries. It is not: those are 104 MB of a 905 MB peak. The memory is
+astropy's ephemeris evaluation, and the grid helps only by asking it for 16 560 points
+instead of three million. If a user hits a memory limit on `--dt 0`, the fix is to
+**evaluate the correction in chunks** of a few hundred thousand events -- exact, since
+the correction is pointwise in time, and it bounds the peak whatever the file size.
