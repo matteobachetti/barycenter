@@ -345,8 +345,12 @@ def leap_seconds_since_mjdref(mjdref, mets):
 
     asked = np.asarray(mets, dtype=np.float64)
     index = np.searchsorted(boundary_mets, np.atleast_1d(asked), side="right")
-    # Index 0 means "before the first step after the epoch", which owes nothing.
-    values = np.where(index == 0, 0.0, offsets[np.clip(index - 1, 0, None)])
+    # Index 0 means "before the first step after the epoch", which owes nothing, so the
+    # zero is prepended and ``index`` reads the table directly. Selecting it afterwards
+    # with ``np.where`` would not do: that evaluates both of its branches, so an empty
+    # table -- an MJDREF later than every leap second, which is every mission launched
+    # since 2017 -- raised IndexError on a time that correctly owes zero.
+    values = np.concatenate(([0.0], offsets))[index]
     return values.reshape(asked.shape) if asked.ndim else values[0]
 
 

@@ -85,3 +85,24 @@ class TestShapeAndEpochIndependence:
         chandra = leap_seconds_since_mjdref(CHANDRA_MJDREF, met_of(CHANDRA_MJDREF, iso))
         assert swift == pytest.approx(4.0)
         assert chandra == pytest.approx(5.0)
+
+
+class TestEpochAfterTheLastLeapSecond:
+    """A reference epoch later than every tabulated step owes nothing, not an error."""
+
+    #: An epoch after 2017-01-01, the most recent leap second. SVOM's is 2024, so this is
+    #: the shape of any mission launched since -- not a hypothetical.
+    RECENT_MJDREF = 60000.0
+
+    def test_a_recent_epoch_owes_nothing(self):
+        """No step falls after the epoch, so the leap-second table is empty here.
+
+        The empty table used to be indexed anyway -- ``np.where`` evaluates both of its
+        branches -- and raised IndexError instead of returning zero.
+        """
+        assert leap_seconds_since_mjdref(self.RECENT_MJDREF, 1000.0) == pytest.approx(0.0)
+
+    def test_a_recent_epoch_owes_nothing_for_an_array_either(self):
+        """Event times arrive as arrays, and must survive the same empty table."""
+        got = leap_seconds_since_mjdref(self.RECENT_MJDREF, np.array([0.0, 1e6, 1e8]))
+        assert np.allclose(got, 0.0)
