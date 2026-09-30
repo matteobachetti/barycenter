@@ -387,6 +387,75 @@ The output table carries both time bases — `MJD_TT`, which is what PINT's
 orbit file once, in one place, is what makes the native-versus-PINT comparison
 meaningful: the two engines cannot disagree about where the spacecraft was.
 
+(where-the-orbit-file-stops)=
+## Where the orbit file stops
+
+An interpolating spline answers every time it is asked about. Past its last knot it
+extrapolates, and through an interior gap it coasts, and in neither case does it say so.
+That is the behaviour we want for the sub-second shortfalls orbit files routinely have,
+and exactly the wrong one for a file that is missing half an orbit: the answer is then a
+guess written into an event list, indistinguishable from a measurement.
+
+`OrbitCoverage` in `orbit.py` draws the line. It holds the sample times and the file's
+own **cadence** — the median spacing — and `uncovered(times)` returns, per time, how many
+seconds it reaches beyond what the file covers: zero between two samples, zero within one
+cadence of either end, and positive past that or deep inside a gap.
+
+The cadence allowance is not a nicety. Fermi tabulates the spacecraft position every
+30 s, so a rule based on distance to the nearest *sample* would count **33.5 % of a
+healthy LAT file** as uncovered purely for sitting between two samples. With the
+allowance, the same file reports zero uncovered events out of 143 569 and zero uncovered
+boundaries out of 1 308 GTIs — and still isolates the one time that really is outside.
+
+### What happens to a time that is not covered
+
+`enforce_orbit_coverage` tests every time column where the correction is actually
+evaluated — after `TIMEZERO`, the leap seconds and the clock correction, since that is
+what the orbit file gets asked about — and sorts the failures into three cases, against a
+tolerance of `COVERAGE_TOLERANCE_S` (10 s) on top of the cadence allowance:
+
+- **Inside a good time interval** → `ValueError`. There is no honest time to write, and
+  silently dropping real events would be worse than refusing the file. A GTI boundary is
+  a good time by definition, so a GTI reaching past the orbit file is always an error.
+- **Outside every good time interval** → the row is dropped, with a loud warning. It is
+  junk the orbit file also happens not to cover.
+- **A file with no GTI extension at all** → every time counts as good. Silence about
+  which times are trustworthy is not a claim that none of them are.
+
+### `TSTART` and `TSTOP` are a separate case
+
+These two keywords routinely hold the range that was *requested* rather than the one that
+was delivered. A Fermi LAT extraction is the clearest example: the server returns
+`TSTART` set to the start of the requested window, while the GTIs and the spacecraft file
+begin whenever the data really does. On one M82 observation that gap is **1455.6 s**, and
+it is why `gtbary` refuses the file outright:
+
+```
+Cannot get Fermi spacecraft position for 412041603 Fermi MET (TT):
+the time is not covered by spacecraft file ...SC00.fits[SC_DATA]
+```
+
+`gtbary` is right, and the time it names is the `TSTART` keyword — not an event. Every
+one of the 143 569 events and all 1 308 GTI boundaries in that file are properly covered.
+
+Refusing the whole file over a keyword would be unhelpful, and extrapolating it is what
+we used to do: the correction came out 300.4644 s, from a spacecraft position extrapolated
+a quarter of an orbit past the end of the file. Chopping the first 49 samples off a real
+Fermi spacecraft file and asking it to predict them back measures what that costs:
+
+| extrapolated back | position error | timing error |
+|------------------:|---------------:|-------------:|
+|             300 s |         1.7 km |     0.002 ms |
+|             600 s |          38 km |     0.008 ms |
+|            1450 s |        1441 km |     2.3 ms   |
+
+So `clamp_uncovered_keyword` moves such a keyword to the edge of the good time intervals
+instead — the first GTI `START` for `TSTART`, the last `STOP` for `TSTOP` — warns loudly,
+and corrects that. Where the file has no GTIs the event times stand in, which is the same
+intent. Only these two keywords are ever moved, and only when they miss by more than the
+tolerance; on the M82 file the events and GTIs come out bit-identical either way, and only
+`TSTART` and the `DATE-OBS` derived from it change.
+
 (the-pint-engine)=
 ## The PINT engine
 
