@@ -40,6 +40,7 @@ from .utils import (
 ENGINES = ("native", "pint")
 
 __all__ = [
+    "ABSORBED_KEYWORDS",
     "COORDINATE_KEYWORDS",
     "DERIVED_KEYWORDS",
     "ENGINES",
@@ -58,6 +59,16 @@ __all__ = [
 #: Every column holding a time that a barycentric correction must move. Matched against
 #: a file's columns without regard to case; see :func:`barycenter.utils.column_named`.
 TIME_COLUMNS = ("TIME", "START", "STOP", "TSTART", "TSTOP")
+
+#: Keywords describing a correction that the output has now absorbed, and which cannot
+#: be rewritten because there is nothing left for them to describe. They are removed.
+#: ``UTCFINIT`` is "the UTC correction factor at TSTART": after barycentring TSTART has
+#: moved, ``TIMESYS`` is TDB, and the factor itself has been folded into every time, so
+#: anyone applying it again would move a Swift event a further 15.56 s. HEASOFT
+#: ``barycorr`` deletes it from every extension for the same reason (v1.7, "remove the
+#: UTCFINIT keyword since leap seconds have now been adjusted for"), and does so whether
+#: or not a clock file was used.
+ABSORBED_KEYWORDS = ("UTCFINIT",)
 
 #: Keywords that are not times themselves but are *computed* from ``TSTART`` and
 #: ``TSTOP``, and so become wrong the moment those move. No official tool rewrites all
@@ -671,6 +682,11 @@ def apply_barycenter_correction(
             # TSTART and TSTOP have moved, so everything computed from them is now
             # wrong. This has to come after the loop above, not inside it.
             update_derived_keywords(hdu.header, mjdref)
+
+            for keyname in ABSORBED_KEYWORDS:
+                if keyname in hdu.header:
+                    logger.info(f"Removing {keyname}, now folded into the times")
+                    del hdu.header[keyname]
 
             hdu.header["CREATOR"] = f"Barycenter - v. {version}"
             hdu.header["RA_OBJ"] = (ra, "Coordinate used for barycentering")

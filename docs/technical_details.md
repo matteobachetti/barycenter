@@ -817,6 +817,14 @@ and `axbary` truncate the string to whole seconds; we keep the milliseconds, sin
 package aiming at 100 ns has no business rounding a timestamp to the nearest second, and
 the tests compare against our string cut back the same way.
 
+A keyword can also describe a correction the output has now *absorbed*, in which case
+there is nothing left for it to describe and it is removed rather than rewritten;
+`barycenter.core.ABSORBED_KEYWORDS` lists those. `UTCFINIT` is the one that exists today.
+It means "the UTC correction factor at TSTART", and after barycentring TSTART has moved,
+`TIMESYS` is TDB, and the factor has been folded into every time -- so applying it again
+would move a Swift event a further 15.56 s. `barycorr` deletes it from every extension,
+with or without a clock file, and both committed Swift references have it gone.
+
 `ONTIME`, `LIVETIME` and `EXPOSURE` are deliberately left alone, as all three tools
 leave them. They are sums of good-time interval lengths rather than differences between
 the file's ends, and the corrections at the two edges of one interval differ by
