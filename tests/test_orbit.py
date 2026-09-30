@@ -19,6 +19,7 @@ datadir = os.path.join(curdir, "data")
 NUSTAR_ORBIT = os.path.join(datadir, "dummy_orb.fits.gz")
 XMM_ORBIT = os.path.join(datadir, "dummy_xmm_orb.fits.gz")
 CHANDRA_ORBIT = os.path.join(datadir, "dummy_chandra_orb.fits.gz")
+SWIFT_ORBIT = os.path.join(datadir, "dummy_swift_orb.fits.gz")
 
 
 def write_fporbit(path, met, pos, vel=None, telescope="NICER", extname="ORBIT"):
@@ -111,6 +112,24 @@ class TestRealFile:
         # Metres already, so nothing should have been scaled: 86000-113600 km.
         radius = np.hypot(np.hypot(table["X"], table["Y"]), table["Z"])
         assert np.all((radius > 8.0e7 * u.m) & (radius < 1.2e8 * u.m))
+
+    def test_swifts_prefilter_vectors_are_read_and_converted_from_km(self):
+        """Swift's PREFILTER gives POSITION and VELOCITY as vector columns in kilometres.
+
+        The units are the point: Swift tabulates km and km/s where NICER tabulates metres,
+        so a missing conversion would put the spacecraft 1000 times too far out and cost
+        about 20 ms.  A 585 km orbit is unmistakable at either scale.
+        """
+        table = read_orbit(SWIFT_ORBIT)
+        with fits.open(SWIFT_ORBIT) as hdul:
+            orbit = hdul["PREFILTER"].data
+            assert np.allclose(table["MET"].value, orbit["TIME"])
+            # Column 0 of each vector, scaled by 1000: km in the file, metres in the table.
+            assert table["X"].unit == u.m and table["Vx"].unit == u.m / u.s
+            assert np.allclose(table["X"].value, orbit["POSITION"][:, 0] * 1000.0)
+            assert np.allclose(table["Vx"].value, orbit["VELOCITY"][:, 0] * 1000.0)
+        radius = np.hypot(np.hypot(table["X"].value, table["Y"].value), table["Z"].value)
+        assert np.all((radius > 6.9e6) & (radius < 7.0e6))
 
 
 class TestCleaning:

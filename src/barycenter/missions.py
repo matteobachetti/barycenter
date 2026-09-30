@@ -12,10 +12,9 @@ a misspelt one fails at import rather than silently doing nothing, and
 Three columns of :data:`MISSIONS` deserve a word:
 
 ``orbit``
-    ``None`` means there is no native orbit reader, either because the mission does not
-    distribute a spacecraft position in a format we read (ASCA) or because nobody has had
-    a file to test against (Swift). Such a mission still works through
-    ``--apply-official``.
+    ``None`` means there is no native orbit reader, because the mission does not
+    distribute a spacecraft position in a format we read (ASCA). Such a mission still
+    works through ``--apply-official``.
 ``clock``
     ``None`` means the mission needs no clock correction -- which for most of them is
     because the correction is already applied in the pipeline that produced the event file.
@@ -31,7 +30,7 @@ from dataclasses import dataclass
 
 import astropy.units as u
 
-from .clock import nustar_clock_builder, rxte_clock_builder
+from .clock import nustar_clock_builder, rxte_clock_builder, swift_clock_builder
 from .orbit import OrbitSpec
 
 __all__ = ["Mission", "MISSIONS", "mission_for"]
@@ -179,10 +178,26 @@ MISSIONS = {
         # `tools/make_test_data.py` drives it for the reference files and nowhere else.
         official=None,
     ),
-    # No native orbit reader yet. Swift's position is in the `sw*sao.fits` attitude file,
-    # whose layout nobody here has a file to check. It is on the list, and needs a
-    # reference dataset before it can be claimed.
-    "swift": Mission(name="swift", telescop=("swift",), official="barycorr"),
+    "swift": Mission(
+        name="swift",
+        # `auxil/sw<obsid>sao.fits`, the prefilter product, extension PREFILTER. Same
+        # vector-column shape as NuSTAR and SVOM, and in kilometres like NuSTAR -- SVOM's
+        # identically named columns are metres, which is a 20 ms error either way round.
+        orbit=OrbitSpec(
+            pos="POSITION",
+            vel="VELOCITY",
+            pos_unit=u.km,
+            vel_unit=u.km / u.s,
+            expected_extnames=("PREFILTER",),
+        ),
+        telescop=("swift",),
+        clock=swift_clock_builder,
+        # The one mission here whose MET counts UTC seconds rather than TT seconds. See
+        # `utils.leap_seconds_since_mjdref`: for a 2015 observation this is worth 4 s, and
+        # it is applied whatever `--clockfile` says.
+        met_is_utc=True,
+        official="barycorr",
+    ),
     # ASCA is the odd one: barycorr refuses it, and the only tool is `timeconv`, which
     # needs a downloaded earth.dat and frf.orbit file and can only do DE200.
     "asca": Mission(name="asca", telescop=("asca",), official="timeconv", official_ephem="DE200"),

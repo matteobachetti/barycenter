@@ -158,6 +158,43 @@ On the test observation the correction is 17.4 µs: small, but 170 times the tar
 Passing `--clockfile none` skips all of this. Passing a clock file for RXTE warns and uses
 `tdc.dat` anyway, which is also what HEASOFT does with that parameter.
 
+### Swift
+
+Swift's correction is not a fine clock correction at all but the **UTC correction factor**,
+the offset between the onboard clock and UTC. It is tens of seconds — −15.56 s on the test
+observation — where NuSTAR's is tens of milliseconds and RXTE's tens of microseconds, so a
+sign error is not subtle.
+
+The file is `swclockcor*.fits` in `swift/mis/bcf/clock/`, and the numbers live in a
+`CLOCK_CORRECT` extension: one row per fit interval, with `TSTART`, `TSTOP` and quadratic
+coefficients `C0`, `C1`, `C2`. The correction is
+
+```
+x = (met - TSTART) / 86400
+correction = -(C0 + C1 x + C2 x^2) * 1e-6
+```
+
+microseconds, and negated, because the table gives the clock's excess over UTC while the
+correction has to remove it. The sign was settled against the `UTCFINIT` keyword in the
+event files themselves rather than reasoned about.
+
+Three properties of the table are worth knowing, because the reader depends on all three:
+
+* **The intervals are contiguous and gap-free** — each `TSTOP` is the next `TSTART`
+  exactly — so the row containing a time is found with one `searchsorted` and a boundary
+  time belongs to the later row.
+* **The polynomial matters.** The clock drifts 4616 µs/day, which is 342 µs across the
+  6.4 ks test observation. A reader that took `C0` and stopped would be within 100 ns for
+  the first two seconds of an interval and 3400 times the target out by the end of a day.
+* **The table steps by −1 s at each leap second**, because the UTCF's destination is UTC
+  and UTC is what steps. That is the mirror image of the leap-second term described below,
+  which steps +1 s because *its* destination is TT, and the two cancel.
+
+A time the table does not cover raises, rather than extrapolating a quadratic off the end
+of it — the same choice made for a NuSTAR observation predating its clock file. The message
+says which way out the time fell and offers the two ways forward: fetch a newer CALDB file,
+or run with `--clockfile none` and accept the 15 s.
+
 **Step 6 — correct the times.** `TIMEZERO` is folded in first. `TIMEPIXR` deliberately is
 not: this step used to add `(0.5 - TIMEPIXR) * TIMEDEL` as well, moving a timestamp from
 the start of its bin to its centre. `barycorr` does not do that, and on RXTE PCA data,
@@ -328,6 +365,7 @@ mission's [registry entry](#the-mission-registry):
 | RXTE | `XTE_PE` (or `ORBIT`) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | XMM-Newton | `ORBIT` | scalar `GEI_X`,`GEI_Y`,`GEI_Z` | scalar `VX`,`VY`,`VZ` | **km** |
 | Chandra | `ORBITEPHEM` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
+| Swift | `PREFILTER` | `POSITION` | `VELOCITY` | **km** |
 
 The units are declared in the spec, not read from `TUNITn`, because orbit files are
 unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
@@ -646,6 +684,54 @@ decade past the data DE405 was fitted to. Projected on M82's direction that come
 offset, not noise. **DE440 is the package default**, so a comparison against an `axbary` product has to
 ask for DE405 explicitly; the tests do.
 
+### Swift
+
+`tests/data/dummy_swift_bary_DE440_{noclk,clk}.evt.gz` are HEASOFT `barycorr` references
+made on 492 XRT events spanning the 6.4 ks of observation 00037258040, with explicit
+coordinates. There are two of them because Swift is the only mission here where the clock
+correction and the leap-second term can be separated: `clockfile=NONE` switches the UTCF
+off and leaves the +4 s of leap seconds in place. Measured with the native engine:
+
+| reference | mean | std | max abs |
+|---|---|---|---|
+| no clock file, `TIME` | **+36.6 ns** | 29.0 ns | 59.6 ns (1 ulp) |
+| with the UTCF, `TIME` | **+37.4 ns** | 28.8 ns | 59.6 ns (1 ulp) |
+| GTI `START`/`STOP` | +29.8 to +59.6 ns | — | 59.6 ns (1 ulp) |
+| `TSTART`, `TSTOP` keywords | — | — | 59.6 ns (1 ulp) |
+
+One unit in the last place is 59.6 ns at Swift's 4.7e8 s, so again the scatter is the
+reference file's granularity and not ours, and the residual drifts by 0.9 ns per ks across
+the exposure — nothing.
+
+The two references agreeing to the same 37 ns is the useful part: it says the UTCF is
+reproduced well enough to leave the solar-system residual untouched, even though it is a
+15.56 s correction and drifts 342 µs across the observation.
+
+Getting to those numbers took one non-obvious fix, recorded here because it will bite
+anyone who writes this kind of term again. The leap-second count has to be read out of
+ERFA's table as an integer, never computed as `(epoch.tai.mjd - epoch.utc.mjd) * 86400`:
+two MJDs of order 5e4 cannot express 32 s to better than 0.6 µs, so that expression gives
+31.999999937, and the resulting **+63 ns** bias on every Swift time is two thirds of the
+budget. It showed up as an unexplained 96 ns disagreement with `barycorr` where a prototype
+had measured 37 ns.
+
+Ephemeris sensitivity, measured against the DE440 reference:
+
+| ephemeris | offset |
+|---|---|
+| DE440 | +37 ns |
+| DE430 | −274.2 µs |
+| DE421 | −273.9 µs |
+| DE405 | −274.3 µs |
+| DE200 | +2.16 ms |
+
+The three middle rows sitting on top of each other, 274 µs from DE440, is the same
+solar-system-barycentre revision that costs 79 µs on the Chandra dataset, and it checks
+out exactly: DE440 puts the Earth 116.5 km from where DE405 puts it at this epoch, and
+82.2 km of that is along the direction of Mrk 421, which is 274.3 µs of light travel time.
+The measurement and the geometry agree to 0.1 µs, so this is the ephemerides differing and
+not the code.
+
 (the-coordinate-keyword-order)=
 ### The coordinate keyword order is deliberately not HEASOFT's
 
@@ -708,7 +794,7 @@ When a comparison disagrees, check these before looking for a bug:
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
-| Swift | `sw*sao.fits` — spec not written, no test file | none needed | `--apply-official` only |
+| Swift | `auxil/sw<obsid>sao.fits`, `PREFILTER` in km | `swclockcor*.fits`, `CLOCK_CORRECT` extension (the UTCF) | validated to 100 ns |
 | ASCA | — | — | `--apply-official` only, DE200 only |
 
 ## Test data
@@ -736,6 +822,11 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_chandra_orb.fits.gz` | 71 rows of the matching `orbitf*_eph1.fits`, the file's own 300 s sampling over the events plus 1200 s |
 | `dummy_chandra_bary_DE405.evt.gz` | the CIAO `axbary` reference for those events, `refframe=ICRS` |
 | `dummy_chandra_bary_DE200.evt.gz` | the same with `refframe=FK5`, which is how the ephemeris/frame pairing gets checked against a real tool |
+| `dummy_swift_evt.evt` | 492 XRT photon-counting events, every 3rd row of observation 00037258040, so the sample spans the whole 6.4 ks, plus its `GTI` extension |
+| `dummy_swift_orb.fits.gz` | 3271 rows of the matching `sw*sao.fits` prefilter, every 2nd second over the events plus 600 s, cut to `TIME`, `POSITION`, `VELOCITY` |
+| `dummy_swift_clk.fits` | 15 intervals of CALDB `swclockcor20041120v174.fits`, spanning the 2015-07-01 leap second as well as the observation |
+| `dummy_swift_bary_DE440_noclk.evt.gz` | the `barycorr` reference for those events, `clockfile=NONE` — which still carries the +4 s of leap seconds |
+| `dummy_swift_bary_DE440_clk.evt.gz` | the same with the UTCF applied, 15.56 s away from its twin |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
 triples of identical length — `GEI_*` is geocentric equatorial and is the one the
@@ -743,6 +834,21 @@ ephemeris is referred to, `GSE_*` is the same vector rotated into the Earth-Sun 
 and reading the wrong one is a 160 ms error that nothing in the units or the column
 comments would give away. A committed file that still offers the wrong choice is a
 sharper test than a hand-built one.
+
+The Swift prefilter is decimated to 2 s rather than something coarser for a reason worth
+recording, since it costs 90 kB: `hdaxbary` refuses to read a prefilter sampled more
+coarsely than about 10 s — 15 s and up fail with "no bracketing sample found" on a file
+that brackets the time comfortably — and while 5 s and 10 s are read, they move the
+reference times by a full float64 ulp (59.6 ns at Swift's MET, most of the budget) against
+the native 1 s sampling. 2 s is the coarsest step that is bit-identical to 1 s.
+
+The clock file is trimmed to 15 intervals rather than the one that contains the
+observation, so that the tests can check the two things that only show up at an interval
+boundary: that the row containing a time is the one used, and that the tabulated correction
+steps by exactly one second at a leap second. The boundaries are found in the file itself,
+by evaluating each interval's polynomial at its own end and at the next interval's start —
+ordinary boundaries agree to a few microseconds, a leap second shows up as a one-second
+jump — rather than by looking the leap seconds up and trusting them to line up.
 
 The Chandra files keep their column names exactly as Chandra writes them, for the same
 reason: `time` in the events, `Time` in the orbit file, `START`/`STOP` in capitals in the
