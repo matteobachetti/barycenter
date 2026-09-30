@@ -306,18 +306,40 @@ def leap_seconds_since_mjdref(mjdref, mets):
     # would be wrong, so they are left out.
     table = table[table["year"] >= 1972]
 
-    epoch = Time(np.float64(mjdref), format="mjd", scale="tt")
-    at_epoch = (epoch.tai.mjd - epoch.utc.mjd) * 86400.0
-
     boundaries = Time(
         [f"{row['year']:04d}-{row['month']:02d}-01T00:00:00" for row in table], scale="utc"
     )
-    boundary_mets = (boundaries.tt.mjd - np.float64(mjdref)) * 86400.0
+    tai_utc = np.asarray(table["tai_utc"], dtype=np.float64)
+
+    # TAI - UTC at the reference epoch, read out of the table rather than computed as
+    # ``(epoch.tai.mjd - epoch.utc.mjd) * 86400``. That difference of two MJDs of order
+    # 5e4 rounds to 31.999999937 s for Swift, and the resulting 63 ns bias is most of the
+    # 100 ns budget -- it was measured, as a 60 ns disagreement with ``barycorr`` that
+    # went away when this was made exact. Since 1972 the quantity is a whole number of
+    # seconds by definition, so it should be read, never subtracted.
+    epoch_utc_mjd = Time(np.float64(mjdref), format="mjd", scale="tt").utc.mjd
+    at = np.searchsorted(boundaries.mjd, epoch_utc_mjd, side="right") - 1
+    if at < 0:
+        raise ValueError(
+            f"MJDREF {mjdref} predates 1972, when TAI-UTC stopped being a drifting rate. "
+            "No mission this package handles observed then."
+        )
+    at_epoch = tai_utc[at]
+
+    # Where each step falls, on the file's own clock -- and that clock counts UTC seconds,
+    # which is the whole reason this function exists. ``(boundary.tt - mjdref) * 86400`` is
+    # a count of *TT* seconds, so it sits ahead of the MET of the same instant by exactly
+    # the leap seconds owed there, and subtracting ``offsets`` puts the boundary back into
+    # MET. Leaving it out puts every step 4 s late for Swift: harmless for data taken away
+    # from a leap second, but wrong by a second for the four seconds after one.
+    elapsed_tt = (boundaries.tt.mjd - np.float64(mjdref)) * 86400.0
+    offsets = tai_utc - at_epoch
+    boundary_mets = elapsed_tt - offsets
 
     # Only the steps that fall after this file's epoch can contribute to it.
     after = boundary_mets > 0.0
     boundary_mets = boundary_mets[after]
-    offsets = np.asarray(table["tai_utc"], dtype=np.float64)[after] - at_epoch
+    offsets = offsets[after]
 
     asked = np.asarray(mets, dtype=np.float64)
     index = np.searchsorted(boundary_mets, np.atleast_1d(asked), side="right")

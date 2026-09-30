@@ -41,6 +41,7 @@ __all__ = [
     "CLOCK_CALDB",
     "ClockSource",
     "FINE_CLOCK_EXTENSION",
+    "SWIFT_CLOCK_EXTENSION",
     "RXTE_DETECTOR_DELAY",
     "clock_cache_dir",
     "clock_correction_fun",
@@ -53,6 +54,8 @@ __all__ = [
     "rxte_clock_builder",
     "rxte_clock_correction_fun",
     "rxte_tdc_file",
+    "swift_clock_builder",
+    "swift_clock_correction_fun",
 ]
 
 
@@ -95,6 +98,12 @@ CLOCK_CALDB = {
 
 #: The extension a modern NuSTAR clock file keeps its fine correction in.
 FINE_CLOCK_EXTENSION = "NU_FINE_CLOCK"
+
+#: The extension a Swift clock file keeps its coefficients in. The same *name* as the
+#: pre-2019 NuSTAR extension this package refuses, and nothing like it: NuSTAR's held one
+#: polynomial per orbit and was only good to the millisecond, while this is Swift's
+#: definitive product.
+SWIFT_CLOCK_EXTENSION = "CLOCK_CORRECT"
 
 
 def clock_cache_dir():
@@ -327,6 +336,94 @@ def nustar_clock_correction_fun(clockfile):
     return correction
 
 
+def swift_clock_correction_fun(clockfile):
+    """A function giving the Swift clock correction at arbitrary times.
+
+    Parameters
+    ----------
+    clockfile : str
+        A Swift CALDB clock file, ``swclockcor*.fits``, with a ``CLOCK_CORRECT``
+        extension.
+
+    Returns
+    -------
+    callable
+        ``fun(met)`` gives the correction in seconds, with the shape it was given.
+
+    Raises
+    ------
+    ValueError
+        If the file has no ``CLOCK_CORRECT`` extension, or if any time asked for falls
+        outside the intervals it tabulates. ``hdaxbary`` instead falls back to the event
+        header's ``UTCFINIT`` plus a cumulative drift rate, printing ``Could not
+        interpolate Swift clock file. Used UTCFINIT.``; that path is not reproduced here,
+        on the same grounds as the pre-2019 NuSTAR files -- an answer whose accuracy
+        nobody documents is worse than a refusal that says what to do instead.
+
+    Notes
+    -----
+    The extension holds one quadratic per interval, with the correction in **microseconds**
+    as a function of days since that interval's own ``TSTART``::
+
+        correction = -(C0 + C1 x + C2 x**2) * 1e-6,  x = (met - TSTART) / 86400
+
+    The sign and the scaling were settled against the event header: evaluated at the start
+    of an observation this reproduces that file's ``UTCFINIT`` exactly.
+
+    Unlike every other clock correction here, this one is **tens of seconds** -- it is the
+    mission's UTCF, and Swift's clock has drifted some 38 s since launch. It also drifts
+    4616 us/day, which is 342 us across a 6.4 ks observation, so it has to be evaluated per
+    event rather than frozen at the observation midpoint.
+
+    The intervals are contiguous -- ``TSTOP`` of one is exactly ``TSTART`` of the next --
+    and they are cut at leap seconds, so no interval ever straddles one and evaluating the
+    row that contains a time is exact. Across a leap second the tabulated correction steps
+    by **-1 s**, because the UTCF converts to UTC, which is what steps. The leap-second
+    term from :func:`barycenter.utils.leap_seconds_since_mjdref` steps by +1 s at the same
+    instant, because the destination is TT, so the total is continuous. The two are
+    genuinely different corrections and both are needed.
+    """
+    with fits.open(clockfile) as hdul:
+        names = [hdu.name for hdu in hdul[1:]]
+        if SWIFT_CLOCK_EXTENSION not in names:
+            raise ValueError(
+                f"{clockfile} has no {SWIFT_CLOCK_EXTENSION} extension (found {names}). "
+                "Swift clock corrections come from the CALDB swclockcor*.fits files; pass "
+                "one with --clockfile, or --clockfile none to skip the correction."
+            )
+        table = Table(hdul[SWIFT_CLOCK_EXTENSION].data)
+
+    tstart = np.asarray(table["TSTART"], dtype=np.float64)
+    tstop = np.asarray(table["TSTOP"], dtype=np.float64)
+    coeffs = [np.asarray(table[name], dtype=np.float64) for name in ("C0", "C1", "C2")]
+    logger.info(f"Read {len(table)} intervals from {SWIFT_CLOCK_EXTENSION} of {clockfile}")
+
+    def correction(times):
+        asked = np.asarray(times, dtype=np.float64)
+        mets = np.atleast_1d(asked)
+        # Clipped so that the comparison against TSTOP below is what reports a time
+        # outside the table, rather than an index error here.
+        rows = np.clip(np.searchsorted(tstart, mets, side="right") - 1, 0, len(tstart) - 1)
+        # One test, not two: it catches a time before the first interval, after the last,
+        # and in a gap between two of them, which a future file may well have.
+        outside = (mets < tstart[rows]) | (mets > tstop[rows])
+        if np.any(outside):
+            worst = mets[outside]
+            raise ValueError(
+                f"{np.count_nonzero(outside)} times, from {worst.min():.1f} to "
+                f"{worst.max():.1f}, are not covered by {clockfile}, which spans "
+                f"{tstart[0]:.1f} to {tstop[-1]:.1f}. Fetch a newer clock file, or pass "
+                "--clockfile none to skip the correction -- but note that it is tens of "
+                "seconds for Swift, not a refinement."
+            )
+        x = (mets - tstart[rows]) / 86400.0
+        c0, c1, c2 = (c[rows] for c in coeffs)
+        values = -(c0 + c1 * x + c2 * x**2) * 1e-6
+        return values.reshape(asked.shape) if asked.ndim else values[0]
+
+    return correction
+
+
 def rxte_tdc_file():
     """Where to find the RXTE fine clock coefficients.
 
@@ -479,6 +576,18 @@ def nustar_clock_builder(clockfile=None, instrument=None):
         clockfile = get_latest_clock_file("nustar")
         logger.info(f"Using latest NuSTAR clock file: {clockfile}")
     return nustar_clock_correction_fun(clockfile), clockfile
+
+
+def swift_clock_builder(clockfile=None, instrument=None):
+    """The ``clock`` entry for Swift in :data:`barycenter.missions.MISSIONS`.
+
+    Fetches the newest CALDB file when none is named. ``instrument`` is unused: the
+    correction is to the spacecraft clock, which XRT, BAT and UVOT share.
+    """
+    if clockfile is None:
+        clockfile = get_latest_clock_file("swift")
+        logger.info(f"Using latest Swift clock file: {clockfile}")
+    return swift_clock_correction_fun(clockfile), clockfile
 
 
 def rxte_clock_builder(clockfile=None, instrument=None):

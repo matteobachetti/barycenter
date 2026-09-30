@@ -683,6 +683,132 @@ class TestChandra:
         assert np.all(np.abs(shift + 52.46) < 0.6)
 
 
+class TestSwift:
+    """Swift, the only mission here whose MET counts UTC seconds.
+
+    Two references, differing only in whether ``barycorr`` was given the clock file, and
+    that pair is the point of the class. Swift's clock correction is the UTC correction
+    factor, tens of seconds rather than the microseconds of a NuSTAR fine clock file, and
+    it is *not* the only whole-second term: MJDREFF = 0.00074287037 is 64.184 s, which is
+    TT - UTC at 2001-01-01, so the MET is UTC seconds since then and owes the leap seconds
+    accumulated since -- 4 s for a December 2015 observation. ``barycorr`` adds those
+    whatever ``clockfile`` says, so both references carry them and the pair shows that we
+    do too.
+
+    The dataset is XRT photon-counting observation 00037258040 of Mrk 421, decimated to
+    492 events over its 6.4 ks, with the prefilter beside it at 2 s sampling.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_swift_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_swift_orb.fits.gz")
+        cls.clockfile = os.path.join(datadir, "dummy_swift_clk.fits")
+        cls.noclk = os.path.join(datadir, "dummy_swift_bary_DE440_noclk.evt.gz")
+        cls.clk = os.path.join(datadir, "dummy_swift_bary_DE440_clk.evt.gz")
+        # The target position, passed explicitly as everywhere else in these tests.
+        cls.ra, cls.dec = "182.635833", "39.405833"
+
+    def run(self, outfile, clockfile):
+        return main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                self.ra,
+                "--dec",
+                self.dec,
+                "--ephem",
+                "DE440",
+                "--clockfile",
+                clockfile,
+            ]
+        )
+
+    def test_agrees_with_barycorr_without_a_clock_file(self, tmp_path):
+        """With ``--clockfile none`` we match barycorr, which means the 4 s is still there.
+
+        This is the test that would fail loudest if the leap-second term were tied to the
+        clock correction: the reference has it and a naive reading of the MET does not, so
+        the disagreement would be 4 s rather than 40 ns.
+        """
+        outfile = str(tmp_path / "swift_noclk.evt")
+        assert self.run(outfile, "none") == outfile
+        with fits.open(outfile) as hdul, fits.open(self.noclk) as ref:
+            assert_times_agree(hdul["EVENTS"].data["TIME"], ref["EVENTS"].data["TIME"])
+            assert hdul["EVENTS"].header["TIMESYS"] == "TDB"
+            assert hdul["EVENTS"].header["CLOCKAPP"] is False
+
+    def test_agrees_with_barycorr_with_the_clock_file(self, tmp_path):
+        """The UTCF is read and applied to the same 100 ns, and CLOCKAPP says so."""
+        outfile = str(tmp_path / "swift_clk.evt")
+        self.run(outfile, self.clockfile)
+        with fits.open(outfile) as hdul, fits.open(self.clk) as ref:
+            assert_times_agree(hdul["EVENTS"].data["TIME"], ref["EVENTS"].data["TIME"])
+            assert hdul["EVENTS"].header["CLOCKAPP"] is True
+
+    def test_gtis_agree_with_barycorr(self, tmp_path):
+        """The GTI boundaries get the clock and leap-second terms as well as the events."""
+        outfile = str(tmp_path / "swift_clk.evt")
+        self.run(outfile, self.clockfile)
+        with fits.open(outfile) as hdul, fits.open(self.clk) as ref:
+            for column in ("START", "STOP"):
+                assert_times_agree(hdul["GTI"].data[column], ref["GTI"].data[column])
+
+    def test_the_two_references_differ_by_the_utcf(self):
+        """The references really were made with and without the clock file: 15.56 s apart.
+
+        Two references accidentally made with the same settings would let both tests above
+        pass while checking nothing -- and on Swift the difference is large enough to see
+        from across the room, which is exactly why it must not be left unasserted.
+        """
+        with fits.open(self.clk) as a, fits.open(self.noclk) as b:
+            diff = a["EVENTS"].data["TIME"] - b["EVENTS"].data["TIME"]
+        assert np.all((diff > -15.56) & (diff < -15.55))
+
+    def test_the_leap_seconds_survive_switching_the_clock_file_off(self, tmp_path):
+        """Both runs are shifted by the +4 s, so no flag can silently lose a whole second.
+
+        Without the clock file the shift is +64.26 to +64.76 s and with it +48.70 to
+        +49.20 s; the 0.5 s span in each is the Roemer delay's own drift across the 6.4 ks
+        exposure, and the two windows differ by the UTCF and by nothing else. Had the
+        leap-second term been tied to the clock correction, the first window would sit near
+        +60.5 s instead -- a whole second out, four times over.
+        """
+        with fits.open(self.evfile) as orig:
+            before = np.array(orig["EVENTS"].data["TIME"])
+        shifts = {}
+        for tag, clockfile in (("none", "none"), ("file", self.clockfile)):
+            outfile = str(tmp_path / f"swift_{tag}.evt")
+            self.run(outfile, clockfile)
+            with fits.open(outfile) as hdul:
+                shifts[tag] = np.array(hdul["EVENTS"].data["TIME"]) - before
+        assert np.all((shifts["none"] > 64.2) & (shifts["none"] < 64.8))
+        assert np.all((shifts["file"] > 48.6) & (shifts["file"] < 49.3))
+
+    def test_a_clock_file_that_does_not_cover_the_events_is_refused(self, tmp_path):
+        """Rather than extrapolating a quadratic, it says the times are not covered.
+
+        The same choice as an old NuSTAR file: the correction is 15 s, so extrapolating it
+        off the end of the table is not a small error. Here the file is truncated to the
+        intervals before the observation, which is what an out-of-date CALDB looks like.
+        """
+        from barycenter.clock import SWIFT_CLOCK_EXTENSION
+
+        stale = str(tmp_path / "stale_clk.fits")
+        with fits.open(self.clockfile) as hdul:
+            table = hdul[SWIFT_CLOCK_EXTENSION]
+            keep = np.asarray(table.data["TSTOP"]) < 460000000.0
+            trimmed = fits.BinTableHDU(
+                data=table.data[keep], header=table.header, name=SWIFT_CLOCK_EXTENSION
+            )
+            fits.HDUList([hdul[0].copy(), trimmed]).writeto(stale)
+        with pytest.raises(ValueError, match="not covered"):
+            self.run(str(tmp_path / "swift_stale.evt"), stale)
+
+
 class TestCoordinateKeywords:
     """The header keywords we take the source position from, and HEASOFT's different order."""
 

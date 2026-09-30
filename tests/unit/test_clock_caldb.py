@@ -87,9 +87,7 @@ class TestPickingTheNewest:
 
 
 class TestOfflineFallback:
-    def test_the_newest_cached_file_is_used_when_the_index_is_unreachable(
-        self, cache, monkeypatch
-    ):
+    def test_the_newest_cached_file_is_used_when_the_index_is_unreachable(self, cache, monkeypatch):
         """A network failure must not stop a run that already has a usable clock file."""
         for version in ("v230", "v231"):
             (cache / f"nuCclock20100101{version}.fits").write_text("x")

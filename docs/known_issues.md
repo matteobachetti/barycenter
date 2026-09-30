@@ -39,6 +39,20 @@ moves by that much over 7.6 h, and 1.0 s on the Chandra one. SAS `barycen` does 
 package reads `TELAPSE`, but a file leaving here claims a duration that no longer matches
 its own start and stop times.
 
+**A Swift time within ~15 s of a leap second can be a second out.** The leap-second term
+is a step function, and it is evaluated on the raw MET, where the step falls at the MET of
+the leap instant (457401600 for 2015-07-01). The clock file's own −1 s step falls at the
+leap instant *in onboard-clock time*, which is 14.8 s later because the UTCF is −14.8 s
+there, minus the one second being inserted: `TSTART = 457401613.791`. Between the two the
+correction and the table disagree by a second. Evaluating the leap term on the
+clock-corrected time instead would narrow the window from ~15 s to the inserted second
+itself, which is genuinely ambiguous and cannot be narrowed further — but the clock term
+must stay on the raw MET (evaluating its polynomial 4 s late costs 214 ns), so the two
+terms would no longer share an argument, and `correct_times` deliberately gives them the
+same one. No reference exists near a leap second to settle it, and Swift observations
+straddling one are rare, so this is recorded rather than guessed at. Everything more than
+15 s from a leap second is unaffected, including both committed references.
+
 **Fermi may need Swift's leap-second term, and nothing checks.** Fermi's `MJDREF` is
 51910.00074287037 — bit for bit Swift's, whose fractional part encodes TT − UTC at
 2001-01-01. On Swift that is the signature of a MET counting *UTC* seconds, and leaving the

@@ -64,9 +64,20 @@ class TestConsistency:
             assert mission.has_native_support == (mission.orbit is not None)
 
     def test_the_missions_with_clocks_are_the_ones_we_implement(self):
-        """NuSTAR and RXTE, and nothing else claims a correction it cannot make."""
+        """NuSTAR, RXTE and Swift, and nothing else claims a correction it cannot make."""
         with_clocks = {name for name, m in MISSIONS.items() if m.clock is not None}
-        assert with_clocks == {"nustar", "rxte"}
+        assert with_clocks == {"nustar", "rxte", "swift"}
+
+    def test_only_swift_counts_its_met_in_utc_seconds(self):
+        """``met_is_utc`` is opt-in, and setting it wrongly is a whole-second error.
+
+        Swift's MET is UTC seconds since 2001-01-01, so it owes the leap seconds since
+        then.  Every other mission here counts TT seconds and owes nothing; Fermi shares
+        Swift's MJDREF and may belong in this set, which is why the set is asserted
+        exactly rather than just checking Swift is in it.  See docs/known_issues.md.
+        """
+        counting_utc = {name for name, m in MISSIONS.items() if m.met_is_utc}
+        assert counting_utc == {"swift"}
 
 
 class TestBuilders:

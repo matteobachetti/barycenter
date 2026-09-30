@@ -32,6 +32,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "src"))
+from barycenter.clock import SWIFT_CLOCK_EXTENSION  # noqa: E402
+
 HERE = os.path.abspath(os.path.dirname(__file__))
 DATA = os.path.join(HERE, os.pardir, "tests", "data")
 HEADAS = os.path.expanduser("~/mamba/envs/henv313_x86/heasoft")
@@ -66,6 +69,16 @@ XMM_ODF = os.path.join(XMM_OBS, "event_cl", "odf")
 CHANDRA_OBS = os.path.expanduser("~/tmp/m82_acis/10026/primary")
 CHANDRA_EVENTS = os.path.join(CHANDRA_OBS, "acisf10026N003_evt2.fits.gz")
 CHANDRA_ORBIT = os.path.join(CHANDRA_OBS, "orbitf356961902N001_eph1.fits.gz")
+
+#: The Swift dataset the ``barycorr`` references are made with: the XRT photon-counting
+#: event list of observation 00037258040, the prefilter (``sao``) product beside it that
+#: carries the spacecraft position, and the CALDB clock file.  Public HEASARC data; a
+#: trimmed copy of each is committed.  PC mode rather than the WT-mode file in the same
+#: directory, which holds only 50 events over 19 s of exposure.
+SWIFT_OBS = os.path.expanduser("~/tmp/swift_00037258040")
+SWIFT_EVENTS = os.path.join(SWIFT_OBS, "xrt", "event", "sw00037258040xpcw3po_cl.evt.gz")
+SWIFT_ORBIT = os.path.join(SWIFT_OBS, "auxil", "sw00037258040sao.fits.gz")
+SWIFT_CLOCK = os.path.join(SWIFT_OBS, "swclockcor20041120v174.fits")
 
 #: Where CIAO lives.  ``axbary`` needs its own leap-second file and JPL ephemerides, which
 #: it looks for under ``$TIMING_DIR`` or ``$ASCDS_CALIB``; with neither set it reports
@@ -108,6 +121,10 @@ XMM_REFERENCE = {
         "ephemeris": "DE430",
     },
 }
+
+#: Swift's own RA_OBJ/DEC_OBJ, passed explicitly like everywhere else here.  RA_NOM is
+#: 116 arcsec away, and barycorr prefers RA_NOM.
+SWIFT_RA, SWIFT_DEC = "182.635833", "39.405833"
 
 #: One entry per reference file.  ``args`` are passed to ``barycorr`` verbatim.
 REFERENCES = {
@@ -172,6 +189,33 @@ REFERENCES = {
             "ephem": "JPLEPH.440",
             "ra": "228.481995",
             "dec": "-59.136002",
+        },
+    },
+    # Swift, without and with its clock correction.  Unlike every other mission here the
+    # two differ by *seconds*, not microseconds: Swift's clock correction is the mission's
+    # UTCF.  Both references still carry the leap-second term, which barycorr applies
+    # whatever clockfile says -- that is the whole point of having the pair.
+    "dummy_swift_bary_DE440_noclk.evt.gz": {
+        "infile": "dummy_swift_evt.evt",
+        "orbitfiles": ["dummy_swift_orb.fits.gz"],
+        "args": {
+            "clockfile": "NONE",
+            "refframe": "ICRS",
+            "ephem": "JPLEPH.440",
+            "ra": SWIFT_RA,
+            "dec": SWIFT_DEC,
+        },
+    },
+    "dummy_swift_bary_DE440_clk.evt.gz": {
+        "infile": "dummy_swift_evt.evt",
+        "orbitfiles": ["dummy_swift_orb.fits.gz"],
+        "extra_inputs": ["dummy_swift_clk.fits"],
+        "args": {
+            "clockfile": "dummy_swift_clk.fits",
+            "refframe": "ICRS",
+            "ephem": "JPLEPH.440",
+            "ra": SWIFT_RA,
+            "dec": SWIFT_DEC,
         },
     },
 }
@@ -341,6 +385,92 @@ def trim_xmm_inputs(nevents=400, orbit_step=10, margin=600.0):
     print(f"    wrote {orb_out} ({len(keep)} of {len(t)} rows)")
     subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
     return evt_out, orb_out + ".gz"
+
+
+def trim_swift_inputs(nevents=400, orbit_step=2, margin=600.0):
+    """Cut the Swift event, orbit and clock files down to something committable.
+
+    The event list keeps ``TIME`` and ``PI`` only, plus the ``GTI`` extension.  The
+    prefilter file has 31 columns of which we read two, so it is cut to ``TIME``,
+    ``POSITION`` and ``VELOCITY``, decimated to one sample every ``orbit_step`` seconds
+    from its native 1 s.  2 s was measured, not guessed.  ``hdaxbary`` refuses to read a
+    prefilter sampled more coarsely than about 10 s -- 15 s and up fail with "no bracketing
+    sample found" -- and while 5 s and 10 s are read, they move the reference times by a
+    full float64 ulp (59.6 ns at Swift's MET, most of the 100 ns budget) against the native
+    sampling.  2 s is the coarsest step that is bit-identical to 1 s, and halves the file.
+
+    The clock file keeps every interval from two before the most recent leap second back
+    through two after the observation.  One interval would be enough to correct these
+    events; the wider slice is what lets the tests check the two things that only show up
+    at a boundary -- that the row containing a time is the one used, and that the tabulated
+    correction steps by exactly one second at a leap second, because the UTCF converts to
+    UTC and UTC is what steps.  The leap-second boundaries are found in the file itself
+    rather than looked up, by evaluating each interval's polynomial at its own end and at
+    the next interval's start: ordinary boundaries agree to a few microseconds, a leap
+    second shows up as a one-second jump.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(DATA, "dummy_swift_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_swift_orb.fits")
+    clk_out = os.path.join(DATA, "dummy_swift_clk.fits")
+
+    with fits.open(SWIFT_EVENTS) as hdul:
+        events = hdul["EVENTS"]
+        nrows = len(events.data)
+        step = max(1, nrows // nevents)
+        rows = slice(None, None, step)
+        trimmed = subset_table(events, rows, columns=("TIME", "PI"))
+        trimmed.header.add_history(
+            f"Every {step}th row of {os.path.basename(SWIFT_EVENTS)}, by tools/make_test_data.py"
+        )
+        # Materialised, not a view: it is used after the file is closed.
+        times = np.array(events.data["TIME"][rows])
+        fits.HDUList([hdul[0].copy(), trimmed, hdul["GTI"].copy()]).writeto(evt_out, overwrite=True)
+    print(f"    wrote {evt_out} ({len(times)} of {nrows} rows)")
+
+    with fits.open(SWIFT_ORBIT) as hdul:
+        orbit = hdul["PREFILTER"]
+        t = orbit.data["TIME"]
+        window = np.flatnonzero((t > times.min() - margin) & (t < times.max() + margin))
+        keep = window[::orbit_step]
+        trimmed = subset_table(orbit, keep, columns=("TIME", "POSITION", "VELOCITY"))
+        trimmed.header["TSTART"] = float(t[keep].min())
+        trimmed.header["TSTOP"] = float(t[keep].max())
+        trimmed.header.add_history(
+            f"Every {orbit_step}th row of {os.path.basename(SWIFT_ORBIT)} over the span of "
+            f"{os.path.basename(evt_out)}, by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), trimmed]).writeto(orb_out, overwrite=True)
+    print(f"    wrote {orb_out} ({len(keep)} of {len(t)} rows)")
+
+    with fits.open(SWIFT_CLOCK) as hdul:
+        clock = hdul[SWIFT_CLOCK_EXTENSION]
+        starts = np.asarray(clock.data["TSTART"], dtype=float)
+        stops = np.asarray(clock.data["TSTOP"], dtype=float)
+        c0, c1, c2 = (np.asarray(clock.data[c], dtype=float) for c in ("C0", "C1", "C2"))
+
+        def at(row, met):
+            x = (met - starts[row]) / 86400.0
+            return c0[row] + c1[row] * x + c2[row] * x**2
+
+        here = int(np.searchsorted(starts, times.min(), side="right") - 1)
+        steps = [i for i in range(here) if abs(at(i, stops[i]) - at(i + 1, starts[i + 1])) > 5e5]
+        first = max(0, (steps[-1] if steps else here) - 2)
+        keep = np.arange(first, min(len(starts), here + 3))
+        trimmed = subset_table(clock, keep)
+        trimmed.header.add_history(
+            f"Intervals {keep[0]}-{keep[-1]} of {os.path.basename(SWIFT_CLOCK)}, "
+            "spanning the last leap second before the observation, "
+            "by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), trimmed]).writeto(clk_out, overwrite=True)
+    print(f"    wrote {clk_out} ({len(keep)} of {len(starts)} intervals)")
+
+    for raw in (orb_out,):
+        subprocess.run(["gzip", "-9", "-f", raw], check=True)
+    return evt_out, orb_out + ".gz", clk_out
 
 
 def trim_chandra_inputs(nevents=400, margin=1200.0):
@@ -602,6 +732,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_chandra_evt.evt")):
         print("--- dummy_chandra_evt.evt, dummy_chandra_orb.fits.gz")
         trim_chandra_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_swift_evt.evt")):
+        print("--- dummy_swift_evt.evt, dummy_swift_orb.fits.gz, dummy_swift_clk.fits")
+        trim_swift_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target
