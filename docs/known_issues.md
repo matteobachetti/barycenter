@@ -34,14 +34,6 @@ same one. No reference exists near a leap second to settle it, and Swift observa
 straddling one are rare, so this is recorded rather than guessed at. Everything more than
 15 s from a leap second is unaffected, including both committed references.
 
-**Fermi may need Swift's leap-second term, and nothing checks.** Fermi's `MJDREF` is
-51910.00074287037 — bit for bit Swift's, whose fractional part encodes TT − UTC at
-2001-01-01. On Swift that is the signature of a MET counting *UTC* seconds, and leaving the
-leap seconds out costs 4 s on a 2015 observation. `MISSIONS["fermi"].met_is_utc` is False,
-matching every mission but Swift, but Fermi has never been compared against an official
-tool here, so this is untested either way and the error, if it is one, is a whole number of
-seconds. Resolving it needs an FT1/FT2 pair and a `gtbary` reference.
-
 ## Missing features
 
 **`TIERRELA` is not written.** HEASOFT `barycorr` writes the *relative* clock accuracy

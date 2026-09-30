@@ -1289,3 +1289,131 @@ class TestInterpolationGrid:
             self.run(str(tmp_path / "default.evt"))
         assert any("at every event" in r.message for r in caplog.records)
         assert not any("grid" in r.message for r in caplog.records)
+
+
+class TestFermi:
+    """Fermi LAT, the only mission here whose spacecraft file has no velocity column.
+
+    ``gtbary`` is the mission's own tool, and unlike ``barycorr`` on XMM or Chandra it
+    works -- so this reference is a straight cross-check rather than the only route. What
+    makes the file worth having is the orbit reader: the position lives in ``SC_DATA`` as
+    a single ``SC_POSITION`` vector, timed by a ``START`` column rather than a ``TIME``
+    one, and there is no ``SC_VELOCITY`` beside it, so the velocity is differentiated.
+    That is the one committed file exercising that fallback end to end.
+
+    The dataset is the simulated pulsar from the Fermi ScienceTools tutorial, decimated
+    to 413 events spanning the full week, with all 70 GTIs and the spacecraft file at its
+    native 30 s sampling -- which is not decimated on purpose; see ``trim_fermi_inputs``.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_fermi_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_fermi_orb.fits.gz")
+        cls.reference = os.path.join(datadir, "dummy_fermi_bary_DE405.evt.gz")
+        # The simulated pulsar's position, passed explicitly like everywhere else here.
+        cls.ra, cls.dec = "111.11", "22.22"
+
+    def run(self, outfile, *extra):
+        return main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                self.ra,
+                "--dec",
+                self.dec,
+                "--ephem",
+                "DE405",
+                "--clockfile",
+                "none",
+                *extra,
+            ]
+        )
+
+    def test_agrees_with_gtbary(self, tmp_path):
+        """Our times match Fermi gtbary to one unit in the last place of its own file.
+
+        DE405 because that and DE200 are the only ephemerides gtbary offers, and DE405 is
+        the one paired with ICRS.
+        """
+        outfile = str(tmp_path / "fermi.evt")
+        assert self.run(outfile) == outfile
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            assert_times_agree(hdul["EVENTS"].data["TIME"], ref["EVENTS"].data["TIME"])
+            assert hdul["EVENTS"].header["TIMESYS"] == "TDB"
+            assert hdul["EVENTS"].header["TIMEREF"] == "SOLARSYSTEM"
+
+    def test_gtis_agree_with_gtbary(self, tmp_path):
+        """All 70 GTI boundaries move with the events, not just the TIME column."""
+        outfile = str(tmp_path / "fermi.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            assert len(hdul["GTI"].data) == 70
+            assert_times_agree(hdul["GTI"].data["START"], ref["GTI"].data["START"])
+            assert_times_agree(hdul["GTI"].data["STOP"], ref["GTI"].data["STOP"])
+
+    def test_tstart_and_tstop_agree_to_gtbarys_keyword_precision(self, tmp_path):
+        """TSTART and TSTOP agree to a microsecond, which is all a FITS keyword can say.
+
+        Both are comfortably inside the spacecraft file here, so they are corrected
+        rather than clamped -- which is the case the clamping must not disturb.
+        """
+        outfile = str(tmp_path / "fermi.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            for keyword in ("TSTART", "TSTOP"):
+                assert abs(hdul["EVENTS"].header[keyword] - ref["EVENTS"].header[keyword]) < 1e-6
+
+    def test_the_velocity_is_differentiated_and_says_so(self, tmp_path, caplog):
+        """No SC_VELOCITY column means the position is differentiated, which must be announced.
+
+        Quietly differentiating would be a silent accuracy loss; the reference above shows
+        the loss is nil at this sampling, but only because the file is not decimated.
+        """
+        with caplog.at_level("WARNING"):
+            self.run(str(tmp_path / "fermi.evt"))
+        assert any("differentiating the position" in r.message for r in caplog.records)
+
+    def test_no_clock_correction_is_applied(self, tmp_path):
+        """Fermi has no clock file here, so CLOCKAPP is false and the reference had none either."""
+        outfile = str(tmp_path / "fermi.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul:
+            assert hdul["EVENTS"].header["CLOCKAPP"] is False
+
+    def test_a_tstart_before_the_spacecraft_file_is_clamped(self, tmp_path, caplog):
+        """The real Fermi quirk: TSTART is the requested window, which can predate the data.
+
+        A LAT extraction sets TSTART to the start of the window that was asked for, while
+        the spacecraft file begins whenever the data does -- which is why gtbary refuses
+        such a file outright. Here that is reproduced by moving TSTART an hour earlier:
+        the events and GTIs must come out untouched, and only TSTART may move, to the
+        first GTI rather than to an extrapolated position.
+        """
+        shifted = str(tmp_path / "shifted.evt")
+        with fits.open(self.evfile) as hdul:
+            for hdu in hdul:
+                if "TSTART" in hdu.header:
+                    hdu.header["TSTART"] -= 3600.0
+            hdul.writeto(shifted)
+
+        outfile = str(tmp_path / "clamped.evt")
+        with caplog.at_level("WARNING"):
+            main_barycenter(
+                [shifted, self.orbfile, "-o", outfile]
+                + ["--ra", self.ra, "--dec", self.dec, "--ephem", "DE405", "--clockfile", "none"]
+            )
+        assert any("outside the orbit file" in r.message for r in caplog.records)
+
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            # The data itself is untouched: only the keyword was out of range.
+            assert len(hdul["EVENTS"].data) == len(ref["EVENTS"].data)
+            assert_times_agree(hdul["EVENTS"].data["TIME"], ref["EVENTS"].data["TIME"])
+            assert_times_agree(hdul["GTI"].data["START"], ref["GTI"].data["START"])
+            # And TSTART landed on the corrected first GTI, not an hour before it.
+            assert hdul["EVENTS"].header["TSTART"] == pytest.approx(
+                hdul["GTI"].data["START"].min(), abs=1e-6
+            )

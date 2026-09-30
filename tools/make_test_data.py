@@ -80,6 +80,34 @@ SWIFT_EVENTS = os.path.join(SWIFT_OBS, "xrt", "event", "sw00037258040xpcw3po_cl.
 SWIFT_ORBIT = os.path.join(SWIFT_OBS, "auxil", "sw00037258040sao.fits.gz")
 SWIFT_CLOCK = os.path.join(SWIFT_OBS, "swclockcor20041120v174.fits")
 
+#: The Fermi dataset the ``gtbary`` reference is made with: the simulated pulsar event
+#: list and the one-week spacecraft file from the Fermi ScienceTools pulsar tutorial,
+#: both public and small enough to fetch directly:
+#:
+#:     https://fermi.gsfc.nasa.gov/ssc/data/analysis/scitools/data/Pulsars/fakepulsar_event.fits
+#:     https://fermi.gsfc.nasa.gov/ssc/data/analysis/scitools/data/Pulsars/simscdata_1week.fits
+#:
+#: Simulated rather than real LAT data on purpose: it is the file the mission's own
+#: documentation barycentres, so the reference can be checked against a published one.
+FERMI_OBS = os.path.expanduser("~/tmp/fermi_pulsar")
+FERMI_EVENTS = os.path.join(FERMI_OBS, "fakepulsar_event.fits")
+FERMI_ORBIT = os.path.join(FERMI_OBS, "simscdata_1week.fits")
+
+#: Where the Fermi ScienceTools live.  ``gtbary`` needs ``$TIMING_DIR`` pointing at the
+#: directory holding ``JPLEPH.*``; without it it fails outright rather than quietly, which
+#: is one thing it does better than ``axbary``.
+FERMI_ENV = os.path.expanduser("~/mamba/envs/fermi")
+
+#: How the Fermi reference is made.  ``ra``/``dec`` are the simulated pulsar's position,
+#: passed explicitly like everywhere else.  DE405 because that and DE200 are the only two
+#: ``gtbary`` offers, and DE405 is the one paired with ICRS.
+FERMI_REFERENCE = {
+    "infile": "dummy_fermi_evt.evt",
+    "orbitfile": "dummy_fermi_orb.fits.gz",
+    "outfile": "dummy_fermi_bary_DE405.evt.gz",
+    "args": {"ra": "111.11", "dec": "22.22", "solareph": "JPL DE405"},
+}
+
 #: Where CIAO lives.  ``axbary`` needs its own leap-second file and JPL ephemerides, which
 #: it looks for under ``$TIMING_DIR`` or ``$ASCDS_CALIB``; with neither set it reports
 #: "Could not initialize bary stuff" and then writes the times out *unchanged*, so this
@@ -473,6 +501,68 @@ def trim_swift_inputs(nevents=400, orbit_step=2, margin=600.0):
     return evt_out, orb_out + ".gz", clk_out
 
 
+def trim_fermi_inputs(nevents=400, margin=600.0):
+    """Cut the Fermi event and spacecraft files down to something committable.
+
+    The event list keeps ``TIME`` and ``ENERGY`` only, decimated so that the sample still
+    spans the whole week, plus the ``GTI`` extension -- 70 intervals, which is what makes
+    the reference able to check the GTIs as well as the events.  The spacecraft file is
+    cut to ``START``, ``STOP`` and ``SC_POSITION`` over the span of the events and the
+    GTIs together, plus a margin.
+
+    Unlike the other missions here the spacecraft file is **not** decimated, and that was
+    measured rather than assumed.  This file carries no ``SC_VELOCITY`` column -- older
+    LAT spacecraft files do not, though current ones do -- so the velocity has to be
+    obtained by differentiating the position, and a coarser grid makes a worse derivative.
+    Against a ``gtbary`` reference regenerated at each step, the native 30 s sampling
+    agrees to 29.8 ns, which is one unit in the last place of the reference's float64
+    times and therefore the floor; 60 s gives 119.2 ns, 120 s gives 328 ns, and 240 s
+    gives 4.4 us.  60 s would still pass, at 92 % of the tolerance and with no margin for
+    another platform; 30 s costs 305 KB gzipped and is exact, so it is what is committed.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(DATA, "dummy_fermi_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_fermi_orb.fits")
+
+    with fits.open(FERMI_EVENTS) as hdul:
+        events = hdul["EVENTS"]
+        nrows = len(events.data)
+        step = max(1, nrows // nevents)
+        rows = slice(None, None, step)
+        trimmed = subset_table(events, rows, columns=("TIME", "ENERGY"))
+        trimmed.header.add_history(
+            f"Every {step}th row of {os.path.basename(FERMI_EVENTS)}, by tools/make_test_data.py"
+        )
+        gti = hdul["GTI"].copy()
+        # Materialised, not a view: both are used after the file is closed.
+        times = np.array(events.data["TIME"][rows])
+        starts, stops = np.array(gti.data["START"]), np.array(gti.data["STOP"])
+        fits.HDUList([hdul[0].copy(), trimmed, gti]).writeto(evt_out, overwrite=True)
+    print(f"    wrote {evt_out} ({len(times)} of {nrows} rows, {len(starts)} GTIs)")
+
+    # The GTIs reach past the events at both ends -- they are the requested window, the
+    # events are what arrived -- and they get barycentred too, so the spacecraft file has
+    # to cover them as well or the new coverage check refuses the file.
+    low = min(times.min(), starts.min()) - margin
+    high = max(times.max(), stops.max()) + margin
+    with fits.open(FERMI_ORBIT) as hdul:
+        orbit = hdul["SC_DATA"]
+        start = orbit.data["START"]
+        keep = np.flatnonzero((start > low) & (start < high))
+        trimmed = subset_table(orbit, keep, columns=("START", "STOP", "SC_POSITION"))
+        trimmed.header["TSTART"] = float(start[keep].min())
+        trimmed.header["TSTOP"] = float(start[keep].max())
+        trimmed.header.add_history(
+            f"Rows of {os.path.basename(FERMI_ORBIT)} covering the events, "
+            "by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), trimmed]).writeto(orb_out, overwrite=True)
+    print(f"    wrote {orb_out} ({len(keep)} of {len(start)} rows)")
+    subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
+
+
 def trim_chandra_inputs(nevents=400, margin=1200.0):
     """Cut the Chandra event and orbit files down to something committable.
 
@@ -575,6 +665,61 @@ def run_axbary(infile, orbitfile, outfile, args):
             raise RuntimeError(
                 f"axbary moved the times by at most {moved.max():g} s: it ran without "
                 "an ephemeris and the output is the input"
+            )
+        print(f"    times moved by {moved.mean():.3f} s")
+        shutil.move(produced, outfile)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+def run_gtbary(infile, orbitfile, outfile, args):
+    """Run Fermi ``gtbary`` on ``infile``, writing an uncompressed ``outfile``.
+
+    ``gtbary`` needs no terminal and no ScienceTools init script, but it does need
+    ``$TIMING_DIR`` (or ``$LHEA_DATA``) pointing at the directory holding ``JPLEPH.405``.
+    Without it the task says so and exits non-zero, so unlike ``axbary`` there is no
+    silent-passthrough failure mode to guard against -- but the output is still checked
+    for having moved, because a reference that is its own input would pass every test.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    workdir = tempfile.mkdtemp(prefix="gtbary_")
+    try:
+        local_in = os.path.join(workdir, os.path.basename(infile))
+        shutil.copy(infile, local_in)
+        shutil.copy(orbitfile, workdir)
+        pfiles = os.path.join(workdir, "pfiles")
+        os.makedirs(pfiles)
+
+        fermi_share = os.path.join(FERMI_ENV, "share", "fermitools")
+        cmd = [
+            os.path.join(FERMI_ENV, "bin", "gtbary"),
+            f"evfile={os.path.basename(local_in)}",
+            f"scfile={os.path.basename(orbitfile)}",
+            f"outfile={os.path.basename(outfile)}",
+            "tcorrect=BARY",
+            "clobber=yes",
+            "mode=h",
+        ]
+        cmd += [f"{k}={v}" for k, v in args.items()]
+        env = dict(os.environ)
+        env["PFILES"] = pfiles + ";" + os.path.join(fermi_share, "syspfiles")
+        env["TIMING_DIR"] = os.path.join(fermi_share, "refdata", "fermi", "jplephem")
+        result = subprocess.run(
+            cmd, cwd=workdir, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        )
+        output = result.stdout.decode(errors="replace")
+        if result.returncode != 0 or "Caught" in output:
+            raise RuntimeError(f"gtbary failed:\n{output}")
+        print(output.rstrip())
+
+        produced = os.path.join(workdir, os.path.basename(outfile))
+        with fits.open(local_in) as before, fits.open(produced) as after:
+            moved = np.abs(after["EVENTS"].data["TIME"] - before["EVENTS"].data["TIME"])
+        if moved.max() < 1.0:
+            raise RuntimeError(
+                f"gtbary moved the times by at most {moved.max():g} s: the output is the input"
             )
         print(f"    times moved by {moved.mean():.3f} s")
         shutil.move(produced, outfile)
@@ -735,6 +880,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_swift_evt.evt")):
         print("--- dummy_swift_evt.evt, dummy_swift_orb.fits.gz, dummy_swift_clk.fits")
         trim_swift_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_fermi_evt.evt")):
+        print("--- dummy_fermi_evt.evt, dummy_fermi_orb.fits.gz")
+        trim_fermi_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target
@@ -762,6 +910,18 @@ def main():
         )
         subprocess.run(["gzip", "-9", "-f", raw], check=True)
         print(f"    wrote {target}")
+
+    target = os.path.join(DATA, FERMI_REFERENCE["outfile"])
+    raw = target[: -len(".gz")]
+    print(f"--- {FERMI_REFERENCE['outfile']}")
+    run_gtbary(
+        os.path.join(DATA, FERMI_REFERENCE["infile"]),
+        os.path.join(DATA, FERMI_REFERENCE["orbitfile"]),
+        raw,
+        FERMI_REFERENCE["args"],
+    )
+    subprocess.run(["gzip", "-9", "-f", raw], check=True)
+    print(f"    wrote {target}")
 
     target = os.path.join(DATA, XMM_REFERENCE["outfile"])
     raw = target[: -len(".gz")]

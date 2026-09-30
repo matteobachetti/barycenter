@@ -166,18 +166,32 @@ rather than DE440 and ICRS: reading DE200 coordinates in the wrong frame costs 4
 DE200 is referred to FK5 and DE405 onwards to ICRS, `--radecsys` overrides the pairing,
 and the default gets it right.
 
-## IXPE, Fermi and SVOM
+## Fermi
 
-These three have registry entries and their orbit files are read, but **none has ever
+Validated against the mission's own `gtbary` to 29.8 ns — one unit in the last place of
+the reference file's float64 times, which is the floor. The positions come from the
+`SC_DATA` extension of an FT2 (spacecraft) file, timed by its `START` column.
+
+Two things about Fermi are worth knowing.
+
+**The spacecraft file may have no velocity column.** Older FT2 files carry `SC_POSITION`
+alone, and the velocity is then obtained by differentiating it, with a warning. That is
+accurate at the native 30 s sampling — it is what the committed reference is made with —
+but it degrades quickly if the file is thinned.
+
+**Fermi's MET counts TT seconds, not UTC seconds**, despite an `MJDREF` of
+51910.00074287037 that is bit-for-bit Swift's, whose fractional part encodes TT − UTC at
+2001-01-01. On Swift that is the signature of a MET counting UTC seconds. On Fermi it is
+not: the test observation sits 2.0 s of leap seconds after `MJDREF`, so applying Swift's
+term would put us 2 s from `gtbary`, and we are 30 ns from it. `MISSIONS["fermi"].met_is_utc`
+is correctly False. This used to be an open question here and is now settled.
+
+## IXPE and SVOM
+
+These two have registry entries and their orbit files are read, but **neither has ever
 been compared against an official tool**, so treat the output as unverified. IXPE uses
-the same `ORBIT`-extension dialect as NICER; Fermi's positions come from the `SC_DATA`
-extension of an FT2 file; SVOM's from a `POSITION`/`VELOCITY` pair in metres.
-
-Fermi carries an open question worth knowing about before you trust a Fermi result: its
-`MJDREF` is bit-for-bit Swift's, whose fractional part is the signature of a mission
-elapsed time counting UTC seconds. If Fermi's does too, it needs Swift's leap-second
-term, and leaving it out is a whole-number-of-seconds error. Settling it needs an FT1/FT2
-pair and a `gtbary` reference; see [Known issues](known_issues.md#correctness).
+the same `ORBIT`-extension dialect as NICER; SVOM's positions come from a
+`POSITION`/`VELOCITY` pair in metres.
 
 ## ASCA
 

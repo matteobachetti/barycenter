@@ -257,11 +257,13 @@ The leap-second epochs come from ERFA's own table, converted to METs once, so an
 observation straddling a leap second gets the step in the right place rather than rounded
 to the nearest day — a whole second, silently, in the middle of a file.
 
-:::{warning}
-**Fermi shares Swift's exact `MJDREF`** (51910.00074287037) and has never been checked
-against an official tool here, so it may need the same term. `met_is_utc` is False for it,
-which is a guess in the safe direction only in the sense that it is what every other
-mission needs. See [known issues](known_issues.md).
+:::{note}
+**Fermi shares Swift's exact `MJDREF`** (51910.00074287037) and does *not* need this term.
+That used to be an open question: the shared value was reason to suspect Fermi's MET also
+counted UTC seconds, and being wrong about it is a whole-second error. The `gtbary`
+reference settles it. The test observation sits 2.0 s of leap seconds after `MJDREF`, so
+applying the term would put us 2 s away from `gtbary`; we are 29.8 ns away without it.
+`met_is_utc` is False for Fermi and that is now measured rather than assumed.
 :::
 
 **Step 7 — stamp the headers and write.** Every HDU gets `TIMESYS = TDB`,
@@ -1029,7 +1031,7 @@ When a comparison disagrees, check these before looking for a bug:
 | NICER | `ni<obsid>.orb` | none needed | works |
 | RXTE | `orbit/FPorbit_*` | HEASOFT `tdc.dat`, bundled with the package | validated to 100 ns |
 | IXPE | `FPorbit`-style | none needed | works |
-| Fermi | FT2 | none needed | works |
+| Fermi | FT2 `SC_DATA`, `SC_POSITION` in m, timed by `START` | none needed | validated to 100 ns |
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
@@ -1066,6 +1068,9 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_swift_clk.fits` | 15 intervals of CALDB `swclockcor20041120v174.fits`, spanning the 2015-07-01 leap second as well as the observation |
 | `dummy_swift_bary_DE440_noclk.evt.gz` | the `barycorr` reference for those events, `clockfile=NONE` — which still carries the +4 s of leap seconds |
 | `dummy_swift_bary_DE440_clk.evt.gz` | the same with the UTCF applied, 15.56 s away from its twin |
+| `dummy_fermi_evt.evt` | 413 simulated LAT events, every 10th row of the ScienceTools tutorial's `fakepulsar_event.fits`, so the sample spans the whole week, plus all 70 of its `GTI` rows |
+| `dummy_fermi_orb.fits.gz` | 20199 rows of the matching `simscdata_1week.fits` FT2 file, at its native 30 s over the events and GTIs plus 600 s, cut to `START`, `STOP`, `SC_POSITION` — **not** decimated, see below |
+| `dummy_fermi_bary_DE405.evt.gz` | the Fermi `gtbary` reference for those events, `solareph="JPL DE405"`, GTIs corrected too |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
 triples of identical length — `GEI_*` is geocentric equatorial and is the one the
@@ -1100,6 +1105,27 @@ events alone.
 allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and
 abort with `ERROR: Device not configured` without one, and the old `script -q /dev/null`
 wrapper only worked when it already had a terminal to start from.
+
+### Why the Fermi orbit file is not decimated
+
+Every other orbit file here is thinned — XMM to every 10th second, Swift to every 2nd.
+The Fermi one is not, and that is measured rather than cautious. `simscdata_1week.fits`
+carries `SC_POSITION` but no `SC_VELOCITY` column, which older FT2 files routinely do
+not, so the velocity has to come from differentiating the position — and a coarser grid
+makes a worse derivative. Regenerating the `gtbary` reference at each step and comparing:
+
+| spacecraft sampling | agreement with `gtbary` |
+|--------------------:|------------------------:|
+|          30 s (native) |    **29.8 ns** (one ulp) |
+|                   60 s |                 119.2 ns |
+|                  120 s |                 327.8 ns |
+|                  240 s |                 4440 ns  |
+
+The tolerance is 129.8 ns, so 60 s would pass — at 92 % of it, with nothing left for a
+platform whose longdouble differs. 30 s is exact and costs 305 KB gzipped, so that is
+what is committed. Note that this is a property of *this* file rather than of Fermi:
+a current FT2 file with an `SC_VELOCITY` column would take a Hermite spline instead and
+thin far better.
 
 ### Driving SAS `barycen` for the XMM reference
 
