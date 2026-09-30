@@ -333,16 +333,10 @@ MISSIONS["nustar"] = Mission(
 
 ### Adding a mission
 
-1. Add the entry. If the orbit file's layout already matches an existing `OrbitSpec` —
-   three scalar `X`,`Y`,`Z` columns in metres covers NICER, RXTE and IXPE — reuse it.
-2. Generate a reference with the mission's own tool and commit it trimmed, following
-   `tools/make_test_data.py`.
-3. Add the 100 ns test.
-
-Step 1 is usually five lines. Steps 2 and 3 are the work, and they are the reason a
-mission is not listed until there is a file to check it against: `swift` and `chandra`
-have entries with `orbit=None`, which is the registry saying "known about, not yet
-validated" rather than pretending.
+Step by step, with the traps, in [Adding a mission](adding_a_mission.md). The short
+version: the registry entry is usually five lines, and producing a reference file to
+check it against is the work. That is why a mission is listed with `orbit=None` — "known
+about, not yet validated" — until there is a file to check it against.
 
 `Mission` is a frozen dataclass, so a misspelt field is a `TypeError` at import rather
 than a silently ignored setting, and `mission_for` raises with the list of known missions
