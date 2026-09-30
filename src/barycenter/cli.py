@@ -2,7 +2,12 @@
 
 import os
 
-from .core import ENGINES, apply_barycenter_correction
+from .core import (
+    AUTO_GRID_DT_S,
+    AUTO_GRID_EVENTS,
+    ENGINES,
+    apply_barycenter_correction,
+)
 from .utils import splitext_improved
 
 __all__ = ["main_barycenter"]
@@ -99,6 +104,18 @@ def main_barycenter(args=None):
         help="Only keep these additional columns in the output file, "
         "in addition to the TIME column. It is a comma separated list, like PI,PRIOR",
     )
+    parser.add_argument(
+        "--dt",
+        type=float,
+        default=None,
+        help=(
+            f"Interpolate the correction on a grid of this spacing, in seconds, instead "
+            f"of evaluating it at every event. The default decides from the file's size: "
+            f"above {AUTO_GRID_EVENTS} events a {AUTO_GRID_DT_S} s grid is used, which is "
+            f"about 50 times faster and worth about 1.6 ns. Pass 0 to always evaluate the "
+            f"correction at every event."
+        ),
+    )
 
     args = parser.parse_args(args)
 
@@ -131,6 +148,7 @@ def main_barycenter(args=None):
         only_columns=args.only_columns.split(",") if args.only_columns else None,
         apply_official=args.apply_official,
         engine=args.engine,
+        dt=args.dt,
     )
 
 

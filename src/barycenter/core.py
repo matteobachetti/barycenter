@@ -41,10 +41,13 @@ ENGINES = ("native", "pint")
 
 __all__ = [
     "ABSORBED_KEYWORDS",
+    "AUTO_GRID_DT_S",
+    "AUTO_GRID_EVENTS",
     "COORDINATE_KEYWORDS",
     "DERIVED_KEYWORDS",
     "ENGINES",
     "HEASOFT_COORDINATE_KEYWORDS",
+    "MET_RANGE_PAD_S",
     "TIME_COLUMNS",
     "apply_barycenter_correction",
     "correct_times",
@@ -52,6 +55,9 @@ __all__ = [
     "get_barycentric_correction",
     "get_coordinates_from_fits_header",
     "get_dummy_parfile_for_position",
+    "grid_spacing_for",
+    "met_range_for_file",
+    "pre_bary_shift",
     "update_derived_keywords",
 ]
 
@@ -59,6 +65,110 @@ __all__ = [
 #: Every column holding a time that a barycentric correction must move. Matched against
 #: a file's columns without regard to case; see :func:`barycenter.utils.column_named`.
 TIME_COLUMNS = ("TIME", "START", "STOP", "TSTART", "TSTOP")
+
+#: Above this many events the native engine switches from evaluating the correction at
+#: every event to interpolating it on a grid. Measured on the committed NuSTAR orbit
+#: file: at a million events the exact path takes 6.72 s and the grid 0.14 s, a factor
+#: of 48, for a maximum error of 1.6 ns. Below the threshold the exact path costs well
+#: under a second, so there is nothing to buy and the answer stays exact -- which keeps
+#: every reference comparison in the test suite on the unapproximated code.
+AUTO_GRID_EVENTS = 100_000
+
+#: The grid spacing used when the threshold above is crossed. At 5 s the interpolation
+#: error over the committed orbit file is mean +0.002 ns, std 0.39 ns, max 1.6 ns,
+#: against a 100 ns target and reference files whose own float64 granularity is 30 ns
+#: (NuSTAR) to 119 ns (RXTE).
+AUTO_GRID_DT_S = 5.0
+
+#: How far outside the file's own ``TSTART``/``TSTOP`` a clipped grid is extended.
+#: The range is taken from the headers rather than from the data, because reading a
+#: strided time column out of a memory-mapped table pages in the whole file; the pad
+#: covers the gap between what a header claims and what its extensions hold. All five
+#: committed reference files keep their times inside their own TSTART/TSTOP, the widest
+#: margin being Chandra's 823 s of trailing slack, and a file that does not is caught by
+#: the coverage check in :func:`apply_barycenter_correction`.
+MET_RANGE_PAD_S = 1000.0
+
+
+def grid_spacing_for(n_events, dt=None):
+    """The grid spacing to use, or ``None`` for the exact per-event path.
+
+    Parameters
+    ----------
+    n_events : int
+        The largest number of rows in any time column in the file.
+
+    Other Parameters
+    ----------------
+    dt : float, optional
+        What the caller asked for. ``None`` decides from ``n_events``; a positive value
+        is used as given; zero or negative forces the exact path whatever the size.
+
+    Returns
+    -------
+    float or None
+
+    Examples
+    --------
+    >>> grid_spacing_for(1000) is None
+    True
+    >>> grid_spacing_for(10_000_000)
+    5.0
+    >>> grid_spacing_for(10_000_000, dt=0)   # the escape hatch
+    >>> grid_spacing_for(1000, dt=2.5)
+    2.5
+    """
+    if dt is not None:
+        return float(dt) if float(dt) > 0 else None
+    return AUTO_GRID_DT_S if n_events > AUTO_GRID_EVENTS else None
+
+
+def met_range_for_file(hdul, timezero=0.0, clock_fun=None, leap_fun=None, pad=MET_RANGE_PAD_S):
+    """The span of times the barycentric correction will actually be asked for.
+
+    The widest ``TSTART``/``TSTOP`` over every extension, padded, and then shifted by the
+    clock and leap-second terms -- because the barycentric correction is evaluated at the
+    clock-corrected time, not the raw one (see :func:`correct_times`). On Swift that shift
+    is nearly 20 s, so ignoring it would put the events outside a grid clipped to the raw
+    span.
+
+    Returns
+    -------
+    tuple of float or None
+        ``None`` when no extension carries either keyword, in which case the caller must
+        not clip: there is nothing to clip to.
+    """
+    lo, hi = np.inf, -np.inf
+    for hdu in hdul:
+        for keyname in ("TSTART", "TSTOP"):
+            value = hdu.header.get(keyname)
+            if value is not None and np.isfinite(float(value)):
+                lo, hi = min(lo, float(value)), max(hi, float(value))
+    if not np.isfinite(lo) or not np.isfinite(hi):
+        return None
+
+    ends = np.array([lo - pad, hi + pad], dtype=np.float64)
+    shifted = pre_bary_shift(ends, timezero, clock_fun, leap_fun)
+    return float(np.min(shifted)), float(np.max(shifted))
+
+
+def pre_bary_shift(times, timezero=0.0, clock_fun=None, leap_fun=None):
+    """The times at which the barycentric correction gets evaluated.
+
+    Everything :func:`correct_times` does *before* it calls ``bary_fun``: fold in
+    ``TIMEZERO``, then add the leap-second and clock terms, both evaluated on the raw
+    times. Factored out because two callers need it -- the one that decides how wide an
+    interpolation grid has to be, and the one that checks afterwards that the times fell
+    inside it.
+    """
+    raw = np.asarray(times, dtype=np.float64) + timezero
+    shifted = raw
+    if leap_fun is not None:
+        shifted = shifted + leap_fun(raw)
+    if clock_fun is not None:
+        shifted = shifted + clock_fun(raw)
+    return shifted
+
 
 #: Keywords describing a correction that the output has now absorbed, and which cannot
 #: be rewritten because there is nothing left for them to describe. They are removed.
@@ -394,6 +504,28 @@ def update_derived_keywords(hdr, mjdref):
         hdr["MJD-OBS"] = float(mjdref + np.longdouble(tstart) / 86400)
 
 
+def _warn_outside_grid(bary_fun, times, where, timezero=0.0, clock_fun=None, leap_fun=None):
+    """Say so if times fall outside an interpolated correction's grid.
+
+    An interpolator extrapolates past its last knot rather than refusing, which is what
+    we want for the sub-second shortfalls orbit files routinely have, but it means a file
+    whose times lie well outside its own ``TSTART``/``TSTOP`` -- the span the grid was
+    built from -- would be quietly answered from an extrapolation. The comparison is
+    against the *shifted* times, since those are what ``bary_fun`` is asked for. The
+    exact per-event path has no grid and so nothing to fall outside of.
+    """
+    grid = getattr(bary_fun, "x", None)
+    if grid is None or len(times) == 0:
+        return
+    ends = pre_bary_shift([np.min(times), np.max(times)], timezero, clock_fun, leap_fun)
+    short = max(grid[0] - np.min(ends), np.max(ends) - grid[-1])
+    if short > 0:
+        logger.warning(
+            f"{where}: times fall up to {short:.3f} s outside the interpolation grid and "
+            f"are extrapolated. Pass dt=0 to evaluate the correction at every event."
+        )
+
+
 def correct_times(times, bary_fun, clock_fun=None, leap_fun=None):
     """Apply the clock and barycentric corrections to an array of times.
 
@@ -512,6 +644,7 @@ def apply_barycenter_correction(
     only_columns=None,
     apply_official=False,
     engine="native",
+    dt=None,
 ):
     """Apply barycenter correction to a FITS event file.
 
@@ -544,6 +677,11 @@ def apply_barycenter_correction(
         List of column names to keep in the output file, in addition to the "TIME" column.
     engine : {"native", "pint"}, optional
         Which implementation computes the correction. See :data:`ENGINES`.
+    dt : float, optional
+        Grid spacing in seconds for interpolating the correction instead of evaluating it
+        at every event. The default, ``None``, decides from the file's size: see
+        :func:`grid_spacing_for` and :data:`AUTO_GRID_EVENTS`. Zero forces the exact
+        per-event path whatever the size.
     """
     cloud = "SCISERVER_USER_ID" in os.environ or "/home/jovyan" in os.environ.get("HOME", "")
 
@@ -588,16 +726,6 @@ def apply_barycenter_correction(
             ra = hdul[1].header[ra_str]
             dec = hdul[1].header[dec_str]
             logger.info(f"Using coordinates from header: {ra_str}={ra}, {dec_str}={dec}")
-
-        bary_fun = get_barycentric_correction(
-            orbfile,
-            ra=ra,
-            dec=dec,
-            ephem=ephem,
-            radecsys=radecsys,
-            model=model if engine == "pint" else None,
-            engine=engine,
-        )
 
         # TIMEZERO is folded in, but TIMEPIXR deliberately is not. This used to add
         # ``(0.5 - TIMEPIXR) * TIMEDEL``, moving every RXTE PCA event half a clock tick
@@ -665,6 +793,35 @@ def apply_barycenter_correction(
         if only_columns is not None:
             hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
 
+        # The correction is built here, and not earlier, because the two things that
+        # decide its shape are only known now: the clock and leap-second terms, which
+        # say *where* it will be evaluated, and the file's size, which says how finely.
+        n_events = max(
+            (len(hdu.data) for hdu in hdul if column_named(getattr(hdu, "data", None), "TIME")),
+            default=0,
+        )
+        grid_dt = grid_spacing_for(n_events, dt)
+        met_range = met_range_for_file(hdul, timezero, clock_fun, leap_fun)
+        if grid_dt is None:
+            logger.info(f"{n_events} events: evaluating the correction at every event")
+        else:
+            logger.info(
+                f"{n_events} events: interpolating the correction on a {grid_dt} s grid "
+                f"(worth about 1.6 ns at 5 s; pass --dt 0 to evaluate it at every event)"
+            )
+
+        bary_fun = get_barycentric_correction(
+            orbfile,
+            ra=ra,
+            dec=dec,
+            ephem=ephem,
+            radecsys=radecsys,
+            model=model if engine == "pint" else None,
+            engine=engine,
+            dt=grid_dt,
+            met_range=met_range,
+        )
+
         for hdu in hdul:
             logger.info(f"Updating HDU {hdu.name}")
             for keyname in TIME_COLUMNS:
@@ -675,6 +832,14 @@ def apply_barycenter_correction(
                 column = column_named(hdu.data, keyname)
                 if column is not None:
                     logger.info(f"Updating column {column}")
+                    _warn_outside_grid(
+                        bary_fun,
+                        hdu.data[column],
+                        f"{hdu.name}/{column}",
+                        timezero,
+                        clock_fun,
+                        leap_fun,
+                    )
                     hdu.data[column] = correct_times(
                         hdu.data[column] + timezero, bary_fun, clock_fun, leap_fun
                     )

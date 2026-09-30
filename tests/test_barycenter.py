@@ -1219,3 +1219,73 @@ class TestClockAccuracyKeyword:
         before = fits.getheader(os.path.join(datadir, source), 1).get("TIERABSO")
         with fits.open(outfile) as hdul:
             assert hdul[1].header.get("TIERABSO") == before
+
+
+class TestInterpolationGrid:
+    """Running with ``dt`` set must not cost accuracy that matters.
+
+    The grid is a pure speed optimisation -- 48x at a million events -- so the test is
+    that it still reproduces HEASOFT ``barycorr``, and that the two paths agree with each
+    other far inside the 100 ns target.
+    """
+
+    evfile = os.path.join(datadir, "dummy_evt.evt")
+    orbfile = os.path.join(datadir, "dummy_orb.fits.gz")
+    reference = os.path.join(datadir, "dummy_evt_bary_DE440_noclk.evt.gz")
+
+    def run(self, outfile, *extra):
+        main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                REF_RA,
+                "--dec",
+                REF_DEC,
+                "--ephem",
+                "DE440",
+                "--clockfile",
+                "none",
+                *extra,
+            ]
+        )
+        return outfile
+
+    def test_a_gridded_run_still_matches_barycorr(self, tmp_path):
+        """``--dt 5`` reproduces the reference just as the exact path does."""
+        out = self.run(str(tmp_path / "grid.evt"), "--dt", "5")
+        with fits.open(out) as hdul, fits.open(self.reference) as ref:
+            assert_times_agree(hdul[1].data["TIME"], ref[1].data["TIME"])
+
+    def test_the_grid_and_the_exact_path_land_on_the_same_stored_times(self, tmp_path):
+        """The two paths differ by the interpolation error and nothing else.
+
+        The correction itself agrees to 1.6 ns at ``dt=5`` -- asserted directly in
+        ``tests/test_native.py``. Here the comparison is between *stored* times, which
+        are absolute float64 seconds since MJDREF and so quantised at 29.8 ns for this
+        file, so that step is what the difference is allowed to be. In practice every
+        event but one comes out bit-identical.
+        """
+        exact = self.run(str(tmp_path / "exact.evt"), "--dt", "0")
+        grid = self.run(str(tmp_path / "grid2.evt"), "--dt", "5")
+        with fits.open(exact) as a, fits.open(grid) as b:
+            ours, theirs = np.asarray(b[1].data["TIME"]), np.asarray(a[1].data["TIME"])
+        # One storage step (29.8 ns, added by the helper) plus the 1.6 ns of
+        # interpolation error the grid actually costs.
+        assert_times_agree(ours, theirs, tolerance=2e-9)
+        # And the two are not merely within tolerance: they are the same number almost
+        # everywhere, which is what shows the grid is not drifting.
+        assert np.count_nonzero(ours != theirs) < 0.02 * len(ours)
+
+    def test_a_small_file_is_not_gridded_by_default(self, tmp_path, caplog):
+        """Below the threshold the default run is the exact one, and says so.
+
+        This is what keeps every reference comparison in this file on the
+        unapproximated code: the committed test files all have a few hundred events.
+        """
+        with caplog.at_level("INFO"):
+            self.run(str(tmp_path / "default.evt"))
+        assert any("at every event" in r.message for r in caplog.records)
+        assert not any("grid" in r.message for r in caplog.records)
