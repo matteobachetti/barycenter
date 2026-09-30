@@ -564,8 +564,9 @@ and the two answers, on those three million events:
   interpolation error, which is 1.6 ns at most
 
 So at the precision a FITS `D` column can hold, the grid is indistinguishable from the
-exact path. The memory halving is discussed under
-[Memory](#memory-where-the-factor-of-four-goes).
+exact path. Why the peak memory nearly halved too is discussed under
+[Performance](known_issues.md#performance): about half of it was never astropy's
+read-modify-write, but this function's own `(N, 3)` temporaries.
 
 #### The grid has to be padded by two steps, not one
 

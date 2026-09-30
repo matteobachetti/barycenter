@@ -67,20 +67,28 @@ file from the CALDB instead.
 
 ## Performance
 
-**`--engine pint`'s TOA grid spans the whole orbit file, not the events.** A 5-second
-grid across a multi-day `.attorb` file, or across a stack of orbit files, costs tens of
-thousands of PINT TOAs that are then never used. `pint_barycentric_correction` accepts a
-`met_range` that clips the grid, but `apply_barycenter_correction` does not yet pass it.
-The native engine uses no grid at all.
+**The whole file is still materialised in memory**, at about **2.3× its size**: an 858 MB
+event file peaks at 1.98 GB of resident memory. It is read, modified and written as one
+`HDUList`, so that factor is one input copy plus one output copy, which is the floor for
+that approach. Fixing it means correcting and writing one extension at a time.
 
-**The native engine evaluates the ephemeris once per event.** That is exact, and at
-~6.5 µs per event it is still 30× faster than the PINT path, but a 10-million-event file
-would take about a minute. `native_barycentric_correction` accepts a `dt` that puts a
-cubic spline through a grid instead -- measured cost 1.2 ns at 5 s -- and nothing passes
-it yet.
+It used to be 4.4× (3.76 GB on the same file), and *where the other half went* is worth
+recording, because it was not astropy: it was `native.barycentric_correction`'s own
+temporaries. That function allocates five `(N, 3)` float64 arrays — `pos_sc`, `r_earth`,
+`v_earth`, `r_sun`, `r_obs` — which at 3 million events is 1.7 GB, matching the 1.8 GB
+that disappeared when the grid was introduced. Evaluating on a 16 560-point grid instead
+of 3 million events makes them negligible, so the largest single contributor was removed
+for free. On a run forced to `--dt 0` the 4.4× is still there.
 
-**The whole file is materialised in memory.** A 600 MB event file is read, modified and
-written as one `HDUList`.
-
-**`numba` is imported unconditionally** halfway down the module and compiles eagerly,
-for a single small interpolation routine.
+**`numba` would be worth its import cost if more of the hot path used it.** It is now an
+optional extra, imported lazily, because compiling its one kernel eagerly cost 0.52 s of
+a 1.09 s module import while that kernel is under half a per cent of a run — it does not
+pay for itself below roughly 50 million events. But the conclusion to draw is not "numba
+is not useful here". The reason it cannot earn its keep today is that the hot path is not
+ours: at 6.7 µs per event the native engine spends nearly all its time inside astropy's
+and ERFA's JPL ephemeris evaluation. What *is* ours is the vector arithmetic in
+`native.barycentric_correction` — an `einsum`, a matrix product, a `log1p` and the half
+dozen `(N, 3)` temporaries described above — all memory-bound numpy that one fused kernel
+would do in a single pass and a fraction of the memory. Doing that would speed up the
+exact path *and* shrink the 2.3× above, and would justify the import several times over.
+Measured first: numba is 6× faster than numpy on the existing kernel and bit-identical.
