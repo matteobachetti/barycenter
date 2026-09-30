@@ -493,10 +493,11 @@ def update_derived_keywords(hdr, mjdref):
     the self-consistent answer, because the output header says ``TIMESYS = TDB`` and the
     date should be the date of the time the file now records. It does change the
     convention on a mission that writes ``DATE-OBS`` in UTC while counting its MET in TT
-    seconds: XMM by 63 s, Swift by 68 s, RXTE by 3.8 s. ``barycen`` shifts the string
-    instead and so preserves XMM's UTC convention -- at the price of keeping ``DATE-OBS``
-    and ``TSTART`` as inconsistent with each other on the way out as they were on the way
-    in, which is the worse of the two.
+    seconds: XMM by 63 s, Swift by 68 s, Fermi by 66.2 s, RXTE by 3.8 s -- in every case
+    TT - UTC at the epoch. ``barycen`` shifts the string instead, and ``gtbary`` likewise
+    keeps its dates in UTC, so both preserve that convention -- at the price of keeping
+    ``DATE-OBS`` and ``TSTART`` as inconsistent with each other on the way out as they
+    were on the way in, which is the worse of the two.
 
     ``ONTIME``, ``LIVETIME`` and ``EXPOSURE`` are deliberately left alone, as all three
     official tools leave them: they are sums of good-time interval lengths rather than

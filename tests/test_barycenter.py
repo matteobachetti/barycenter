@@ -3,10 +3,12 @@ import os
 import numpy as np
 import pytest
 from astropy.coordinates import SkyCoord
+from astropy.time import Time
 from astropy.io import fits
 
 from barycenter import main_barycenter
 from barycenter.core import get_coordinates_from_fits_header
+from barycenter.utils import high_precision_mjdref
 
 curdir = os.path.abspath(os.path.dirname(__file__))
 datadir = os.path.join(curdir, "data")
@@ -1383,6 +1385,28 @@ class TestFermi:
         self.run(outfile)
         with fits.open(outfile) as hdul:
             assert hdul["EVENTS"].header["CLOCKAPP"] is False
+
+    def test_the_fortran_style_mjdref_is_read_and_the_dates_follow(self, tmp_path, caplog):
+        """This file writes MJDREFF as ``7.428703703703703D-4``, a string, not a number.
+
+        Without parsing that, ``MJDREF`` is unreadable and ``DATE-OBS`` silently keeps its
+        pre-barycentring value -- leaving the output claiming a start seven minutes before
+        its own ``TSTART``. The date lands 66.2 s from gtbary's, which is TT - UTC at this
+        epoch and the documented convention difference, not an error; see
+        ``update_derived_keywords``.
+        """
+        outfile = str(tmp_path / "fermi.evt")
+        with caplog.at_level("WARNING"):
+            self.run(outfile)
+        assert not any("no MJDREF" in r.message for r in caplog.records)
+
+        with fits.open(self.evfile) as before, fits.open(outfile) as after:
+            assert after["EVENTS"].header["DATE-OBS"] != before["EVENTS"].header["DATE-OBS"]
+            # The recomputed date is the date of the corrected TSTART, to the second.
+            start = Time(after["EVENTS"].header["DATE-OBS"], format="isot", scale="tt")
+            mjdref = high_precision_mjdref(after["EVENTS"].header)
+            expected = float(mjdref + after["EVENTS"].header["TSTART"] / 86400)
+            assert start.tt.mjd == pytest.approx(expected, abs=1.2e-5)  # ~1 s
 
     def test_a_tstart_before_the_spacecraft_file_is_clamped(self, tmp_path, caplog):
         """The real Fermi quirk: TSTART is the requested window, which can predate the data.

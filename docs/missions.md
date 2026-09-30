@@ -179,6 +179,13 @@ alone, and the velocity is then obtained by differentiating it, with a warning. 
 accurate at the native 30 s sampling — it is what the committed reference is made with —
 but it degrades quickly if the file is thinned.
 
+**Older files write `MJDREFF` in Fortran notation.** `7.428703703703703D-4` is a string
+as far as FITS is concerned, not a number. It is read anyway; without that, `MJDREF` is
+unreadable and the file's `DATE-OBS` cannot be recomputed. Note that `gtbary` keeps its
+dates in UTC while we write the date of the time the file now records, so the two differ
+by TT − UTC — 66.2 s in 2009. That is the same convention difference as XMM and Swift;
+see "The keywords derived from `TSTART` and `TSTOP`" in the technical details.
+
 **Fermi's MET counts TT seconds, not UTC seconds**, despite an `MJDREF` of
 51910.00074287037 that is bit-for-bit Swift's, whose fractional part encodes TT − UTC at
 2001-01-01. On Swift that is the signature of a MET counting UTC seconds. On Fermi it is

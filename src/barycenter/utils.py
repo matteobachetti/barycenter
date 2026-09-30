@@ -1,3 +1,4 @@
+import re
 import logging as logger
 
 from html.parser import HTMLParser
@@ -6,6 +7,7 @@ import numpy as np
 from astropy.io import fits
 
 __all__ = [
+    "as_longdouble",
     "column_named",
     "leap_seconds_since_mjdref",
     "fits_open_including_remote",
@@ -253,6 +255,33 @@ def get_remote_directory_listing(url: str):
     return urls
 
 
+#: A real number written the way Fortran writes one, with ``D`` (or ``Q``) marking the
+#: exponent instead of ``E``. Matched in full rather than substituted blindly, so that a
+#: keyword which is not a number stays unparseable instead of being coerced into one.
+FORTRAN_EXPONENT = re.compile(r"\A([+-]?(?:\d+\.?\d*|\.\d+))[DdQq]([+-]?\d+)\Z")
+
+
+def as_longdouble(value):
+    """A header value as a ``longdouble``, allowing for Fortran's exponent marker.
+
+    FITS says a floating-point keyword is written with ``E`` or no exponent at all, and
+    astropy hands such a card back as a number. A card whose value it cannot recognise as
+    a number comes back as a *string* instead -- which is what happens to a keyword an
+    older Fortran tool wrote as ``7.428703703703703D-4``. Fermi's own tutorial event file
+    writes ``MJDREFF`` that way, and so do other products of that era.
+
+    Only the exponent marker is rewritten, and only when the whole value is otherwise a
+    number. Anything else is passed through untouched and fails as it did before: silently
+    coercing an unrecognised keyword would be far worse than refusing it, because being
+    wrong about ``MJDREF`` by a day is a half-hour error in the barycentric correction.
+    """
+    if isinstance(value, str):
+        match = FORTRAN_EXPONENT.match(value.strip())
+        if match is not None:
+            value = f"{match.group(1)}E{match.group(2)}"
+    return np.longdouble(value)
+
+
 def high_precision_keyword_read(header, keyword):
     """Read a FITS keyword that may be split into integer and fractional halves.
 
@@ -274,11 +303,11 @@ def high_precision_keyword_read(header, keyword):
         ``None`` if neither the single keyword nor the pair is present.
     """
     if keyword in header:
-        return np.longdouble(header[keyword])
+        return as_longdouble(header[keyword])
 
     stem = keyword[:7] if len(keyword) == 8 else keyword
     if stem + "I" in header and stem + "F" in header:
-        return np.longdouble(header[stem + "I"]) + np.longdouble(header[stem + "F"])
+        return as_longdouble(header[stem + "I"]) + as_longdouble(header[stem + "F"])
     return None
 
 
