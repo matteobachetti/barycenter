@@ -107,3 +107,32 @@ def test_met_range_clips_the_toa_grid(orbit_table):
     assert grid.max() - grid.min() < 40.0
     # And the correction it returns is a light-travel time, a few hundred seconds.
     assert 100.0 < abs(fun(start + 10.0)) < 600.0
+
+
+def test_radecsys_reaches_the_pint_engine(orbit_table):
+    """``radecsys="FK5"`` with DE200 changes the answer, not just the output header.
+
+    DE200 is referred to FK5 and DE405 onwards to ICRS; the two frames differ by about
+    20 mas, which is 15 km of the Earth's barycentric position and up to 45 us of Roemer
+    delay -- 12.6 us for this source at this epoch. PINT labels ``RAJ``/``DECJ`` as ICRS
+    and, like astropy, applies no rotation when it reads a JPL kernel, so the source
+    direction has to be handed over already in the ephemeris's own frame -- which is
+    exactly what the native engine does. The
+    strong assertion is the second one: the PINT answer must sit on the native answer
+    for the same frame, not the whole 12.6 us away from it.
+    """
+    from barycenter.core import get_barycentric_correction
+
+    met = np.asarray(orbit_table["MET"].value, dtype=np.float64)
+    start = met.min() + 100.0
+    when = start + 10.0
+    common = dict(ra=294.9107, dec=21.58308, ephem="DE200", met_range=(start, start + 20.0), dt=5.0)
+
+    fk5 = get_barycentric_correction(NUSTAR_ORBIT, radecsys="FK5", engine="pint", **common)
+    icrs = get_barycentric_correction(NUSTAR_ORBIT, radecsys="ICRS", engine="pint", **common)
+    assert abs(fk5(when) - icrs(when)) > 1e-5, "the frame made no difference at all"
+
+    native = get_barycentric_correction(NUSTAR_ORBIT, radecsys="FK5", engine="native", **common)
+    # 2 us of room for PINT's known Shapiro-convention offset (116 ns) and its
+    # longdouble quantisation on Apple Silicon (775 ns peak to peak), both documented.
+    assert abs(fk5(when) - native(when)) < 2e-6, f"{(fk5(when) - native(when)) * 1e6:.1f} us"

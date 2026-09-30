@@ -18,11 +18,6 @@ answer: measured 775 ns peak-to-peak on arm64 against 149 ns on x86. The default
 engine computes every term as a small quantity in float64 and gives bit-identical
 answers on both.
 
-**`--radecsys` does not reach the computation with `--engine pint`.** PINT treats the
-coordinates as ICRS whatever the keyword says, so asking for FK5 changes only the output
-header. Getting this wrong is worth 45 µs. The default native engine handles it, by
-rotating the source direction into the frame the ephemeris itself uses.
-
 ## Correctness
 
 **`TELAPSE` is left stale.** `correct_times` updates `TIME`, `START`, `STOP`, `TSTART`

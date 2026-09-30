@@ -17,7 +17,7 @@ from astropy.time import Time
 
 from ._version import __version__
 from .clock import clock_correction_fun
-from .native import native_barycentric_correction
+from .native import coordinates_in_ephemeris_frame, native_barycentric_correction
 from .official import apply_mission_specific_barycenter_correction
 from .orbit import read_orbit
 from .remote import download_locally
@@ -225,9 +225,10 @@ def get_barycentric_correction(
     ephem : str, optional
         JPL ephemeris. Default ``"DE440"``.
     radecsys : str, optional
-        Frame of the coordinates. The native engine rotates the source direction into
-        the frame the ephemeris itself uses, which matters by 45 us between FK5 (DE200)
-        and ICRS (DE405 and later). The PINT engine ignores this and assumes ICRS.
+        Frame of the coordinates. Both engines rotate the source position into the frame
+        the ephemeris itself uses, which matters by 45 us between FK5 (DE200) and ICRS
+        (DE405 and later). Ignored when ``model`` is given: a par file's astrometry is
+        in the frame it was fitted in.
     model : pint.models.TimingModel, optional
         A model read from a ``.par`` file. Its coordinates and ephemeris take precedence
         over ``ra``/``dec``/``ephem``.
@@ -278,7 +279,16 @@ def get_barycentric_correction(
     from .pintengine import pint_barycentric_correction, timing_model_for_position
 
     if model is None:
+        # PINT takes a position rather than a direction, labels it ICRS whatever it
+        # really is, and -- like astropy -- applies no rotation when it reads a JPL
+        # kernel. So ``radecsys`` has to be honoured here, by handing PINT coordinates
+        # already expressed in the kernel's own frame; the native engine does the same
+        # thing to its unit vector. Without this the flag reached only the output
+        # header, and DE200 with FK5 coordinates came out 45 us wrong.
+        ra, dec = coordinates_in_ephemeris_frame(ra, dec, frame=radecsys, ephem=ephem)
         model = timing_model_for_position(ra, dec, ephem)
+    # A model read from a .par file is left alone: its astrometry is in the frame the
+    # model was fitted in, and ``radecsys`` describes the event file's keywords, not it.
     return pint_barycentric_correction(
         orbit_table, model, dt=5.0 if dt is None else dt, met_range=met_range
     )
