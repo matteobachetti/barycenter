@@ -788,6 +788,28 @@ class TestSwift:
         assert np.all((shifts["none"] > 64.2) & (shifts["none"] < 64.8))
         assert np.all((shifts["file"] > 48.6) & (shifts["file"] < 49.3))
 
+    @pytest.mark.parametrize("clockfile", ["none", "file"])
+    def test_utcfinit_is_removed_from_every_hdu(self, tmp_path, clockfile):
+        """UTCFINIT does not survive into a TDB file, as barycorr also removes it.
+
+        It means "the UTC correction factor at TSTART", and after barycentring neither
+        half of that sentence is true any more: TSTART has moved and TIMESYS is TDB.
+        Worse, the UTCF has been folded into the times, so anyone who applied the
+        keyword as it stands would move a Swift event another 15.56 s. HEASOFT
+        ``barycorr`` walks every HDU deleting it (v1.7, "remove the UTCFINIT keyword
+        since leap seconds have now been adjusted for"), and both committed references
+        have it gone -- including the one made with ``clockfile=NONE``.
+        """
+        outfile = str(tmp_path / "swift.evt")
+        self.run(outfile, self.clockfile if clockfile == "file" else "none")
+        with fits.open(self.evfile) as orig:
+            assert "UTCFINIT" in orig[1].header, "the input was supposed to carry it"
+        reference = self.clk if clockfile == "file" else self.noclk
+        with fits.open(outfile) as hdul, fits.open(reference) as ref:
+            for hdu in hdul:
+                assert "UTCFINIT" not in hdu.header, f"left in {hdu.name}"
+            assert all("UTCFINIT" not in hdu.header for hdu in ref)
+
     def test_a_clock_file_that_does_not_cover_the_events_is_refused(self, tmp_path):
         """Rather than extrapolating a quadratic, it says the times are not covered.
 
