@@ -29,9 +29,6 @@ rotating the source direction into the frame the ephemeris itself uses.
 `download_file(cache=True)` and then `shutil.move`s the cached file out of the cache
 directory, leaving the cache index pointing at nothing.
 
-**`fits_open_remote` can return an unbound variable** if the fallback branch is not
-taken.
-
 **`TELAPSE` is left stale.** `correct_times` updates `TIME`, `START`, `STOP`, `TSTART`
 and `TSTOP` but not `TELAPSE`, which is `TSTOP − TSTART` and changes by as much as the
 two ends' corrections differ — 1.6 s on the XMM test observation, where the Roemer delay

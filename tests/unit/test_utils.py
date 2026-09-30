@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
+from astropy.io import fits
 
-from barycenter.utils import column_named, fits_open_including_remote
+from barycenter.utils import column_named, fits_open_including_remote, fits_open_remote
 
 fname = (
     "s3://nasa-heasarc/swift/data/obs/2015_12/00037258040/xrt/event/sw00037258040xwtw2st_cl.evt.gz"
@@ -49,3 +50,25 @@ class TestColumnNamed:
     def test_an_extension_with_no_table_gives_none(self):
         """Image and empty extensions have no columns at all, and must not raise."""
         assert column_named(None, "TIME") is None
+
+
+class TestFitsOpenRemote:
+    """The fallback to anonymous access must not swallow the error it cannot handle."""
+
+    def test_a_local_permission_error_is_reported_as_itself(self, tmp_path):
+        """A local unreadable file raises PermissionError, not UnboundLocalError.
+
+        The anonymous-access retry only makes sense for a URL. When the name is a
+        local path the ``except`` branch has nothing to try, and it used to fall
+        through to ``return hdul`` with ``hdul`` never assigned -- turning a plain
+        "you cannot read this file" into an UnboundLocalError from inside our code.
+        """
+        pytest.importorskip("botocore")
+        unreadable = tmp_path / "unreadable.fits"
+        fits.PrimaryHDU().writeto(unreadable)
+        unreadable.chmod(0o000)
+        try:
+            with pytest.raises(PermissionError):
+                fits_open_remote(str(unreadable))
+        finally:
+            unreadable.chmod(0o600)
