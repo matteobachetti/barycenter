@@ -244,3 +244,48 @@ class TestPieces:
 
         without = spacecraft_interpolator(met, pos)
         assert not np.allclose(without.derivative()(met)[:, 0], vel[:, 0])
+
+
+class TestGridClipping:
+    """A grid clipped to the events must give the same answer as an unclipped one.
+
+    Clipping exists only to avoid computing a grid across a whole multi-day orbit file
+    when a short snapshot is being corrected, so it has to be numerically free.
+    """
+
+    @staticmethod
+    def build(**kwargs):
+        from barycenter.native import native_barycentric_correction
+        from barycenter.orbit import read_orbit
+
+        orbit = read_orbit(os.path.join(datadir, "dummy_orb.fits.gz"))
+        return orbit, native_barycentric_correction(
+            orbit, REF_RA, REF_DEC, ephem=REF_EPHEM, **kwargs
+        )
+
+    def test_clipping_agrees_with_the_unclipped_grid(self):
+        """Inside the span asked for, the clipped spline matches the full one."""
+        orbit, full = self.build(dt=5.0)
+        met = np.asarray(orbit["MET"].value, dtype=np.float64)
+        start, span = met.min() + 1000.0, 300.0
+        _, clipped = self.build(dt=5.0, met_range=(start, start + span))
+
+        probe = np.linspace(start, start + span, 400)
+        assert np.max(np.abs(clipped(probe) - full(probe))) < 1e-10
+        assert len(clipped.x) < 100 < len(full.x)
+
+    def test_the_grid_costs_under_two_nanoseconds(self):
+        """The whole reason a grid is allowed at all: it is far inside the 100 ns budget.
+
+        Measured over the committed NuSTAR orbit file at ``dt=5``, against the exact
+        per-event answer the same engine gives with no grid. The reference files cannot
+        even record a difference this small -- one float64 step at NuSTAR's MET is
+        29.8 ns.
+        """
+        _, exact = self.build()
+        orbit, spline = self.build(dt=5.0)
+        met = np.asarray(orbit["MET"].value, dtype=np.float64)
+        probe = np.linspace(met.min() + 10, met.max() - 10, 5000)
+
+        resid = spline(probe) - exact(probe)
+        assert np.max(np.abs(resid)) < 2e-9, f"{np.max(np.abs(resid)) * 1e9:.3f} ns"
