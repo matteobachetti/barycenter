@@ -168,7 +168,7 @@ convention its times no longer followed. Where a timestamp sits inside its bin i
 barycentring tool's business. Then `correct_times` computes
 
 ```
-t_clk = t_in + clock_fun(t_in)
+t_clk = t_in + clock_fun(t_in) + leap_fun(t_in)
 t_out = t_clk + bary_fun(t_clk)
 ```
 
@@ -188,6 +188,43 @@ used to do, and it is wrong by the clock correction times the rate of change of 
 barycentric one. Measured against the reference generated with the clock file on:
 **+1146 ns mean, 1878 ns peak**, against **+22 ns mean, 60 ns peak** for the correct
 order. It is an order of magnitude above the target, from a line that looks harmless.
+:::
+
+### Missions whose MET counts UTC seconds
+
+`leap_fun` above is present for exactly one mission, and is the reason the formula has
+three terms rather than two.
+
+Almost every mission counts its mission elapsed time in **TT** seconds, so `MJDREF` is all
+you need: `MJD(TT) = MJDREF + MET/86400`. Swift counts **UTC** seconds. Its clock is
+effectively held back by one second every time a leap second is inserted, so the number of
+TT seconds that have really elapsed since the epoch is larger than the MET by however many
+leap seconds fell in between. `utils.leap_seconds_since_mjdref` returns that difference,
+measured from the file's own epoch — which is what `MJDREF` means. Swift's
+`MJDREFF = 0.00074287037` is 64.184 s, TT − UTC on 2001-01-01, when TAI − UTC was 32 s;
+for a December 2015 observation four more leap seconds have been inserted, so the term
+is +4 s.
+
+Two things about it are deliberate:
+
+- **It is not a clock correction, and `--clockfile none` does not switch it off.** It is a
+  time-system conversion, and it belongs to the file regardless of whether anyone has a
+  clock model for it. Leaving it out puts a Swift observation four seconds from
+  `barycorr` — forty million times the target — and a flag should not be able to cause
+  that. It is opt-in per mission, through `Mission.met_is_utc`.
+- **Both the clock term and the leap term are evaluated on the raw time.** Swift's clock
+  correction drifts 4616 µs/day, so evaluating its polynomial 4 s later moves every event
+  214 ns. That is above the target, and it is not what `barycorr` does.
+
+The leap-second epochs come from ERFA's own table, converted to METs once, so an
+observation straddling a leap second gets the step in the right place rather than rounded
+to the nearest day — a whole second, silently, in the middle of a file.
+
+:::{warning}
+**Fermi shares Swift's exact `MJDREF`** (51910.00074287037) and has never been checked
+against an official tool here, so it may need the same term. `met_is_utc` is False for it,
+which is a guess in the safe direction only in the sense that it is what every other
+mission needs. See [known issues](known_issues.md).
 :::
 
 **Step 7 — stamp the headers and write.** Every HDU gets `TIMESYS = TDB`,
