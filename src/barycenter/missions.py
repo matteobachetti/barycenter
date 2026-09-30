@@ -67,6 +67,14 @@ class Mission:
         The only ephemeris that tool can use, if it is limited to one. ASCA's ``timeconv``
         is fixed to DE200, which is the main reason to prefer the native engine for that
         mission.
+    met_is_utc : bool
+        Whether the mission's elapsed time counts **UTC** seconds rather than TT seconds,
+        so that the leap seconds inserted since ``MJDREF`` have to be added before
+        anything else. True for Swift, and for nothing else here that has been checked
+        against an official tool. This is not a clock correction and is applied even with
+        ``--clockfile none``: getting it wrong is a whole number of seconds, so it must
+        not depend on a flag. See
+        :func:`barycenter.utils.leap_seconds_since_mjdref`.
     """
 
     name: str
@@ -75,6 +83,7 @@ class Mission:
     clock: "Callable | None" = None
     official: "str | None" = None
     official_ephem: "str | None" = None
+    met_is_utc: bool = False
 
     @property
     def has_native_support(self):

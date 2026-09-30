@@ -5,6 +5,7 @@ from astropy.io import fits
 
 __all__ = [
     "column_named",
+    "leap_seconds_since_mjdref",
     "fits_open_including_remote",
     "fits_open_remote",
     "high_precision_keyword_read",
@@ -255,6 +256,74 @@ def high_precision_mjdref(header):
     if mjdref is None:
         raise ValueError("Header has no MJDREF, nor MJDREFI/MJDREFF")
     return mjdref
+
+
+def leap_seconds_since_mjdref(mjdref, mets):
+    """Seconds of leap-second drift between a file's reference epoch and its times.
+
+    Most missions count their mission elapsed time in TT seconds, and ``MJDREF`` is all
+    that is needed to place a time stamp: ``MJD(TT) = MJDREF + MET / 86400``. Swift does
+    not. Its MET counts **UTC** seconds, which is to say it is a clock that is held back
+    by one second every time a leap second is inserted, so the number of TT seconds that
+    have actually elapsed since the epoch is larger than the MET by however many leap
+    seconds fell in between. HEASOFT ``barycorr`` adds that difference before doing
+    anything else, and it does so whether or not a clock file was given: leaving it out
+    puts a December 2015 Swift observation 4 s away from ``barycorr``, which is forty
+    million times the accuracy target.
+
+    The offset is deliberately measured from the *file's own* epoch rather than from any
+    fixed date, because that is what ``MJDREF`` means. Swift's ``MJDREFF`` of
+    0.00074287037 is 64.184 s, which is TT - UTC on 2001-01-01; the four leap seconds
+    since then are what this function returns for a 2015 observation. Applying it to a
+    mission whose MET is already in TT seconds would be an error of the same size, so it
+    is opt-in per mission, through :attr:`barycenter.missions.Mission.met_is_utc`.
+
+    Parameters
+    ----------
+    mjdref : float
+        The file's reference epoch as an MJD in TT, from :func:`high_precision_mjdref`.
+    mets : float or array-like
+        Mission elapsed times, in seconds.
+
+    Returns
+    -------
+    float or ndarray
+        Seconds to add, with the shape of ``mets``.
+
+    Notes
+    -----
+    The leap-second epochs come from ERFA's own table, converted to METs once, so the
+    answer is exact at the boundary rather than rounded to the nearest day. A file may
+    straddle a leap second -- rarely, but the alternative to handling it is a silent
+    one-second step in the middle of an observation.
+    """
+    import erfa
+    from astropy.time import Time
+
+    table = erfa.leap_seconds.get()
+    # Before 1972 TAI-UTC was a drifting rate rather than a whole number of seconds. No
+    # mission this package handles observed then, and pretending those entries are steps
+    # would be wrong, so they are left out.
+    table = table[table["year"] >= 1972]
+
+    epoch = Time(np.float64(mjdref), format="mjd", scale="tt")
+    at_epoch = (epoch.tai.mjd - epoch.utc.mjd) * 86400.0
+
+    boundaries = Time(
+        [f"{row['year']:04d}-{row['month']:02d}-01T00:00:00" for row in table], scale="utc"
+    )
+    boundary_mets = (boundaries.tt.mjd - np.float64(mjdref)) * 86400.0
+
+    # Only the steps that fall after this file's epoch can contribute to it.
+    after = boundary_mets > 0.0
+    boundary_mets = boundary_mets[after]
+    offsets = np.asarray(table["tai_utc"], dtype=np.float64)[after] - at_epoch
+
+    asked = np.asarray(mets, dtype=np.float64)
+    index = np.searchsorted(boundary_mets, np.atleast_1d(asked), side="right")
+    # Index 0 means "before the first step after the epoch", which owes nothing.
+    values = np.where(index == 0, 0.0, offsets[np.clip(index - 1, 0, None)])
+    return values.reshape(asked.shape) if asked.ndim else values[0]
 
 
 def splitext_improved(path):

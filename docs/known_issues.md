@@ -39,6 +39,14 @@ moves by that much over 7.6 h, and 1.0 s on the Chandra one. SAS `barycen` does 
 package reads `TELAPSE`, but a file leaving here claims a duration that no longer matches
 its own start and stop times.
 
+**Fermi may need Swift's leap-second term, and nothing checks.** Fermi's `MJDREF` is
+51910.00074287037 — bit for bit Swift's, whose fractional part encodes TT − UTC at
+2001-01-01. On Swift that is the signature of a MET counting *UTC* seconds, and leaving the
+leap seconds out costs 4 s on a 2015 observation. `MISSIONS["fermi"].met_is_utc` is False,
+matching every mission but Swift, but Fermi has never been compared against an official
+tool here, so this is untested either way and the error, if it is one, is a whole number of
+seconds. Resolving it needs an FT1/FT2 pair and a `gtbary` reference.
+
 ## Missing features
 
 **Only the new NuSTAR clock format is read.** `nustar_clock_correction_fun` reads the

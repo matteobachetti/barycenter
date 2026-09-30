@@ -9,6 +9,7 @@ column and time keyword in every extension.
 import logging as logger
 import os
 import tempfile
+from functools import partial
 
 import astropy.units as u
 import numpy as np
@@ -20,7 +21,13 @@ from .native import native_barycentric_correction
 from .official import apply_mission_specific_barycenter_correction
 from .orbit import read_orbit
 from .remote import download_locally
-from .utils import column_named, fits_open_including_remote, slim_down_hdu_list
+from .utils import (
+    column_named,
+    fits_open_including_remote,
+    high_precision_mjdref,
+    leap_seconds_since_mjdref,
+    slim_down_hdu_list,
+)
 
 #: The engines that can compute the correction. ``native`` is the default: it is exact
 #: in float64 on every platform, about 30 times faster, and matches HEASOFT ``barycorr``
@@ -277,7 +284,23 @@ def get_barycentric_correction(
     )
 
 
-def correct_times(times, bary_fun, clock_fun=None):
+def _mission_counts_utc_seconds(telescope):
+    """Whether this mission's MET counts UTC seconds, so leap seconds must be added.
+
+    An unrecognised ``TELESCOP`` gets False rather than an error: the orbit reader will
+    complain first if the mission really is unknown, and a file with a garbled keyword but
+    usable columns should still be correctable. False is also the safe answer, because it
+    is what every mission but Swift needs.
+    """
+    from .missions import mission_for
+
+    try:
+        return mission_for(telescope).met_is_utc
+    except ValueError:
+        return False
+
+
+def correct_times(times, bary_fun, clock_fun=None, leap_fun=None):
     """Apply the clock and barycentric corrections to an array of times.
 
     Parameters
@@ -288,6 +311,11 @@ def correct_times(times, bary_fun, clock_fun=None):
         The barycentric correction, from :func:`get_barycentric_correction`.
     clock_fun : callable, optional
         The clock correction. If None, no clock correction is applied.
+    leap_fun : callable, optional
+        The leap-second term for a mission whose MET counts UTC seconds, from
+        :func:`barycenter.utils.leap_seconds_since_mjdref`. Not a clock correction: it is
+        a time-system conversion, it is applied even when ``clock_fun`` is None, and both
+        are evaluated on the **raw** times.
 
     Returns
     -------
@@ -303,17 +331,24 @@ def correct_times(times, bary_fun, clock_fun=None):
 
     which is what HEASOFT ``barycorr`` does, and it also means the spacecraft position is
     looked up at ``t'``, since ``bary_fun`` interpolates the orbit at whatever time it is
-    given. This package used to compute ``t + clock(t) + bary(t)``, evaluating both on the
+    given. With a leap-second term the first line becomes ``t' = t + clock(t) + leap(t)``,
+    both still evaluated at the raw ``t``: on Swift, evaluating the clock polynomial at
+    the leap-shifted time instead moves every event 214 ns, which is above the target and
+    is not what ``barycorr`` does. This package used to compute ``t + clock(t) + bary(t)``, evaluating both on the
     raw mission time. On NuSTAR, where the clock correction reaches 25 ms, that was
     measured at +1146 ns mean and 1878 ns peak against ``barycorr`` -- an order of
     magnitude above the 100 ns target, and the reason the reference tests used to be run
     with the clock correction switched off.
     """
-    if clock_fun is None:
+    if clock_fun is None and leap_fun is None:
         return times + bary_fun(times)
 
-    clock_corrected = times + clock_fun(times)
-    return clock_corrected + bary_fun(clock_corrected)
+    shifted = times
+    if leap_fun is not None:
+        shifted = shifted + leap_fun(times)
+    if clock_fun is not None:
+        shifted = shifted + clock_fun(times)
+    return shifted + bary_fun(shifted)
 
 
 def extract_events_in_region(fname, ra, dec, region_deg, outfile="src_events.evt"):
@@ -492,6 +527,19 @@ def apply_barycenter_correction(
                 mission, clockfile, instrument=hdul[1].header.get("INSTRUME")
             )
 
+        # Not part of the clock correction, and so not switched off with it: a mission
+        # whose MET counts UTC seconds needs the leap seconds since MJDREF added whatever
+        # --clockfile said. Leaving them out is a whole-second error, which is not the
+        # kind of thing a flag should be able to cause.
+        leap_fun = None
+        if _mission_counts_utc_seconds(mission):
+            mjdref = high_precision_mjdref(hdul[1].header)
+            leap_fun = partial(leap_seconds_since_mjdref, mjdref)
+            logger.info(
+                f"{mission} MET counts UTC seconds: adding "
+                f"{leap_fun(hdul[1].header.get('TSTART', 0.0)):.1f} s of leap seconds"
+            )
+
         if only_columns is not None:
             hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
 
@@ -506,12 +554,12 @@ def apply_barycenter_correction(
                 if column is not None:
                     logger.info(f"Updating column {column}")
                     hdu.data[column] = correct_times(
-                        hdu.data[column] + timezero, bary_fun, clock_fun
+                        hdu.data[column] + timezero, bary_fun, clock_fun, leap_fun
                     )
                 if keyname in hdu.header:
                     logger.info(f"Updating header keyword {keyname}")
                     corrected_time = correct_times(
-                        hdu.header[keyname] + timezero, bary_fun, clock_fun
+                        hdu.header[keyname] + timezero, bary_fun, clock_fun, leap_fun
                     )
                     if not np.isfinite(corrected_time):
                         logger.error(
