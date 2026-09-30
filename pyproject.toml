@@ -222,9 +222,14 @@ detached = true
 
 # This table installs created the command hatch run install:check which will build and check your package.
 [tool.hatch.envs.build.scripts]
+# `-e hatch-build` is not decoration. Running this script sets HATCH_ENV_ACTIVE to the
+# name of the environment the script runs in, and the nested `hatch build` reads that
+# variable to pick its builder environment -- which this one is not, so it refuses with
+# "is not a builder environment". Naming hatch's own default builder explicitly is what
+# breaks the loop; renaming this environment would not, the error would just follow it.
 check = [
     "pip check",
-    "hatch build {args:--clean}",
+    "hatch -e hatch-build build {args:--clean}",
     "twine check dist/*",
 ]
 
