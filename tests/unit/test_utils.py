@@ -81,3 +81,81 @@ class TestFitsOpenRemote:
                 fits_open_remote(str(unreadable))
         finally:
             unreadable.chmod(0o600)
+
+
+#: A CALDB index page, cut down to the shapes that matter: a parent link, a
+#: subdirectory, a hidden entry, two clock files, and an anchor with no text.
+CALDB_INDEX = b"""<html><head><title>Index of /caldb</title></head><body>
+<h1>Index of /caldb</h1>
+<table>
+<tr><td><a href="/caldb/">Parent Directory</a></td></tr>
+<tr><td><a href="bcf/">bcf/</a></td></tr>
+<tr><td><a href=".hidden/">.hidden/</a></td></tr>
+<tr><td><a href="nuCclock20100101v123.fits">nuCclock20100101v123.fits</a></td></tr>
+<tr><td><a href="nuCclock20100101v124.fits">nuCclock20100101v124.fits</a></td></tr>
+<tr><td><a href="icon.gif"><img src="icon.gif"></a></td></tr>
+</table></body></html>"""
+
+
+class TestLinkTextsInHtml:
+    """Reading a directory index with the standard library rather than BeautifulSoup.
+
+    The CALDB scrape is the default way NuSTAR and Swift clock files are found, so this
+    parser has to work in a plain installation -- which is why it is not bs4.
+    """
+
+    def test_every_link_text_is_collected_in_order(self):
+        """Apache indexes name each entry in the link text, and order picks the newest."""
+        from barycenter.utils import link_texts_in_html
+
+        assert link_texts_in_html(CALDB_INDEX) == [
+            "Parent Directory",
+            "bcf/",
+            ".hidden/",
+            "nuCclock20100101v123.fits",
+            "nuCclock20100101v124.fits",
+        ]
+
+    def test_an_anchor_with_no_text_is_skipped(self):
+        """Index pages wrap icons in bare anchors; an empty name has nothing to fetch."""
+        from barycenter.utils import link_texts_in_html
+
+        assert "" not in link_texts_in_html(CALDB_INDEX)
+
+    def test_entities_and_nested_markup_come_out_as_text(self):
+        """The text may be marked up or escaped, and the filename is what is wanted."""
+        from barycenter.utils import link_texts_in_html
+
+        html = b'<a href="x">a&amp;b</a><a href="y"><b>bold</b>ed</a>'
+        assert link_texts_in_html(html) == ["a&b", "bolded"]
+
+    def test_it_agrees_with_beautifulsoup(self):
+        """The replacement must read a real index exactly as the old bs4 code did."""
+        bs4 = pytest.importorskip("bs4", reason="the parity check needs the old dependency")
+        from barycenter.utils import link_texts_in_html
+
+        soup = bs4.BeautifulSoup(CALDB_INDEX, "html.parser")
+        expected = [t for t in (a.get_text() for a in soup.find_all("a")) if t]
+        assert link_texts_in_html(CALDB_INDEX) == expected
+
+    def test_it_works_with_bs4_uninstalled(self, monkeypatch):
+        """A plain installation has no bs4, and must still find its clock files.
+
+        ``beautifulsoup4`` is not a dependency of the base package, so an import of it
+        anywhere on the default NuSTAR or Swift path breaks ``pip install barycenter``.
+        """
+        import builtins
+
+        real_import = builtins.__import__
+
+        def refuse_bs4(name, *args, **kwargs):
+            if name.split(".")[0] == "bs4":
+                raise ImportError("No module named 'bs4'")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", refuse_bs4)
+        monkeypatch.delitem(__import__("sys").modules, "bs4", raising=False)
+
+        from barycenter.utils import link_texts_in_html
+
+        assert "nuCclock20100101v124.fits" in link_texts_in_html(CALDB_INDEX)

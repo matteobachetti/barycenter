@@ -1,5 +1,7 @@
 import logging as logger
 
+from html.parser import HTMLParser
+
 import numpy as np
 from astropy.io import fits
 
@@ -182,12 +184,51 @@ def slim_down_file(file, outfile, additional_cols=None, ext=1):
     hdul.writeto(outfile)
 
 
+class _LinkTextParser(HTMLParser):
+    """Collect the text of every ``<a>`` element, which is what a directory index lists."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.texts = []
+        self._depth = 0
+        self._parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._depth += 1
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._depth > 0:
+            self._depth -= 1
+            if self._depth == 0:
+                self.texts.append("".join(self._parts))
+                self._parts = []
+
+    def handle_data(self, data):
+        if self._depth > 0:
+            self._parts.append(data)
+
+
+def link_texts_in_html(html):
+    """The text of every link on a page, in the order the page lists them.
+
+    This is all the CALDB scrape ever wanted from BeautifulSoup, and the standard
+    library's parser does it in twenty lines. Keeping bs4 would mean either a dependency
+    on the base installation -- the NuSTAR and Swift clock files are fetched this way by
+    default, so a plain ``pip install`` has to be able to do it -- or an install that
+    fails on its own README example. Anchors with no text, which index pages use to wrap
+    icons, are left out: there is no filename in them to fetch.
+    """
+    parser = _LinkTextParser()
+    parser.feed(html.decode("utf-8", errors="replace") if isinstance(html, bytes) else html)
+    parser.close()
+    return [text for text in parser.texts if text]
+
+
 def get_remote_directory_listing(url: str):
     """Give the list of files in the remote directory."""
     from urllib.request import Request, urlopen
     from urllib.error import HTTPError
-
-    from bs4 import BeautifulSoup
 
     url = url.replace(" ", "%20")
     req = Request(url)
@@ -196,11 +237,8 @@ def get_remote_directory_listing(url: str):
     except HTTPError:
         return None
 
-    soup = BeautifulSoup(a, "html.parser")
-    x = soup.find_all("a")
     urls = []
-    for i in x:
-        file_name = i.extract().get_text()
+    for file_name in link_texts_in_html(a):
         url_new = url + file_name
         url_new = url_new.replace(" ", "%20")
         if file_name[-1] == "/" and file_name[0] != ".":

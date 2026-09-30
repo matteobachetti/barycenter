@@ -41,8 +41,11 @@ keywords = [
     "X-ray",
 ]
 # Everything imported at module level. The optional extras below cover the
-# imports that happen inside a function: s3/HTTP input, region filtering, the
-# CALDB index scrape, and the --apply-official shell-outs.
+# imports that happen inside a function: s3/HTTP input, region filtering, and
+# the --apply-official shell-outs. The CALDB index scrape is deliberately not
+# among them: it is how NuSTAR's and Swift's clock files are found when none is
+# named, so it has to work in a plain installation, and it uses only the
+# standard library.
 dependencies = [
     "astropy >= 5.0",
     "numpy",
@@ -68,7 +71,6 @@ test = [
 # Reading input straight from HEASARC over https or s3.
 remote = [
     "astroquery >= 0.4.11",
-    "beautifulsoup4",
     "boto3",
     "botocore",
     "fsspec",
