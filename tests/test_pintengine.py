@@ -104,7 +104,10 @@ def test_met_range_clips_the_toa_grid(orbit_table):
     fun = pint_barycentric_correction(orbit_table, model, dt=5.0, met_range=(start, start + 20.0))
     grid = fun.x
     assert grid.min() >= met.min()
-    assert grid.max() - grid.min() < 40.0
+    # The 20 s asked for plus two grid steps of margin at each end, which keeps the
+    # events clear of the interpolator's end conditions. The orbit file spans 82800 s,
+    # so this is the assertion that the grid follows the events and not the file.
+    assert grid.max() - grid.min() <= 20.0 + 4 * 5.0
     # And the correction it returns is a light-travel time, a few hundred seconds.
     assert 100.0 < abs(fun(start + 10.0)) < 600.0
 
@@ -136,3 +139,30 @@ def test_radecsys_reaches_the_pint_engine(orbit_table):
     # 2 us of room for PINT's known Shapiro-convention offset (116 ns) and its
     # longdouble quantisation on Apple Silicon (775 ns peak to peak), both documented.
     assert abs(fk5(when) - native(when)) < 2e-6, f"{(fk5(when) - native(when)) * 1e6:.1f} us"
+
+
+def test_clipping_the_grid_does_not_move_the_answer(orbit_table):
+    """A grid clipped to the events must agree with the unclipped one inside the span.
+
+    Clipping is a pure speed optimisation -- 33x on a 300 s snapshot in this 82800 s
+    orbit file -- so it has to be numerically free. It was not: one grid step of margin
+    left a 46 ns error, all of it in the last third of the span, because
+    ``Akima1DInterpolator`` builds its boundary slopes from extrapolated points and so
+    its last two intervals are not the interior interpolant. Two steps of margin put
+    those intervals outside the events and the two grids agree exactly.
+    """
+    from barycenter.pintengine import pint_barycentric_correction, timing_model_for_position
+
+    model = timing_model_for_position(294.9107, 21.58308, "DE440")
+    met = np.asarray(orbit_table["MET"].value, dtype=np.float64)
+    start, span = met.min() + 1000.0, 300.0
+    probe = np.linspace(start, start + span, 400)
+
+    full = pint_barycentric_correction(orbit_table, model, dt=5.0)
+    clipped = pint_barycentric_correction(
+        orbit_table, model, dt=5.0, met_range=(start, start + span)
+    )
+    diff = np.max(np.abs(clipped(probe) - full(probe)))
+    assert diff < 1e-9, f"{diff * 1e9:.3f} ns"
+    # And the clipped grid really is small: 82800 s of orbit at dt=5 would be 16560.
+    assert len(clipped.x) < 100 < len(full.x)

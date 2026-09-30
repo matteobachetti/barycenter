@@ -451,9 +451,13 @@ def native_barycentric_correction(
 
     start, stop = met.min(), met.max()
     if met_range is not None:
-        # One grid step of margin either side, so events are interpolated, not
-        # extrapolated.
-        start = max(start, met_range[0] - dt)
-        stop = min(stop, met_range[1] + dt)
+        # Two grid steps of margin either side, so the events are interpolated and sit
+        # clear of the spline's end conditions, whose first and last intervals are not
+        # the same function as the interior. It matters much less here than on the PINT
+        # path -- 0.045 ns against 46 ns -- because these knots hold exact values while
+        # PINT's carry its own noise for the end condition to amplify. Matching the two
+        # engines costs two grid points.
+        start = max(start, met_range[0] - 2 * dt)
+        stop = min(stop, met_range[1] + 2 * dt)
     grid = np.arange(start, stop + dt, dt)
     return CubicSpline(grid, correction(grid), extrapolate=True)

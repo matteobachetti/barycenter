@@ -167,10 +167,14 @@ def pint_barycentric_correction(orbit_table, model, mjdref=None, dt=5.0, met_ran
     met = np.asarray(orbit_table["MET"].value, dtype=np.float64)
     start, stop = met.min(), met.max()
     if met_range is not None:
-        # One grid step of margin either side, so the events are interpolated and not
-        # extrapolated.
-        start = max(start, met_range[0] - dt)
-        stop = min(stop, met_range[1] + dt)
+        # Two grid steps of margin either side, not one. The interpolator below is an
+        # Akima spline, which builds the slopes at its two boundary knots from
+        # extrapolated points, so its first and last *two* intervals are not the same
+        # function as its interior. One step of margin therefore left those intervals
+        # sitting on the events, and clipping -- which is meant to be a pure speed
+        # optimisation -- moved the answer by 46 ns. Two steps push them clear.
+        start = max(start, met_range[0] - 2 * dt)
+        stop = min(stop, met_range[1] + 2 * dt)
 
     grid = np.arange(start, stop + dt, dt)
     mjds = np.asarray(np.longdouble(mjdref) + np.longdouble(grid) / 86400, dtype=np.float64)
