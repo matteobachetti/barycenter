@@ -62,6 +62,7 @@ from scipy.interpolate import CubicHermiteSpline, CubicSpline
 
 __all__ = [
     "barycentric_correction",
+    "coordinates_in_ephemeris_frame",
     "ephemeris_frame",
     "native_barycentric_correction",
     "resolve_ephemeris",
@@ -213,11 +214,43 @@ def source_unit_vector(ra_deg, dec_deg, frame="icrs", ephem_frame="icrs"):
     -------
     n_hat : ndarray, shape (3,)
     """
-    frame, ephem_frame = frame.lower(), ephem_frame.lower()
-    coord = SkyCoord(ra_deg * u.deg, dec_deg * u.deg, frame=frame)
-    if frame != ephem_frame:
-        coord = coord.transform_to(ephem_frame)
+    coord = _radec_in_frame(ra_deg, dec_deg, frame, ephem_frame)
     return coord.cartesian.xyz.value.astype(np.float64)
+
+
+def _radec_in_frame(ra_deg, dec_deg, frame, target_frame):
+    """The source position as a ``SkyCoord`` in ``target_frame``, rotated if need be."""
+    frame, target_frame = str(frame).lower(), str(target_frame).lower()
+    coord = SkyCoord(ra_deg * u.deg, dec_deg * u.deg, frame=frame)
+    if frame != target_frame:
+        coord = coord.transform_to(target_frame)
+    return coord
+
+
+def coordinates_in_ephemeris_frame(ra_deg, dec_deg, frame="icrs", ephem="DE440"):
+    """The source position in degrees, in the frame the ephemeris itself uses.
+
+    The vector form of this is :func:`source_unit_vector`, which is what the native
+    engine wants. This angular form exists for the PINT engine, which takes a position
+    rather than a direction: PINT labels ``RAJ``/``DECJ`` as ICRS and, like astropy,
+    applies no rotation when it reads a JPL kernel, so it has to be handed coordinates
+    that are already in the kernel's own frame.
+
+    Parameters
+    ----------
+    ra_deg, dec_deg : float
+        Source coordinates in degrees, in ``frame``.
+    frame : str, optional
+        The frame those coordinates are in, typically the ``RADECSYS`` keyword.
+    ephem : str, optional
+        JPL ephemeris name, whose frame comes from :func:`ephemeris_frame`.
+
+    Returns
+    -------
+    ra_deg, dec_deg : float
+    """
+    coord = _radec_in_frame(ra_deg, dec_deg, frame, ephemeris_frame(ephem))
+    return float(coord.ra.deg), float(coord.dec.deg)
 
 
 def met_to_time(met, mjdref):
