@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 from astropy.io import fits
@@ -55,6 +57,10 @@ class TestColumnNamed:
 class TestFitsOpenRemote:
     """The fallback to anonymous access must not swallow the error it cannot handle."""
 
+    @pytest.mark.skipif(
+        os.name == "nt",
+        reason="chmod(0) only sets the read-only flag on Windows; the file stays readable",
+    )
     def test_a_local_permission_error_is_reported_as_itself(self, tmp_path):
         """A local unreadable file raises PermissionError, not UnboundLocalError.
 
@@ -62,6 +68,9 @@ class TestFitsOpenRemote:
         local path the ``except`` branch has nothing to try, and it used to fall
         through to ``return hdul`` with ``hdul`` never assigned -- turning a plain
         "you cannot read this file" into an UnboundLocalError from inside our code.
+
+        Skipped on Windows, where there is no way to make a file unreadable this way.
+        The branch under test is platform-independent, so POSIX coverage is enough.
         """
         pytest.importorskip("botocore")
         unreadable = tmp_path / "unreadable.fits"
