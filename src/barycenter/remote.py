@@ -61,7 +61,16 @@ def download_locally(fname, outdir="."):
             if os.path.exists(local_fname):
                 logger.info(f"{local_fname} already exists, skipping download.")
             else:
-                cache_file = download_file(fname, cache=True)
+                # cache=False, deliberately. The local copy made just below is already
+                # the cache -- the branch above skips the download when it is there --
+                # and with cache=True the file astropy hands back lives *inside* its
+                # download cache, so moving it away leaves the cache index claiming a
+                # URL whose contents have walked off. astropy's own
+                # ``check_download_cache`` reports that as CacheDamaged, and it breaks
+                # every later download_file call in the same environment, ours or
+                # anyone else's. With cache=False the file is a temporary one that is
+                # ours to move.
+                cache_file = download_file(fname, cache=False)
                 shutil.move(cache_file, local_fname)
                 logger.info(f"Downloaded remote file {fname} to local file {local_fname}")
         elif fname.startswith("s3://"):
