@@ -17,7 +17,11 @@ from astropy.time import Time
 
 from ._version import __version__
 from .clock import clock_correction_fun
-from .native import coordinates_in_ephemeris_frame, native_barycentric_correction
+from .native import (
+    coordinates_in_ephemeris_frame,
+    met_to_time,
+    native_barycentric_correction,
+)
 from .official import apply_mission_specific_barycenter_correction
 from .orbit import read_orbit
 from .remote import download_locally
@@ -37,6 +41,7 @@ ENGINES = ("native", "pint")
 
 __all__ = [
     "COORDINATE_KEYWORDS",
+    "DERIVED_KEYWORDS",
     "ENGINES",
     "HEASOFT_COORDINATE_KEYWORDS",
     "TIME_COLUMNS",
@@ -46,12 +51,21 @@ __all__ = [
     "get_barycentric_correction",
     "get_coordinates_from_fits_header",
     "get_dummy_parfile_for_position",
+    "update_derived_keywords",
 ]
 
 
 #: Every column holding a time that a barycentric correction must move. Matched against
 #: a file's columns without regard to case; see :func:`barycenter.utils.column_named`.
 TIME_COLUMNS = ("TIME", "START", "STOP", "TSTART", "TSTOP")
+
+#: Keywords that are not times themselves but are *computed* from ``TSTART`` and
+#: ``TSTOP``, and so become wrong the moment those move. No official tool rewrites all
+#: four and each rewrites a different subset, so this list is not copied from any of
+#: them; what they agree on is that a file must not leave claiming a duration or a
+#: calendar date that its own corrected ``TSTART`` and ``TSTOP`` contradict. See
+#: :func:`update_derived_keywords`.
+DERIVED_KEYWORDS = ("TELAPSE", "DATE-OBS", "DATE-END", "MJD-OBS")
 
 #: Our order of preference for the source position, when it is not given explicitly.
 #: ``RA_OBJ`` is the position of the object the observation was aimed at, which is the
@@ -310,6 +324,65 @@ def _mission_counts_utc_seconds(telescope):
         return False
 
 
+def update_derived_keywords(hdr, mjdref):
+    """Rewrite the keywords computed from ``TSTART`` and ``TSTOP``, once those have moved.
+
+    Called per extension *after* the times in that extension have been corrected, so
+    everything is simply recomputed from the values now in the header. Only keywords the
+    header already carried are written: adding a ``DATE-END`` to a file that never had
+    one would be inventing metadata.
+
+    Parameters
+    ----------
+    hdr : astropy.io.fits.Header
+        An extension header whose ``TSTART``/``TSTOP`` have already been corrected.
+    mjdref : numpy.longdouble or None
+        The file's reference epoch. ``None`` leaves the date keywords alone --
+        ``TELAPSE`` needs no epoch and is still updated.
+
+    Notes
+    -----
+    ``TELAPSE`` is ``TSTOP - TSTART``, and it moves by as much as the corrections at the
+    two ends differ: 3.4 s over the NuSTAR test observation, 1.6 s over the 7.6 h XMM
+    one. SAS ``barycen`` updates it. HEASOFT ``barycorr`` does not, and its output is
+    therefore 3.4 s self-inconsistent, which is a bug rather than a convention worth
+    copying.
+
+    ``DATE-OBS``, ``DATE-END`` and ``MJD-OBS`` are recomputed from ``MJDREF +
+    TSTART/86400``, not shifted by however far ``TSTART`` moved. That is what ``barycorr``
+    and CIAO ``axbary`` do -- checked against all five committed references -- and it is
+    the self-consistent answer, because the output header says ``TIMESYS = TDB`` and the
+    date should be the date of the time the file now records. It does change the
+    convention on a mission that writes ``DATE-OBS`` in UTC while counting its MET in TT
+    seconds: XMM by 63 s, Swift by 68 s, RXTE by 3.8 s. ``barycen`` shifts the string
+    instead and so preserves XMM's UTC convention -- at the price of keeping ``DATE-OBS``
+    and ``TSTART`` as inconsistent with each other on the way out as they were on the way
+    in, which is the worse of the two.
+
+    ``ONTIME``, ``LIVETIME`` and ``EXPOSURE`` are deliberately left alone, as all three
+    official tools leave them: they are sums of good-time interval lengths rather than
+    differences between the file's ends, and the corrections at the two edges of one
+    interval differ by microseconds.
+    """
+    tstart, tstop = hdr.get("TSTART"), hdr.get("TSTOP")
+
+    if "TELAPSE" in hdr and tstart is not None and tstop is not None:
+        hdr["TELAPSE"] = tstop - tstart
+
+    if mjdref is None:
+        return
+
+    for keyword, met in (("DATE-OBS", tstart), ("DATE-END", tstop)):
+        if keyword in hdr and met is not None:
+            # isot rather than fits: the same string, without astropy ever being tempted
+            # to append a time-scale suffix. met_to_time keeps MJDREF's integer and
+            # fractional halves apart, so the rendered milliseconds are real.
+            hdr[keyword] = met_to_time(met, mjdref).isot
+
+    if "MJD-OBS" in hdr and tstart is not None:
+        hdr["MJD-OBS"] = float(mjdref + np.longdouble(tstart) / 86400)
+
+
 def correct_times(times, bary_fun, clock_fun=None, leap_fun=None):
     """Apply the clock and barycentric corrections to an array of times.
 
@@ -541,9 +614,25 @@ def apply_barycenter_correction(
         # whose MET counts UTC seconds needs the leap seconds since MJDREF added whatever
         # --clockfile said. Leaving them out is a whole-second error, which is not the
         # kind of thing a flag should be able to cause.
+        # Needed by the leap-second term below and by the DATE-OBS/DATE-END/MJD-OBS
+        # keywords at the end of the loop. A file with no MJDREF at all gets None and
+        # keeps its date keywords, rather than the whole run failing over metadata.
+        try:
+            mjdref = high_precision_mjdref(hdul[1].header)
+        except ValueError:
+            mjdref = None
+            logger.warning(
+                "No MJDREF in the header: DATE-OBS, DATE-END and MJD-OBS cannot be "
+                "recomputed and are left as they are."
+            )
+
         leap_fun = None
         if _mission_counts_utc_seconds(mission):
-            mjdref = high_precision_mjdref(hdul[1].header)
+            if mjdref is None:
+                raise ValueError(
+                    f"{mission} counts UTC seconds, so the leap seconds since MJDREF "
+                    "have to be added, but the header has no MJDREF to count from."
+                )
             leap_fun = partial(leap_seconds_since_mjdref, mjdref)
             logger.info(
                 f"{mission} MET counts UTC seconds: adding "
@@ -578,6 +667,10 @@ def apply_barycenter_correction(
                         )
                     else:
                         hdu.header[keyname] = corrected_time
+
+            # TSTART and TSTOP have moved, so everything computed from them is now
+            # wrong. This has to come after the loop above, not inside it.
+            update_derived_keywords(hdu.header, mjdref)
 
             hdu.header["CREATOR"] = f"Barycenter - v. {version}"
             hdu.header["RA_OBJ"] = (ra, "Coordinate used for barycentering")

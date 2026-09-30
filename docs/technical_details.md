@@ -765,6 +765,63 @@ explicitly**, matched to whatever the reference was made with. Every reference-a
 test in `tests/` does exactly that, which is why the difference in default order costs
 nothing in validation while keeping the more accurate position in everyday use.
 
+### The keywords derived from `TSTART` and `TSTOP`
+
+Correcting the times leaves a handful of keywords that are not times themselves but are
+computed from them, and which are therefore wrong the moment `TSTART` and `TSTOP` move.
+`barycenter.core.DERIVED_KEYWORDS` lists them and `update_derived_keywords` rewrites
+them, per extension, after that extension's times have been corrected. Each is written
+only where the input already had it: adding a `DATE-END` to a file that never carried
+one would be inventing metadata.
+
+No official tool rewrites all of them, and each rewrites a different subset. Read off the
+five committed reference pairs:
+
+| keyword | HEASOFT `barycorr` | SAS `barycen` | CIAO `axbary` | here |
+|---|---|---|---|---|
+| `TSTART`, `TSTOP` | updated | updated | updated | updated |
+| `TELAPSE` | **left stale** | updated | (absent) | updated |
+| `DATE-OBS`, `DATE-END` | recomputed | string shifted | recomputed | recomputed |
+| `MJD-OBS` | **left stale** | (absent) | recomputed | recomputed |
+| `ONTIME`, `LIVETIME`, `EXPOSURE` | left | left | left | left |
+
+`TELAPSE` is `TSTOP − TSTART`, and it moves by however much the corrections at the two
+ends differ: 3.4 s over the NuSTAR test observation, 1.6 s over the 7.6 h XMM one.
+`barycorr` moves `TSTART` by 309.5 s and `TSTOP` by 306.1 s and leaves `TELAPSE` at
+81973.50000756979 — the value it had on the way in. That is a bug, not a convention, and
+`barycen` shows what the right answer looks like. `tests/test_barycenter.py` asserts the
+staleness of the reference explicitly, so the reason for not copying `barycorr` here is
+recorded in a test rather than only in prose.
+
+`DATE-OBS`, `DATE-END` and `MJD-OBS` are **recomputed** from `MJDREF + TSTART/86400`,
+not shifted by however far `TSTART` moved. Both `barycorr` and `axbary` recompute, and
+recomputing is the self-consistent answer: the output header says `TIMESYS = TDB`, so the
+date should be the date of the time the file now records.
+
+The two rules are not equivalent, because several missions write `DATE-OBS` in UTC while
+counting their MET in TT seconds since `MJDREF`, so the file's date string and its own
+`TSTART` disagree before anything is corrected:
+
+| reference file | `DATE-OBS` − date of `TSTART`, as delivered |
+|---|---|
+| Chandra ACIS | −0.005 s (consistent) |
+| RXTE PCA | +3.816 s |
+| XMM EPIC-pn | −62.708 s |
+| Swift XRT | −68.207 s |
+
+`barycen` shifts the string and so carries that inconsistency through; recomputing
+replaces it. On XMM our `DATE-OBS` therefore differs from `barycen`'s by exactly the
+63 s above and by nothing else, which is what
+`test_xmm_dates_differ_from_barycen_by_xmms_own_utc_offset` pins down. Both `barycorr`
+and `axbary` truncate the string to whole seconds; we keep the milliseconds, since a
+package aiming at 100 ns has no business rounding a timestamp to the nearest second, and
+the tests compare against our string cut back the same way.
+
+`ONTIME`, `LIVETIME` and `EXPOSURE` are deliberately left alone, as all three tools
+leave them. They are sums of good-time interval lengths rather than differences between
+the file's ends, and the corrections at the two edges of one interval differ by
+microseconds — far below the precision those keywords are used at.
+
 ### Things that will move the answer by more than 100 ns
 
 When a comparison disagrees, check these before looking for a bug:
