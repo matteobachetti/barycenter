@@ -70,6 +70,32 @@ def official_barycorr(
     return outfile
 
 
+def _refuse_to_clobber(outfile, overwrite):
+    """Refuse an existing output file unless the caller asked for it to be replaced."""
+    if os.path.exists(outfile) and not overwrite:
+        raise FileExistsError(
+            f"Output file {outfile} already exists. Use overwrite=True to overwrite."
+        )
+
+
+def _deliver(temp_outfile, outfile, only_columns=None):
+    """Put the finished temporary file at ``outfile``, keeping only ``only_columns``.
+
+    ``shutil.move`` rather than ``os.rename``: the temporary file lives in the system
+    temporary directory, which on many machines -- any Linux box whose ``/tmp`` is a
+    tmpfs, or any run writing to a mounted volume -- is a different filesystem from the
+    output. ``os.rename`` refuses to cross one (EXDEV); ``shutil.move`` copies instead.
+    """
+    if only_columns is not None:
+        with fits.open(temp_outfile) as hdul:
+            hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
+            hdul.writeto(outfile, overwrite=True, output_verify="ignore")
+        os.remove(temp_outfile)
+    else:
+        shutil.move(temp_outfile, outfile)
+    return outfile
+
+
 def apply_mission_specific_barycenter_correction(
     fname,
     orbfile,
@@ -114,10 +140,7 @@ def apply_mission_specific_barycenter_correction(
         List of column names to keep in the output file, in addition to the "TIME" column.
     """
 
-    if os.path.exists(outfile) and not overwrite:
-        raise FileExistsError(
-            f"Output file {outfile} already exists. Use overwrite=True to overwrite."
-        )
+    _refuse_to_clobber(outfile, overwrite)
 
     temp_outfile = tempfile.NamedTemporaryFile(delete=False, suffix=".evt").name
 
@@ -155,6 +178,10 @@ def apply_mission_specific_barycenter_correction(
         )
         if ephem in outfile:
             outfile = outfile.replace(ephem, mission.official_ephem)
+            # The guard above ran against the name the caller passed. This is a different
+            # file, and it must be protected too, or the delivery below silently replaces
+            # it on POSIX whatever ``overwrite`` said.
+            _refuse_to_clobber(outfile, overwrite)
         ephem = mission.official_ephem
 
     if mission.official == "barycorr":
@@ -211,11 +238,4 @@ def apply_mission_specific_barycenter_correction(
             f"Official tool {mission.official!r}, named for {mission.name}, has no wrapper here."
         )
 
-    if only_columns is not None:
-        with fits.open(temp_outfile) as hdul:
-            hdul = slim_down_hdu_list(hdul, additional_cols=only_columns)
-            hdul.writeto(outfile, overwrite=True, output_verify="ignore")
-        os.remove(temp_outfile)
-    else:
-        os.rename(temp_outfile, outfile)
-    return outfile
+    return _deliver(temp_outfile, outfile, only_columns)
