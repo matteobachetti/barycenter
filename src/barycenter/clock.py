@@ -208,16 +208,13 @@ def _cubic_kernel():
     run, so the saving is around 13 ms per million events against a fixed 0.65 s: numba
     does not pay for itself below roughly 50 million events.
 
-    It is kept, lazily, because *that arithmetic is not the reason to have numba* -- if
-    more of the hot path were compiled the import would justify itself easily. The
-    obstacle is that the hot path is not ours: at 6.7 us per event the native engine
-    spends almost all of its time inside astropy's and ERFA's JPL ephemeris evaluation,
-    which numba cannot touch. What is ours is the vector arithmetic in
-    :func:`barycenter.native.barycentric_correction` -- an ``einsum``, a matrix product,
-    a ``log1p`` and half a dozen (N, 3) temporaries, all memory-bound numpy that a single
-    fused kernel would do in one pass and in a fraction of the memory. That, not this,
-    is the change that would make numba worth its import, and it is recorded in
-    ``docs/known_issues.md``.
+    It is kept rather than deleted because it is genuinely 6x faster and does earn its
+    keep on a very large clock table. Whether to lean on numba *more* -- fusing the
+    vector arithmetic in :func:`barycenter.native.barycentric_correction` -- was measured
+    and the answer is no: that arithmetic is 0.6 per cent of the per-event cost, against
+    60 per cent for astropy's JPL ephemeris and 40 per cent for ``erfa.dtdb``, neither of
+    which numba can touch. See ``docs/known_issues.md`` and
+    ``tools/benchmarks/bench_split.py``.
 
     The two paths give bit-identical results; ``tests/test_clock.py`` asserts it.
     """

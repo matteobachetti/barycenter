@@ -72,23 +72,36 @@ event file peaks at 1.98 GB of resident memory. It is read, modified and written
 `HDUList`, so that factor is one input copy plus one output copy, which is the floor for
 that approach. Fixing it means correcting and writing one extension at a time.
 
-It used to be 4.4× (3.76 GB on the same file), and *where the other half went* is worth
-recording, because it was not astropy: it was `native.barycentric_correction`'s own
-temporaries. That function allocates five `(N, 3)` float64 arrays — `pos_sc`, `r_earth`,
-`v_earth`, `r_sun`, `r_obs` — which at 3 million events is 1.7 GB, matching the 1.8 GB
-that disappeared when the grid was introduced. Evaluating on a 16 560-point grid instead
-of 3 million events makes them negligible, so the largest single contributor was removed
-for free. On a run forced to `--dt 0` the 4.4× is still there.
+It used to be 4.4× (3.76 GB on the same file) and the grid removed the difference, because
+on the exact path `native.barycentric_correction` runs over every event at once.
+`tools/benchmarks/bench_memsplit.py` attributes that per phase, at a million events:
 
-**`numba` would be worth its import cost if more of the hot path used it.** It is now an
-optional extra, imported lazily, because compiling its one kernel eagerly cost 0.52 s of
-a 1.09 s module import while that kernel is under half a per cent of a run — it does not
-pay for itself below roughly 50 million events. But the conclusion to draw is not "numba
-is not useful here". The reason it cannot earn its keep today is that the hot path is not
-ours: at 6.7 µs per event the native engine spends nearly all its time inside astropy's
-and ERFA's JPL ephemeris evaluation. What *is* ours is the vector arithmetic in
-`native.barycentric_correction` — an `einsum`, a matrix product, a `log1p` and the half
-dozen `(N, 3)` temporaries described above — all memory-bound numpy that one fused kernel
-would do in a single pass and a fraction of the memory. Doing that would speed up the
-exact path *and* shrink the 2.3× above, and would justify the import several times over.
-Measured first: numba is 6× faster than numpy on the existing kernel and bit-identical.
+| phase | peak |
+|---|---|
+| **astropy's JPL ephemeris** (`get_body_barycentric_posvel` + `get_body_barycentric`) | **865 MB** |
+| our own vector arithmetic | 104 MB |
+| `met_to_time` | 89 MB |
+| unpacking `.xyz.to_value(u.m).T` | 72 MB |
+| spacecraft interpolation | 24 MB |
+| `erfa.dtdb` | 8 MB |
+| the whole function in one go | 905 MB |
+
+So on the exact path the memory is **astropy's ephemeris evaluation**, 865 MB of the
+905 MB total, and the grid helps simply by asking it for 16 560 points instead of three
+million. The obvious way to cap it without a grid is to **evaluate the correction in
+chunks** of a few hundred thousand events — the correction is pointwise in time, so
+chunking is exact, and it would bound the peak regardless of file size. That is a smaller
+and safer change than restructuring the FITS write path, and it is the one to make first
+if a user hits a memory limit on `--dt 0`.
+
+**A fused `numba` kernel over our own arithmetic is *not* worth including — measured.**
+This was worth checking, because numba is 6× faster than numpy on the one kernel it
+already has and bit-identical, so more of it sounded attractive.
+`tools/benchmarks/bench_split.py` settles it: the arithmetic a kernel could replace — the
+`einsum`, the matrix products, the `log1p` — is **0.6 % of the per-event cost** (0.042 s
+of 6.9 s at a million events), against 60 % for astropy's JPL ephemeris and 40 % for
+`erfa.dtdb`, neither of which numba can touch. On memory it is 104 MB inside an 865 MB
+envelope it does not control. A perfect fusion would therefore buy under 1 % of the
+runtime and about a tenth of the peak, for a compiled dependency and a second code path
+to keep bit-identical. `numba` stays where it is: lazily imported, an optional `[speed]`
+extra, earning its keep only on the clock kernel and only on very large files.
