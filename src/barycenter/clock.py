@@ -41,12 +41,14 @@ __all__ = [
     "CLOCK_CALDB",
     "ClockSource",
     "FINE_CLOCK_EXTENSION",
+    "HEASOFT_DATA_VARIABLES",
     "SWIFT_CLOCK_EXTENSION",
     "RXTE_DETECTOR_DELAY",
     "clock_cache_dir",
     "clock_correction_fun",
     "cubic_interpolation",
     "get_latest_clock_file",
+    "in_heasoft_data_dirs",
     "interpolate_clock_function",
     "nustar_clock_builder",
     "nustar_clock_correction_fun",
@@ -424,6 +426,28 @@ def swift_clock_correction_fun(clockfile):
     return correction
 
 
+#: The environment variables HEASOFT uses to point at its own timing reference data, in
+#: the order ``barycorr`` searches them (its Swift branch, lines 347-351).
+HEASOFT_DATA_VARIABLES = ("TIMING_DIR", "LHEA_DATA")
+
+
+def in_heasoft_data_dirs(filename):
+    """``filename`` found under ``$TIMING_DIR`` or ``$LHEA_DATA``, or ``None``.
+
+    HEASOFT's own reference data lives in one of those two directories, and ``barycorr``
+    looks a bare clock-file name up in both before treating it as a path. Doing the same
+    means ``--clockfile swclockcor20041120v009.fits`` works against an installed HEASOFT
+    the way it does for HEASOFT's own tasks.
+    """
+    for variable in HEASOFT_DATA_VARIABLES:
+        directory = os.environ.get(variable)
+        if directory:
+            candidate = os.path.join(directory, filename)
+            if os.path.exists(candidate):
+                return candidate
+    return None
+
+
 def rxte_tdc_file():
     """Where to find the RXTE fine clock coefficients.
 
@@ -432,11 +456,9 @@ def rxte_tdc_file():
     and ``LHEA_DATA`` are still honoured first, so a HEASOFT installation's own copy wins
     if there is one.
     """
-    for variable in ("TIMING_DIR", "LHEA_DATA"):
-        directory = os.environ.get(variable)
-        if directory and os.path.exists(os.path.join(directory, "tdc.dat")):
-            return os.path.join(directory, "tdc.dat")
-    return os.path.join(os.path.dirname(__file__), "data", "tdc.dat")
+    return in_heasoft_data_dirs("tdc.dat") or os.path.join(
+        os.path.dirname(__file__), "data", "tdc.dat"
+    )
 
 
 def read_tdc_file(tdcfile=None):
@@ -637,7 +659,17 @@ def clock_correction_fun(mission, clockfile=None, instrument=None):
     from .missions import mission_for
 
     if clockfile is not None and not os.path.exists(clockfile):
-        raise FileNotFoundError(f"Clock file {clockfile} not found")
+        # A bare name may be one of HEASOFT's own reference files rather than something
+        # in the working directory. ``barycorr`` looks in $TIMING_DIR and $LHEA_DATA
+        # before giving up, so a name that works for barycorr works here too.
+        found = in_heasoft_data_dirs(clockfile)
+        if found is None:
+            raise FileNotFoundError(
+                f"Clock file {clockfile} not found, and not in "
+                f"{' or '.join('$' + name for name in HEASOFT_DATA_VARIABLES)}"
+            )
+        logger.info(f"Found clock file {clockfile} in a HEASOFT data directory: {found}")
+        clockfile = found
 
     try:
         builder = mission_for(mission).clock
