@@ -5,6 +5,7 @@ steps around them: refusing to clobber, and delivering the finished file.
 """
 
 import os
+import sys
 
 import numpy as np
 import pytest
@@ -113,6 +114,10 @@ class TestCopyDecompressing:
 class TestRunningTimeconv:
     """ASCA's ``timeconv`` must work from any directory and leave only the output behind."""
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="the stand-in is a shell script, and HEASOFT does not run on Windows anyway",
+    )
     def test_timeconv_runs_in_isolation(self, tmp_path, monkeypatch):
         """A stand-in ``timeconv`` checks that every file it is handed exists where it runs.
 
