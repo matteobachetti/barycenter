@@ -10,7 +10,7 @@ hand.
 
 <!-- towncrier release notes start -->
 
-## [1.0.0](https://github.com/matteobachetti/barycenter/tree/1.0.0) - 2026-10-01
+## [1.0.0](https://github.com/matteobachetti/barycenter/tree/v1.0.0) - 2026-10-01
 
 ### Backwards-incompatible changes
 
