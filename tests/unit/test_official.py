@@ -11,6 +11,7 @@ import pytest
 from astropy.io import fits
 
 from barycenter.official import (
+    _copy_decompressing,
     _deliver,
     _refuse_to_clobber,
     apply_mission_specific_barycenter_correction,
@@ -84,3 +85,26 @@ class TestDelivering:
         outfile = str(tmp_path / "out.evt")
         _deliver(temp, outfile)
         assert os.path.exists(outfile)
+
+
+class TestCopyDecompressing:
+    """``timeconv`` edits its file in place, so it gets a private, uncompressed copy."""
+
+    @pytest.mark.parametrize("gzipped", [True, False])
+    def test_the_input_directory_is_left_alone(self, tmp_path, gzipped):
+        """The copy holds the uncompressed bytes; the (read-only) input dir is untouched."""
+        import gzip
+
+        indir = tmp_path / "in"
+        indir.mkdir()
+        payload = b"pretend FITS bytes"
+        name = "asca.evt.gz" if gzipped else "asca.evt"
+        (indir / name).write_bytes(gzip.compress(payload) if gzipped else payload)
+        indir.chmod(0o555)
+        dest = tmp_path / "copy.evt"
+        try:
+            _copy_decompressing(str(indir / name), str(dest))
+        finally:
+            indir.chmod(0o755)
+        assert dest.read_bytes() == payload
+        assert os.listdir(indir) == [name]

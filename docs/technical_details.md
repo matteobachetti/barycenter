@@ -39,6 +39,17 @@ they are `http(s)://` or `s3://` URLs. On SciServer (detected from the
 `SCISERVER_USER_ID` environment variable or a `/home/jovyan` home directory) the HEASARC
 archive is already mounted under `/FTP`, so nothing is downloaded.
 
+A local path is never copied: it comes back as the absolute path of the file where it is,
+with a relative path resolved from the caller's directory. It used to be copied into the
+current directory, but only when no file of that name was there yet, so reprocessing an
+observation silently barycentred the stale copy of the old one, and parallel runs sharing a
+working directory read each other's copies. Nothing is ever written next to an input, which
+may sit in a read-only directory; anything that has to change a file (the ASCA `timeconv`
+path, which also gunzips) works on a private copy in the system temporary directory.
+Downloaded `http(s)://` and `s3://` files do still land in the current directory (the
+output's directory, on the ASCA path) and are reused when already there, since that is the
+cache.
+
 **Step 2 — optional region cut.** If `--source-region-deg` is given,
 `extract_events_in_region` keeps only the events inside a circle on the sky, using the
 `X`/`Y` sky columns and the WCS keywords in the event header. Doing this first means
@@ -281,7 +292,8 @@ instead of computing anything:
   `heasoftpy.barycorr` in a temporary working directory (HEASOFT tools are sensitive to
   the current directory and to `PFILES`).
 - ASCA goes through a `timeconv` call, with `earth.dat` and `frf.orbit.255` downloaded
-  from HEASARC first.
+  from HEASARC first. `timeconv` rewrites the file it is given, so it runs on a
+  temporary copy, decompressed on the way if the input is gzipped.
 
 This path exists for cross-checking and for missions we do not yet implement natively.
 It requires a working HEASOFT installation and is not exercised in CI.

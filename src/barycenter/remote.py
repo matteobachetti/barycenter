@@ -40,10 +40,20 @@ def download_locally(fname, outdir="."):
     """Download a remote file locally if needed.
     Manages S3 and HTTP(s) URLs. For S3, only public buckets are supported at the moment
 
+    A local path is never copied: it comes back as an absolute path to the file where it
+    is. A copy only ever duplicated the input, went stale when the observation was
+    reprocessed (the stale copy was then read without warning), and collided between runs
+    sharing a working directory. Nothing is written next to a local input either, so a
+    read-only input directory is fine.
+
     Parameters
     ----------
     fname : str
         Input file path or URL.
+    outdir : str
+        Where downloaded files go. A relative local path is still read from the caller's
+        current directory, not from here.
+
     Returns
     -------
     local_fname : str
@@ -52,6 +62,12 @@ def download_locally(fname, outdir="."):
 
     if not isinstance(fname, str) and isinstance(fname, Iterable):
         return [download_locally(f, outdir=outdir) for f in fname]
+
+    if not fname.startswith(("http://", "https://", "s3://")):
+        local_fname = os.path.abspath(fname)
+        if not os.path.exists(local_fname):
+            raise FileNotFoundError(f"No such file: {local_fname}")
+        return local_fname
 
     with _do_in_other_directory(outdir):
         if fname.startswith("http://") or fname.startswith("https://"):
@@ -73,7 +89,7 @@ def download_locally(fname, outdir="."):
                 cache_file = download_file(fname, cache=False)
                 shutil.move(cache_file, local_fname)
                 logger.info(f"Downloaded remote file {fname} to local file {local_fname}")
-        elif fname.startswith("s3://"):
+        else:
             from urllib.parse import urlparse
 
             import boto3
@@ -104,13 +120,6 @@ def download_locally(fname, outdir="."):
             else:
                 s3_client.download_file(bucket_name, key, dest)
             logger.info(f"Downloaded remote file {fname} to local file {dest}")
-            local_fname = dest
-        else:
-            fname_path = os.path.abspath(fname)
-            dest = os.path.join(os.getcwd(), os.path.basename(fname))
-            if fname_path != dest and not os.path.exists(dest):
-                shutil.copy2(fname_path, dest)
-                logger.info(f"Copied local file {fname_path} to {outdir}")
             local_fname = dest
 
         fname = os.path.abspath(local_fname)

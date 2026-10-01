@@ -5,6 +5,7 @@ interface, so they need no network and are not marked ``remote_data``.
 """
 
 import http.server
+import os
 import threading
 
 import pytest
@@ -83,3 +84,42 @@ class TestDownloadLocally:
         with set_temp_cache(cache_dir):
             local = download_locally(served_file, outdir=str(outdir))
         assert open(local, "rb").read() == b"already here"
+
+
+class TestLocalFiles:
+    """A local path is used where it is: no copies, no writes near the input."""
+
+    def test_a_local_file_is_used_in_place(self, tmp_path, monkeypatch):
+        """The input comes back at its own absolute path, and nothing is written anywhere.
+
+        Copying it into the working directory meant a rerun silently read the stale copy,
+        and the input directory may be read-only, so neither may be touched.
+        """
+        indir = tmp_path / "in"
+        indir.mkdir()
+        (indir / "ni_cl.evt").write_bytes(PAYLOAD)
+        indir.chmod(0o555)
+        workdir = tmp_path / "work"
+        workdir.mkdir()
+        monkeypatch.chdir(workdir)
+        try:
+            local = download_locally(str(indir / "ni_cl.evt"))
+        finally:
+            indir.chmod(0o755)
+        assert local == str(indir / "ni_cl.evt")
+        assert os.listdir(workdir) == []
+        assert os.listdir(indir) == ["ni_cl.evt"]
+
+    def test_a_relative_path_is_read_from_the_callers_directory(self, tmp_path, monkeypatch):
+        """``outdir`` decides where downloads go, not where a relative input is looked up."""
+        (tmp_path / "ni.orb").write_bytes(PAYLOAD)
+        outdir = tmp_path / "out"
+        outdir.mkdir()
+        monkeypatch.chdir(tmp_path)
+        assert download_locally("ni.orb", outdir=str(outdir)) == str(tmp_path / "ni.orb")
+        assert os.listdir(outdir) == []
+
+    def test_a_missing_local_file_is_reported(self, tmp_path):
+        """A typo in a path fails here, naming the file, not later inside the FITS reader."""
+        with pytest.raises(FileNotFoundError, match="nonexistent.evt"):
+            download_locally(str(tmp_path / "nonexistent.evt"))

@@ -78,6 +78,22 @@ def _refuse_to_clobber(outfile, overwrite):
         )
 
 
+def _copy_decompressing(fname, dest):
+    """Copy ``fname`` to ``dest``, gunzipping it on the way if it ends in ``.gz``.
+
+    ``timeconv`` rewrites the file it is given, so it gets this private copy. The input
+    is only ever read: gunzipping it in place would change the user's data, fail in a
+    read-only directory, and leave a decompressed file that a later run could pick up stale.
+    """
+    if fname.endswith(".gz"):
+        import gzip
+
+        with gzip.open(fname, "rb") as fin, open(dest, "wb") as fout:
+            shutil.copyfileobj(fin, fout)
+    else:
+        shutil.copy(fname, dest)
+
+
 def _deliver(temp_outfile, outfile, only_columns=None):
     """Put the finished temporary file at ``outfile``, keeping only ``only_columns``.
 
@@ -197,11 +213,7 @@ def apply_mission_specific_barycenter_correction(
         )
     elif mission.official == "timeconv":
         fname = download_locally(fname, outdir=os.path.dirname(outfile))
-
-        if fname.endswith(".gz"):
-            sp.check_call(["gunzip", "-f", fname])
-            fname = fname[:-3]
-        shutil.copy(fname, temp_outfile)
+        _copy_decompressing(fname, temp_outfile)
         # Add download for frf.orbit
         download_locally(
             "https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat",
