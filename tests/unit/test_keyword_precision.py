@@ -15,6 +15,9 @@ from barycenter.utils import high_precision_keyword_read, high_precision_mjdref
 #: What Fermi's `fakepulsar_event.fits` actually holds: a *string*, in Fortran's
 #: D-exponent notation, where a FITS float is expected.
 FERMI_MJDREFF = "7.428703703703703D-4"
+#: The same epoch, built in longdouble. A float64 literal would be ~2e-12 off at this
+#: magnitude, which fails where longdouble really is extended precision (Linux x86).
+FERMI_MJDREF = np.longdouble(51910) + np.longdouble("7.428703703703703e-4")
 
 
 class TestFortranExponents:
@@ -24,7 +27,7 @@ class TestFortranExponents:
         """The Fermi case: a string keyword whose exponent marker is D rather than E."""
         header = {"MJDREFI": 51910.0, "MJDREFF": FERMI_MJDREFF}
         assert high_precision_keyword_read(header, "MJDREF") == pytest.approx(
-            51910.00074287037, abs=1e-12
+            FERMI_MJDREF, abs=1e-12
         )
 
     def test_the_fractional_part_keeps_its_precision(self):
@@ -73,7 +76,7 @@ class TestThroughAFitsHeader:
         header = fits.Header()
         header["MJDREFI"] = 51910.0
         header["MJDREFF"] = FERMI_MJDREFF
-        assert high_precision_mjdref(header) == pytest.approx(51910.00074287037, abs=1e-12)
+        assert high_precision_mjdref(header) == pytest.approx(FERMI_MJDREF, abs=1e-12)
 
     def test_a_header_with_no_mjdref_still_raises(self):
         """Guessing a reference epoch is never right, and that must not have changed."""
