@@ -12,7 +12,7 @@ import pytest
 from astropy.config import set_temp_cache
 from astropy.utils.data import check_download_cache, get_cached_urls
 
-from barycenter.remote import download_locally
+from barycenter.remote import cached_download, download_locally
 
 PAYLOAD = b"SIMPLE  =                    T / a file pretending to be FITS\n"
 
@@ -123,3 +123,19 @@ class TestLocalFiles:
         """A typo in a path fails here, naming the file, not later inside the FITS reader."""
         with pytest.raises(FileNotFoundError, match="nonexistent.evt"):
             download_locally(str(tmp_path / "nonexistent.evt"))
+
+
+class TestCachedDownload:
+    """A cache entry whose file has gone missing is repaired, not handed back."""
+
+    def test_a_broken_cache_entry_is_downloaded_again(self, served_file, cache_dir):
+        """Older versions moved files out of astropy's cache, leaving entries with no file.
+
+        astropy then returns the path of the missing file, so every reader downstream
+        failed with a confusing error of its own.
+        """
+        with set_temp_cache(cache_dir):
+            os.remove(cached_download(served_file))
+            path = cached_download(served_file)
+            assert open(path, "rb").read() == PAYLOAD
+            check_download_cache()

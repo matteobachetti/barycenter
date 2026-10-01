@@ -291,9 +291,15 @@ instead of computing anything:
 - NuSTAR, NICER, RXTE, Swift and Chandra go through `official_barycorr`, which calls
   `heasoftpy.barycorr` in a temporary working directory (HEASOFT tools are sensitive to
   the current directory and to `PFILES`).
-- ASCA goes through a `timeconv` call, with `earth.dat` and `frf.orbit.255` downloaded
-  from HEASARC first. `timeconv` rewrites the file it is given, so it runs on a
-  temporary copy, decompressed on the way if the input is gzipped.
+- ASCA goes through a `timeconv` call. `timeconv` rewrites the file it is given and
+  looks for its reference files by name in its current directory, so it runs in a private
+  temporary directory holding a copy of the events (decompressed on the way if the input
+  is gzipped) and links to `earth.dat` and `frf.orbit.255` under short names. That makes
+  the run independent of where it was started, leaves nothing beside the output, and
+  keeps every path short of the 80 characters at which FTOOLS truncate file names. The two
+  reference files never change (ASCA stopped operating in 2001), so they are fetched once
+  per machine into astropy's download cache by `cached_download`, which also repairs the
+  broken cache entries that older versions of this package left for exactly these files.
 
 This path exists for cross-checking and for missions we do not yet implement natively.
 It requires a working HEASOFT installation and is not exercised in CI.
@@ -310,7 +316,7 @@ It requires a working HEASOFT installation and is not exercised in CI.
 | `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which looks up which applies. |
 | `missions.py` | The `MISSIONS` registry: the only module that knows anything mission-specific. |
 | `official.py` | Shelling out to HEASOFT `barycorr` and `timeconv` under `--apply-official`. |
-| `remote.py` | `download_locally`: local paths, `https://` and `s3://`. |
+| `remote.py` | `download_locally`: local paths, `https://` and `s3://`; `cached_download` for files that never change. |
 | `utils.py` | FITS I/O that also works on `http(s)://` and `s3://` URLs (`fits_open_including_remote`), column slimming (`slim_down_hdu_list`), HTML directory listing for the CALDB scrape, the `MJDREFI`+`MJDREFF` reader, and `splitext_improved`. |
 
 Until this release all of that lived in one 979-line `barycenter.py`. Nothing outside

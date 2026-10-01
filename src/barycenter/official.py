@@ -16,7 +16,7 @@ from astropy.io import fits
 
 from .clock import CLOCK_CALDB, get_latest_clock_file
 from .missions import mission_for
-from .remote import download_locally
+from .remote import cached_download, download_locally
 from .utils import fits_open_including_remote, slim_down_hdu_list
 
 __all__ = ["official_barycorr", "apply_mission_specific_barycenter_correction"]
@@ -76,6 +76,22 @@ def _refuse_to_clobber(outfile, overwrite):
         raise FileExistsError(
             f"Output file {outfile} already exists. Use overwrite=True to overwrite."
         )
+
+
+ASCA_GEOFILE_URL = (
+    "https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat"
+)
+ASCA_ORBIT_URL = "https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255"
+
+
+def _asca_reference_files():
+    """Local paths to the Earth geometry and ASCA orbit files that ``timeconv`` reads.
+
+    Both are fixed for good -- ASCA stopped operating in 2001 and ``frf.orbit.255`` is its
+    final orbit file -- so astropy's download cache keeps them once per machine instead of
+    beside every output. See :func:`barycenter.remote.cached_download`.
+    """
+    return cached_download(ASCA_GEOFILE_URL), cached_download(ASCA_ORBIT_URL)
 
 
 def _copy_decompressing(fname, dest):
@@ -213,19 +229,19 @@ def apply_mission_specific_barycenter_correction(
         )
     elif mission.official == "timeconv":
         fname = download_locally(fname, outdir=os.path.dirname(outfile))
-        _copy_decompressing(fname, temp_outfile)
-        # Add download for frf.orbit
-        download_locally(
-            "https://heasarc.gsfc.nasa.gov/FTP/software/ftools/ALPHA/ftools/refdata/earth.dat",
-            outdir=os.path.dirname(outfile),
-        )
-        download_locally(
-            "https://heasarc.gsfc.nasa.gov/FTP/asca/data/trend/orbit/frf.orbit.255",
-            outdir=os.path.dirname(outfile),
-        )
-        cmd = f"timeconv {temp_outfile} 2 {ra:.7f} {dec:.7f} earth.dat frf.orbit.255"
-        logger.info(f"Executing {cmd}")
-        sp.check_call(cmd.split())
+        geofile, frforbit = _asca_reference_files()
+        # A private working directory, holding the events and both reference files under
+        # short names: timeconv then never depends on where the run was started, nothing
+        # is left next to the output, and no path is long enough for FTOOLS to truncate.
+        with tempfile.TemporaryDirectory() as workdir:
+            _copy_decompressing(fname, os.path.join(workdir, "events.evt"))
+            os.symlink(geofile, os.path.join(workdir, "earth.dat"))
+            os.symlink(frforbit, os.path.join(workdir, "frf.orbit"))
+            cmd = ["timeconv", "events.evt", "2", f"{ra:.7f}", f"{dec:.7f}"]
+            cmd += ["earth.dat", "frf.orbit"]
+            logger.info(f"Executing {' '.join(cmd)} in {workdir}")
+            sp.check_call(cmd, cwd=workdir)
+            shutil.move(os.path.join(workdir, "events.evt"), temp_outfile)
 
         logger.info("Updating header keywords...")
 

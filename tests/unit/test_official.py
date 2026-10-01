@@ -108,3 +108,55 @@ class TestCopyDecompressing:
             indir.chmod(0o755)
         assert dest.read_bytes() == payload
         assert os.listdir(indir) == [name]
+
+
+class TestRunningTimeconv:
+    """ASCA's ``timeconv`` must work from any directory and leave only the output behind."""
+
+    def test_timeconv_runs_in_isolation(self, tmp_path, monkeypatch):
+        """A stand-in ``timeconv`` checks that every file it is handed exists where it runs.
+
+        The reference files used to be downloaded next to the output but named relative to
+        the current directory, so a run only worked when those two were the same.
+        """
+        stub_dir = tmp_path / "bin"
+        stub_dir.mkdir()
+        log = tmp_path / "timeconv.log"
+        stub = stub_dir / "timeconv"
+        stub.write_text(
+            "#!/bin/sh\n"
+            f'echo "$@" > {log}\n'
+            'for f in "$1" "$5" "$6"; do [ -s "$f" ] || exit 1; done\n'
+        )
+        stub.chmod(0o755)
+        monkeypatch.setenv("PATH", f"{stub_dir}{os.pathsep}{os.environ['PATH']}")
+
+        refs = tmp_path / "refs"
+        refs.mkdir()
+        (refs / "geo").write_text("earth")
+        (refs / "orb").write_text("orbit")
+        monkeypatch.setattr(
+            "barycenter.official._asca_reference_files",
+            lambda: (str(refs / "geo"), str(refs / "orb")),
+        )
+
+        infile = write_event_file(tmp_path / "asca.evt", "ASCA")
+        outdir = tmp_path / "out"
+        outdir.mkdir()
+        workdir = tmp_path / "work"
+        workdir.mkdir()
+        monkeypatch.chdir(workdir)
+        out = apply_mission_specific_barycenter_correction(
+            infile,
+            orbfile=None,
+            outfile=str(outdir / "bary_DE200.evt"),
+            ra=10.0,
+            dec=20.0,
+            ephem="DE200",
+        )
+
+        assert os.listdir(outdir) == ["bary_DE200.evt"]
+        assert os.listdir(workdir) == []
+        assert "/" not in log.read_text()
+        with fits.open(out) as hdul:
+            assert hdul[1].header["TIMESYS"] == "TDB"

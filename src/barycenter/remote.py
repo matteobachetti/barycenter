@@ -12,7 +12,7 @@ import os
 import shutil
 from collections.abc import Iterable
 
-__all__ = ["download_locally"]
+__all__ = ["cached_download", "download_locally"]
 
 
 @contextlib.contextmanager
@@ -34,6 +34,24 @@ def _do_in_other_directory(x):
         # aren't equipped to figure out what went wrong if the
         # old working directory can't be restored.
         os.chdir(d)
+
+
+def cached_download(url):
+    """Local path to ``url`` in astropy's download cache, downloading it if needed.
+
+    For files that never change, which can then be fetched once per machine. The file is
+    only to be read where it is: moving it out of the cache is what damages the cache's
+    index. Versions of this package before that was understood did exactly that, so an
+    entry whose file is missing is cleared and downloaded again rather than returned.
+    """
+    from astropy.utils.data import clear_download_cache, download_file
+
+    path = download_file(url, cache=True)
+    if not os.path.exists(path):
+        logger.info(f"Cached copy of {url} is missing; downloading it again.")
+        clear_download_cache(url)
+        path = download_file(url, cache=True)
+    return path
 
 
 def download_locally(fname, outdir="."):
