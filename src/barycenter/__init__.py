@@ -21,13 +21,40 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""
-Add a docstring here for the init module.
+"""Barycentric time corrections for X-ray event files, in pure Python.
 
-This might include a very brief description of the package,
-its purpose, and any important notes.
-"""
+A photon's arrival time at the spacecraft is not a useful clock: the spacecraft is
+moving, around the Earth and with the Earth around the Sun, so arrival times wander by
+up to about 500 seconds over a year. Barycentring moves them to the solar system's
+centre of mass, where they can be compared between missions and across years.
 
-from .barycenter import main_barycenter
+The workflow lives in :mod:`barycenter.core`, the command line in
+:mod:`barycenter.cli`, the physics in :mod:`barycenter.native` (with
+:mod:`barycenter.pintengine` as an optional second opinion), the orbit file dialects in
+:mod:`barycenter.orbit`, and the spacecraft clock in :mod:`barycenter.clock`.
+"""
 
 from ._version import __version__
+from .cli import main_barycenter
+from .core import (
+    apply_barycenter_correction,
+    correct_times,
+    get_barycentric_correction,
+)
+from .missions import MISSIONS, Mission, mission_for
+from .native import barycentric_correction
+from .orbit import OrbitSpec, read_orbit
+
+__all__ = [
+    "MISSIONS",
+    "Mission",
+    "OrbitSpec",
+    "__version__",
+    "apply_barycenter_correction",
+    "barycentric_correction",
+    "correct_times",
+    "get_barycentric_correction",
+    "main_barycenter",
+    "mission_for",
+    "read_orbit",
+]

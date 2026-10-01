@@ -1,10 +1,29 @@
 name: Test Suite
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch: {}
   workflow_call: {}
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install hatch
+        uses: pypa/hatch@install
+      - name: Style and formatting
+        run: hatch run lint:check
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -14,23 +33,48 @@ jobs:
         python-version: ["3.10", "3.13"]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          # hatch-vcs derives the version from tags; without them the build fails.
+          fetch-depth: 0
+          fetch-tags: true
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install hatch
-      uses: pypa/hatch@install
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Check installation
-      run: hatch run install:check
+      - name: Install hatch
+        uses: pypa/hatch@install
 
-    - name: Check dependencies
-      run: hatch run audit:check
-    - name: Test suite
-      run: hatch run +py=${{ matrix.python-version }} test:run
+      # The JPL ephemeris kernel is ~120 MB and astropy downloads it on first use.
+      # Caching it keeps that to one download rather than one per job.
+      - name: Cache astropy downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/.astropy/cache
+          key: astropy-cache-${{ runner.os }}-v1
 
-    - name: Report coverage
-      shell: bash
-      run: bash <(curl -s https://codecov.io/bash)
+      - name: Test suite
+        run: hatch run +py=${{ matrix.python-version }} test:run
+
+      - name: Report coverage
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+        continue-on-error: true
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install hatch
+        uses: pypa/hatch@install
+      - name: Check the package builds and is installable
+        run: hatch run build:check

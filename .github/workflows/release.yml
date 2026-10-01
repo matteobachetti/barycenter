@@ -49,16 +49,14 @@ jobs:
   publish:
     name: >-
       Publish Python 🐍 distribution 📦 to PyPI
-    # Modify the repo name below to be your project's repo name.
-    if: github.repository_owner == "{{ username }}"
+    if: github.repository_owner == 'matteobachetti'
     needs:
       - build
     runs-on: ubuntu-latest
     # Environment required here for trusted publisher
     environment:
       name: pypi
-      # Modify the url to be the name of your package
-      url: https://pypi.org/p/${{ package_name }}
+      url: https://pypi.org/p/barycenter
     permissions:
       id-token: write  # this permission is mandatory for PyPI publishing
     steps:

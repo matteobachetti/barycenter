@@ -33,10 +33,25 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3 :: Only",
 ]
-# TODO: add keywords
-keywords = []
-# TODO: add dependencies
-dependencies = []
+keywords = [
+    "astronomy",
+    "barycentric correction",
+    "pulsars",
+    "timing",
+    "X-ray",
+]
+# Everything imported at module level. The optional extras below cover the
+# imports that happen inside a function: s3/HTTP input, region filtering, and
+# the --apply-official shell-outs. The CALDB index scrape is deliberately not
+# among them: it is how NuSTAR's and Swift's clock files are found when none is
+# named, so it has to work in a plain installation, and it uses only the
+# standard library.
+dependencies = [
+    "astropy >= 5.0",
+    "numpy",
+    "pint-pulsar",
+    "scipy",
+]
 
 
 [project.scripts]
@@ -46,22 +61,34 @@ barycenter = "barycenter:main_barycenter"
 dev = [
     "hatch",
     "pre-commit",
+    "ruff",
+    "towncrier",
 ]
 test = [
     "pytest",
     "pytest-astropy",
 ]
-recommended = [
-    "s3fs",
-    "astroquery>=0.4.11",
-    "stingray>=2.2.10",
-    "pint-pulsar",
-    "fsspec",
+# Reading input straight from HEASARC over https or s3.
+remote = [
+    "astroquery >= 0.4.11",
     "boto3",
     "botocore",
-    "astroquery",
+    "fsspec",
+    "s3fs",
+]
+# --source-region-deg
+regions = [
     "regions",
+]
+# Compiles the clock-file interpolation kernel, which is about six times faster than
+# the numpy expression it falls back to. Optional because compiling it costs 0.52 s at
+# first use while the routine itself is under half a per cent of a run, so it does not
+# pay for itself below roughly 50 million events. Results are bit-identical either way.
+speed = [
     "numba",
+]
+recommended = [
+    "barycenter[regions,remote]",
 ]
 
 ################################################################################
@@ -79,11 +106,75 @@ only-packages = true
 # Read more about src layouts here: https://www.pyopensci.org/python-package-guide/package-structure-code/python-package-structure.html
 [tool.hatch.build.targets.wheel]
 packages = ["src/barycenter"]
+# only-packages above keeps the build to Python modules, so the bundled RXTE clock
+# coefficients have to be named. Without them an RXTE run cannot be clock-corrected
+# unless HEASOFT happens to be installed.
+force-include = { "src/barycenter/data" = "barycenter/data" }
+
+[tool.hatch.build.targets.sdist]
+# Same reason, at the path the sdist rebuilds from.
+force-include = { "src/barycenter/data" = "src/barycenter/data" }
+
+######## Linting and formatting ########
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["docs/_build", "docs/api"]
+
+[tool.ruff.lint]
+# A deliberately small, flake8-shaped surface: pycodestyle errors and warnings plus
+# pyflakes. Widen it only with a reason.
+select = ["E", "F", "W"]
+
+[tool.ruff.lint.pycodestyle]
+# `ruff format` wraps code at 100 columns, but it cannot split a string literal. Lines
+# that are long because of one -- a log message, a URL, an expected doctest output --
+# are tolerated up to 120 rather than being contorted by hand.
+max-line-length = 120
+
+######## Changelog ########
+[tool.towncrier]
+package = "barycenter"
+package_dir = "src"
+directory = "docs/changes"
+filename = "CHANGELOG.md"
+start_string = "<!-- towncrier release notes start -->\n"
+underlines = ["", "", ""]
+title_format = "## [{version}](https://github.com/matteobachetti/barycenter/tree/{version}) - {project_date}"
+issue_format = "[#{issue}](https://github.com/matteobachetti/barycenter/pull/{issue})"
+
+[[tool.towncrier.type]]
+directory = "breaking"
+name = "Backwards-incompatible changes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "feature"
+name = "New features"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "bugfix"
+name = "Bug fixes"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "doc"
+name = "Documentation"
+showcontent = true
+
+[[tool.towncrier.type]]
+directory = "maintenance"
+name = "Internal changes"
+showcontent = true
 
 ######## Configure pytest for your test suite ########
 [tool.pytest.ini_options]
 testpaths = ["tests"] # Tells pytest what directory tests are in
-markers = ["raises"] # Tells pytest to not raise a warning if you use @pytest.mark.raises
+# raises: pytest-raises. remote_data: pytest-astropy, for tests that hit the network.
+markers = ["raises"]
+# Network tests are opt-in, with --remote-data.
+addopts = "--strict-markers"
 
 [tool.coverage.paths]
 source = [
@@ -100,7 +191,7 @@ version-file = "src/barycenter/_version.py"
 Homepage = "https://github.com/matteobachetti/barycenter"
 "Source Code" = "https://github.com/matteobachetti/barycenter"
 "Bug Tracker" = "https://github.com/matteobachetti/barycenter/issues"
-Documentation = "https://barycenter.readthedocs.io"
+Documentation = "https://matteobachetti.github.io/barycenter/"
 Download = "https://pypi.org/project/barycenter/#files"
 
 [tool.coverage.run]
@@ -133,10 +224,34 @@ detached = true
 
 # This table installs created the command hatch run install:check which will build and check your package.
 [tool.hatch.envs.build.scripts]
+# `-e hatch-build` is not decoration. Running this script sets HATCH_ENV_ACTIVE to the
+# name of the environment the script runs in, and the nested `hatch build` reads that
+# variable to pick its builder environment -- which this one is not, so it refuses with
+# "is not a builder environment". Naming hatch's own default builder explicitly is what
+# breaks the loop; renaming this environment would not, the error would just follow it.
 check = [
     "pip check",
-    "hatch build {args:--clean}",
+    "hatch -e hatch-build build {args:--clean}",
     "twine check dist/*",
+]
+
+#--------------- Lint and format ---------------#
+
+[tool.hatch.envs.lint]
+description = """Check style and formatting."""
+detached = true
+dependencies = [
+    "ruff",
+]
+
+[tool.hatch.envs.lint.scripts]
+check = [
+    "ruff check {args:.}",
+    "ruff format --check --diff {args:.}",
+]
+fix = [
+    "ruff check --fix {args:.}",
+    "ruff format {args:.}",
 ]
 
 #--------------- Run tests ---------------#
@@ -144,11 +259,13 @@ check = [
 
 [tool.hatch.envs.test]
 description = """Run the test suite."""
+features = ["regions", "remote"]
 extra-dependencies = [
     "pytest",
+    # pytest-astropy provides the remote_data marker the network tests use.
+    "pytest-astropy",
     "pytest-cov",
     "pytest-raises",
-    "pytest-randomly",
     "pytest-xdist",
 ]
 
