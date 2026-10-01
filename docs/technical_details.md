@@ -1196,3 +1196,7 @@ that brackets that time comfortably — reproduced with both the trimmed and the
 uncompressed file. `strings` on `hdaxbary` shows readers for `xtescorbit`, `nicerscorbit`,
 `swiftscorbit` and NuSTAR, and nothing for Chandra. So `MISSIONS["chandra"].official` is
 `None`, not `"barycorr"`.
+
+## Documentation hosting
+
+`.github/workflows/docs.yml` runs `hatch run docs:build` on every push to `main` (so, on every merged pull request) and can also be started by hand from the Actions tab. The warnings-as-errors build output in `docs/_build` is published to the `gh-pages` branch with `peaceiris/actions-gh-pages`, which writes `.nojekyll` itself. The branch is recreated from scratch each time (`force_orphan`), so it holds no history. In the repository settings, Pages must be set to "Deploy from a branch", `gh-pages`, root. The site is at <https://matteobachetti.github.io/barycenter/>.

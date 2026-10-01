@@ -191,7 +191,7 @@ version-file = "src/barycenter/_version.py"
 Homepage = "https://github.com/matteobachetti/barycenter"
 "Source Code" = "https://github.com/matteobachetti/barycenter"
 "Bug Tracker" = "https://github.com/matteobachetti/barycenter/issues"
-Documentation = "https://barycenter.readthedocs.io"
+Documentation = "https://matteobachetti.github.io/barycenter/"
 Download = "https://pypi.org/project/barycenter/#files"
 
 [tool.coverage.run]
