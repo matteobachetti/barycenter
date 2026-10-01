@@ -100,9 +100,11 @@ command line checks this for you and warns.
 | XMM-Newton | PPS `*ORBTSR*.FTZ` | none needed | −42 ns vs SAS `barycen` |
 | Chandra | `primary/orbitf*_eph1.fits` | none needed | +47 ns vs CIAO `axbary` |
 | NICER | `ni<obsid>.orb` | none needed | +53 ns vs `barycorr`, one-off check |
-| IXPE, Fermi, SVOM | see the docs | none implemented | orbit file read, never checked against a tool |
+| Fermi LAT | FT2 spacecraft file | none needed | 30 ns vs `gtbary` |
+| Fermi GBM | `glg_poshist_all_*.fit` | none needed | `gtbary` refuses GBM files; identical to the LAT route given the same positions |
+| IXPE, SVOM | see the docs | none implemented | orbit file read, never checked against a tool |
 
-The first five rows have a reference file committed to the repository, so continuous
+The first five rows and Fermi LAT have a reference file committed to the repository, so continuous
 integration re-checks them on every change. The NICER figure comes from a single
 comparison against a `barycorr` run on a Crab observation too large to commit, and the
 last three missions have never been compared against an official tool at all — their

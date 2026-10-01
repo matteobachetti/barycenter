@@ -372,7 +372,8 @@ mission's [registry entry](#the-mission-registry):
 
 | Mission | Extension | Position column | Velocity column | Units in the file |
 |---|---|---|---|---|
-| Fermi | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
+| Fermi LAT | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
+| Fermi GBM | `GLAST POS HIST` | scalar `POS_X`,`POS_Y`,`POS_Z` | scalar `VEL_X`,`VEL_Y`,`VEL_Z` | m |
 | NuSTAR | 1 | `POSITION` | `VELOCITY` | **km** |
 | SVOM | 1 | `POSITION` | `VELOCITY` | m |
 | NICER, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
@@ -1049,7 +1050,8 @@ When a comparison disagrees, check these before looking for a bug:
 | NICER | `ni<obsid>.orb` | none needed | works |
 | RXTE | `orbit/FPorbit_*` | HEASOFT `tdc.dat`, bundled with the package | validated to 100 ns |
 | IXPE | `FPorbit`-style | none needed | works |
-| Fermi | FT2 `SC_DATA`, `SC_POSITION` in m, timed by `START` | none needed | validated to 100 ns |
+| Fermi LAT | FT2 `SC_DATA`, `SC_POSITION` in m, timed by `START` | none needed | validated to 100 ns |
+| Fermi GBM | `glg_poshist_all_*.fit`, `GLAST POS HIST`, `POS_*` in m, timed by `SCLK_UTC` | none needed | identical to the LAT route given the same positions; no official tool accepts GBM files, see [Missions](missions.md#fermi-gbm) |
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
@@ -1089,6 +1091,8 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_fermi_evt.evt` | 413 simulated LAT events, every 10th row of the ScienceTools tutorial's `fakepulsar_event.fits`, so the sample spans the whole week, plus all 70 of its `GTI` rows |
 | `dummy_fermi_orb.fits.gz` | 20199 rows of the matching `simscdata_1week.fits` FT2 file, at its native 30 s over the events and GTIs plus 600 s, cut to `START`, `STOP`, `SC_POSITION` — **not** decimated, see below |
 | `dummy_fermi_bary_DE405.evt.gz` | the Fermi `gtbary` reference for those events, `solareph="JPL DE405"`, GTIs corrected too |
+| `dummy_gbm_evt.evt` | 401 real GBM events, every 6652nd row of NaI 0's `glg_tte_n0_240315_12z_v00.fit.gz`, so the sample spans the hour, with its `EBOUNDS` and `GTI` extensions |
+| `dummy_gbm_poshist.fits.gz` | 2922 rows of that day's `glg_poshist_all_240315_v00.fit`, every column at the native 1 s over the events plus 60 s. No reference file: `gtbary` refuses GBM, and the test compares against the same positions in LAT layout instead |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
 triples of identical length — `GEI_*` is geocentric equatorial and is the one the

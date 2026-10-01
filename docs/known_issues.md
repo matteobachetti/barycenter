@@ -18,6 +18,12 @@ answer: measured 775 ns peak-to-peak on arm64 against 149 ns on x86. The default
 engine computes every term as a small quantity in float64 and gives bit-identical
 answers on both.
 
+**On real 2024 Fermi data we sit +122.6 ns from `gtbary`.** Constant over an hour of GBM
+events and the same with either spacecraft-position file, while on the 2008 tutorial file
+the committed reference uses we are within 30 ns. It hides below one unit in the last
+place of a 2024 float64 time (119.2 ns), so only a mean over many events shows it. Not
+yet explained. See [Missions](missions.md#fermi-gbm).
+
 ## Correctness
 
 **A Swift time within ~15 s of a leap second can be a second out.** The leap-second term

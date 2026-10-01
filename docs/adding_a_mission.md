@@ -74,7 +74,8 @@ reference epoch: Swift's is `51910.00074287037`, whose fraction is 64.184 s.
 
 :::{warning}
 **Fermi's `MJDREF` is bit-for-bit Swift's**, and `met_is_utc` is nevertheless `False` for
-it, because no Fermi result has ever been compared against `gtbary` here. If you add a
+it: Fermi's elapsed time counts TT seconds, which agreeing with `gtbary` to 30 ns, where
+Swift's term would have cost 2 s, established. If you add a
 mission whose `MJDREF` fraction looks like a TT − UTC offset, do not guess: an error here
 is a whole number of seconds, not a small one. `tests/test_missions.py` asserts the
 current set explicitly so it cannot drift without a test failing.

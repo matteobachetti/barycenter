@@ -73,6 +73,21 @@ def _columns(data, names, unit):
     return vec * unit
 
 
+def _spec_for_file(hdul, specs):
+    """The spec to read an open orbit file with, out of the one or more a mission has.
+
+    A mission with several kinds of orbit file under one ``TELESCOP`` lists one spec per
+    kind, each naming its extension, and the file's extensions decide. A file with none
+    of them falls back to the first spec, whose reader then reports what is missing.
+    """
+    if isinstance(specs, OrbitSpec):
+        return specs
+    for spec in specs:
+        if spec.hdu in hdul:
+            return spec
+    return specs[0]
+
+
 def _read_one(fname, spec=None):
     """Read a single orbit file into the common table."""
     from .utils import high_precision_mjdref
@@ -93,7 +108,7 @@ def _read_one(fname, spec=None):
                     f"for {mission.name} yet. Use --apply-official, or add an OrbitSpec to "
                     "its entry in barycenter.missions.MISSIONS."
                 )
-            spec = mission.orbit
+            spec = _spec_for_file(hdul, mission.orbit)
             hdu = hdul[spec.hdu]
             header, data = hdu.header, hdu.data
 

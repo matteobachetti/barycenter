@@ -63,6 +63,19 @@ class TestConsistency:
         for mission in MISSIONS.values():
             assert mission.has_native_support == (mission.orbit is not None)
 
+    def test_a_mission_with_several_orbit_layouts_names_each_ones_extension(self):
+        """The layout is chosen by which extension the file has, so each must name one.
+
+        Fermi is the case: a LAT spacecraft file and a GBM position history both say
+        ``TELESCOP=GLAST``. An unnamed or repeated extension would make the choice
+        depend on the order of the list.
+        """
+        for mission in MISSIONS.values():
+            if isinstance(mission.orbit, tuple):
+                extensions = [spec.hdu for spec in mission.orbit]
+                assert all(isinstance(name, str) for name in extensions), mission.name
+                assert len(set(extensions)) == len(extensions), mission.name
+
     def test_the_missions_with_clocks_are_the_ones_we_implement(self):
         """NuSTAR, RXTE and Swift, and nothing else claims a correction it cannot make."""
         with_clocks = {name for name, m in MISSIONS.items() if m.clock is not None}
@@ -72,9 +85,9 @@ class TestConsistency:
         """``met_is_utc`` is opt-in, and setting it wrongly is a whole-second error.
 
         Swift's MET is UTC seconds since 2001-01-01, so it owes the leap seconds since
-        then.  Every other mission here counts TT seconds and owes nothing; Fermi shares
-        Swift's MJDREF and may belong in this set, which is why the set is asserted
-        exactly rather than just checking Swift is in it.  See docs/known_issues.md.
+        then.  Every other mission here counts TT seconds and owes nothing -- Fermi
+        included, although it shares Swift's MJDREF; agreeing with gtbary to 30 ns is
+        what settled that.  The set is asserted exactly so that it cannot drift.
         """
         counting_utc = {name for name, m in MISSIONS.items() if m.met_is_utc}
         assert counting_utc == {"swift"}
