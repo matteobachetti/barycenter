@@ -23,6 +23,9 @@ source_suffix = {".md": "markdown", ".rst": "restructuredtext"}
 # The master toctree document.
 master_doc = "index"
 
+# The towncrier fragments and their README are release-note sources, not pages.
+exclude_patterns = ["_build", "changes"]
+
 # General information about the project.
 project = "barycenter"
 copyright = "Copyright © 2025 Matteo Bachetti"
