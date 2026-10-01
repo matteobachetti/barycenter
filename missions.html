@@ -1,0 +1,768 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Barycentring, mission by mission &#8212; barycenter  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'missions';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Adding a mission" href="adding_a_mission.html" />
+    <link rel="prev" title="barycenter" href="index.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1.dev1+gfe04b6e7a" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">barycenter  documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Barycentring, mission by mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="adding_a_mission.html">
+    Adding a mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="technical_details.html">
+    Technical details
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="known_issues.html">
+    Known issues
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api/modules.html">
+    barycenter
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Barycentring, mission by mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="adding_a_mission.html">
+    Adding a mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="technical_details.html">
+    Technical details
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="known_issues.html">
+    Known issues
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api/modules.html">
+    barycenter
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Barycentring, mission by mission</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="barycentring-mission-by-mission">
+<h1>Barycentring, mission by mission<a class="headerlink" href="#barycentring-mission-by-mission" title="Link to this heading">#</a></h1>
+<p>Every run needs three things: the <strong>event file</strong>, the mission’s <strong>orbit file</strong> (where the
+spacecraft was), and a <strong>position on the sky</strong>. Some missions need a fourth, a
+<strong>spacecraft clock file</strong>. This page says where each of those comes from for each
+mission, gives the command, and names the one thing that catches people out.</p>
+<p>What is <em>not</em> mission-specific is worth saying once. The mission is recognised from the
+<code class="docutils literal notranslate"><span class="pre">TELESCOP</span></code> keyword, so you never name it. The position can be given as <code class="docutils literal notranslate"><span class="pre">--ra</span></code>/<code class="docutils literal notranslate"><span class="pre">--dec</span></code> in
+degrees, or with <code class="docutils literal notranslate"><span class="pre">--parfile</span></code>, which is usually better because a parameter file carries
+proper motion and parallax. <code class="docutils literal notranslate"><span class="pre">--ephem</span></code> selects the JPL ephemeris and defaults to DE440.
+Times, good-time intervals and the <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>/<code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> keywords are all corrected, in every
+extension of the file — if they were not, the events and the GTIs would end up on
+different time scales and up to 500 s of exposure could silently vanish.</p>
+<p>For how any of it works, see <a class="reference internal" href="technical_details.html"><span class="std std-doc">Technical details</span></a>. For what is
+wrong or missing, <a class="reference internal" href="known_issues.html"><span class="std std-doc">Known issues</span></a>.</p>
+<section id="nustar">
+<h2>NuSTAR<a class="headerlink" href="#nustar" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Orbit file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">nu&lt;obsid&gt;A.attorb</span></code> in the observation’s <code class="docutils literal notranslate"><span class="pre">auxil/</span></code> directory</p></td>
+</tr>
+<tr class="row-odd"><td><p>Clock file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">nuCclock*.fits</span></code> — <strong>fetched automatically</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Reference</p></td>
+<td><p>agrees with HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> to <strong>+22 ns</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>barycenter<span class="w"> </span>nu30702012003A06_cl.evt<span class="w"> </span>nu30702012003A.attorb<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--ra<span class="w"> </span><span class="m">148</span>.9584<span class="w"> </span>--dec<span class="w"> </span><span class="m">69</span>.6794<span class="w"> </span>--ephem<span class="w"> </span>DE440
+</pre></div>
+</div>
+<p>The clock file is the thing to know about. NuSTAR’s onboard clock needs a correction of
+20–30 milliseconds, which is five orders of magnitude above the 100 ns target, so it is
+not optional. If you do not pass <code class="docutils literal notranslate"><span class="pre">--clockfile</span></code>, the newest file is downloaded from the
+CALDB and cached under your user cache directory — they are about 12 MB, so this happens
+once per machine, not once per run. With no network, the newest already-cached file is
+used.</p>
+<p><strong>The catch:</strong> clock files from before 2019 carry a different extension
+(<code class="docutils literal notranslate"><span class="pre">CLOCK_CORRECT</span></code>, a quadratic HEASOFT documents as good only to the millisecond) and are
+<strong>refused</strong> rather than used. A millisecond is ten thousand times the target, and a file
+corrected that way would look corrected while being nothing of the kind. Fetch a current
+clock file.</p>
+</section>
+<section id="rxte">
+<h2>RXTE<a class="headerlink" href="#rxte" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Orbit file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">orbit/FPorbit_*</span></code> in the observation directory</p></td>
+</tr>
+<tr class="row-odd"><td><p>Clock file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> — <strong>bundled with this package</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Reference</p></td>
+<td><p>agrees with HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> to <strong>+25 ns</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>barycenter<span class="w"> </span>FS37_be7ab98-be8f0ab.evt<span class="w"> </span>FPorbit_D06-05-18<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--ra<span class="w"> </span><span class="m">228</span>.4818<span class="w"> </span>--dec<span class="w"> </span>-59.1358
+</pre></div>
+</div>
+<p>RXTE’s clock coefficients are not in a FITS file but in <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code>, a 53 kB ASCII table.
+HEASOFT ignores its own <code class="docutils literal notranslate"><span class="pre">clockfile</span></code> parameter for RXTE and always reads
+<code class="docutils literal notranslate"><span class="pre">$LHEA_DATA/tdc.dat</span></code>, so a copy ships inside the package: RXTE stopped observing in
+January 2012 and the file is final. <code class="docutils literal notranslate"><span class="pre">$TIMING_DIR</span></code> and <code class="docutils literal notranslate"><span class="pre">$LHEA_DATA</span></code> are checked first, so
+an installation’s own copy wins. Naming a clock file on the command line warns and uses
+<code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> anyway — again, what HEASOFT does.</p>
+<p><strong>The catch:</strong> the correction is only 17.4 µs, which sounds negligible and is 170 times
+the target. <code class="docutils literal notranslate"><span class="pre">--clockfile</span> <span class="pre">none</span></code> skips it, and should only be used deliberately.</p>
+</section>
+<section id="swift">
+<h2>Swift<a class="headerlink" href="#swift" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Orbit file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">auxil/sw&lt;obsid&gt;sao.fits</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Clock file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">swclockcor*.fits</span></code>, from <code class="docutils literal notranslate"><span class="pre">swift/mis/bcf/clock/</span></code> in the CALDB</p></td>
+</tr>
+<tr class="row-even"><td><p>Reference</p></td>
+<td><p>agrees with HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> to <strong>+37 ns</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>barycenter<span class="w"> </span>sw00037258040xwtw2po_cl.evt<span class="w"> </span>sw00037258040sao.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--ra<span class="w"> </span><span class="m">182</span>.6358<span class="w"> </span>--dec<span class="w"> </span><span class="m">39</span>.4058<span class="w"> </span>--clockfile<span class="w"> </span>swclockcor20041120v110.fits
+</pre></div>
+</div>
+<p>Swift is the awkward one, for two reasons that both come from the same place: its mission
+elapsed time counts <strong>UTC</strong> seconds, not the TT seconds every other mission here uses.</p>
+<p>First, the leap seconds since 2001 have to be added — four seconds on a 2015
+observation — and this package always does so, whatever <code class="docutils literal notranslate"><span class="pre">--clockfile</span></code> says, because a
+flag should not be able to cause a whole-second error.</p>
+<p>Second, Swift’s “clock file” is not a fine clock correction but the <strong>UTC correction
+factor</strong>, the offset between the onboard clock and UTC. It is −15.56 s on the test
+observation, and it drifts 4.6 ms per day, so the quadratic in the table has to be
+evaluated and not just its constant term.</p>
+<p><strong>The catch:</strong> an observation within about 15 seconds of a leap second may come out a
+second wrong. The leap-second step and the clock file’s own compensating step are ~15 s
+apart in different time bases, and no reference exists to settle which should win.
+Leap seconds are rare, observations straddling them rarer; it is written up honestly in
+<a class="reference internal" href="known_issues.html#correctness"><span class="std std-ref">Known issues</span></a> rather than guessed at.</p>
+</section>
+<section id="xmm-newton">
+<h2>XMM-Newton<a class="headerlink" href="#xmm-newton" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Orbit file</p></td>
+<td><p>PPS product <code class="docutils literal notranslate"><span class="pre">P*OBX000ORBTSR*.FTZ</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Clock file</p></td>
+<td><p>none needed</p></td>
+</tr>
+<tr class="row-even"><td><p>Reference</p></td>
+<td><p>agrees with SAS <code class="docutils literal notranslate"><span class="pre">barycen</span></code> to <strong>−42 ns</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>barycenter<span class="w"> </span>P0112290201PNS003PIEVLI0000.FTZ<span class="w"> </span>P0112290201OBX000ORBTSR0000.FTZ<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--ra<span class="w"> </span><span class="m">148</span>.9583<span class="w"> </span>--dec<span class="w"> </span><span class="m">69</span>.6792<span class="w"> </span>--ephem<span class="w"> </span>DE430
+</pre></div>
+</div>
+<p>This is the only route for XMM if you do not have SAS: HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> refuses the
+mission outright, despite listing it.</p>
+<p><strong>The catch, for anyone extending the reader:</strong> the <code class="docutils literal notranslate"><span class="pre">ORBTSR</span></code> file tabulates the
+spacecraft position <strong>twice</strong>, as <code class="docutils literal notranslate"><span class="pre">GEI_*</span></code> and as <code class="docutils literal notranslate"><span class="pre">GSE_*</span></code>. The first is geocentric
+equatorial, which is what is wanted; the second is the same vector rotated into the
+Earth–Sun frame. They are exactly the same length as each other, so nothing catches the
+mistake, and it is a 160 millisecond error. The committed test file keeps both triples
+so that the reader’s choice stays under test.</p>
+</section>
+<section id="chandra">
+<h2>Chandra<a class="headerlink" href="#chandra" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Orbit file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">primary/orbitf*_eph1.fits</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Clock file</p></td>
+<td><p>none needed</p></td>
+</tr>
+<tr class="row-even"><td><p>Reference</p></td>
+<td><p>agrees with CIAO <code class="docutils literal notranslate"><span class="pre">axbary</span></code> to <strong>+47 ns</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>barycenter<span class="w"> </span>acisf10026N003_evt2.fits<span class="w"> </span>orbitf301093602N002_eph1.fits<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--ra<span class="w"> </span><span class="m">148</span>.9583<span class="w"> </span>--dec<span class="w"> </span><span class="m">69</span>.6792<span class="w"> </span>--ephem<span class="w"> </span>DE440
+</pre></div>
+</div>
+<p>Like XMM, this is the only route without the mission’s own software — and unlike XMM
+there is a positive reason to prefer it even if you have CIAO. <code class="docutils literal notranslate"><span class="pre">axbary</span></code> picks its
+ephemeris from the reference frame and can reach only DE200 (with FK5) and DE405 (with
+ICRS). On the test observation <strong>DE405 is 79 µs away from DE440</strong>, so being able to ask
+for a modern ephemeris is not a detail.</p>
+<p><strong>The catch:</strong> Chandra writes its column names in mixed case — <code class="docutils literal notranslate"><span class="pre">time</span></code> in the events,
+<code class="docutils literal notranslate"><span class="pre">Time</span></code> in the orbit file, <code class="docutils literal notranslate"><span class="pre">START</span></code>/<code class="docutils literal notranslate"><span class="pre">STOP</span></code> in the GTI beside them. FITS says column names
+are case-insensitive and this package honours that, but be aware of it if you write
+your own reader: a <code class="docutils literal notranslate"><span class="pre">time</span></code> column that is not found leaves the events untouched <em>while</em>
+the GTIs are corrected, and nothing complains.</p>
+</section>
+<section id="nicer">
+<h2>NICER<a class="headerlink" href="#nicer" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Orbit file</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ni&lt;obsid&gt;.orb</span></code> in <code class="docutils literal notranslate"><span class="pre">auxil/</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Clock file</p></td>
+<td><p>none needed</p></td>
+</tr>
+<tr class="row-even"><td><p>Reference</p></td>
+<td><p>+53 ns against <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> in a one-off check; no tracked reference</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>barycenter<span class="w"> </span>ni1013010101_0mpu7_cl.evt<span class="w"> </span>ni1013010101.orb<span class="w"> </span>--parfile<span class="w"> </span>Crab.par
+</pre></div>
+</div>
+<p>NICER needs no clock correction and its orbit file is the plain <code class="docutils literal notranslate"><span class="pre">ORBIT</span></code>-extension
+dialect, which makes it the least fussy mission here. The 100 ns agreement was measured
+once, against a <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> run on a Crab observation too large to commit, so continuous
+integration does not re-check it the way it re-checks the five missions above.</p>
+<p>That comparison did settle one useful thing, because it was run with <strong>DE200 and FK5</strong>
+rather than DE440 and ICRS: reading DE200 coordinates in the wrong frame costs 45 µs.
+DE200 is referred to FK5 and DE405 onwards to ICRS, <code class="docutils literal notranslate"><span class="pre">--radecsys</span></code> overrides the pairing,
+and the default gets it right.</p>
+</section>
+<section id="fermi">
+<h2>Fermi<a class="headerlink" href="#fermi" title="Link to this heading">#</a></h2>
+<p>Validated against the mission’s own <code class="docutils literal notranslate"><span class="pre">gtbary</span></code> to 29.8 ns — one unit in the last place of
+the reference file’s float64 times, which is the floor. The positions come from the
+<code class="docutils literal notranslate"><span class="pre">SC_DATA</span></code> extension of an FT2 (spacecraft) file, timed by its <code class="docutils literal notranslate"><span class="pre">START</span></code> column.</p>
+<p>Two things about Fermi are worth knowing.</p>
+<p><strong>The spacecraft file may have no velocity column.</strong> Older FT2 files carry <code class="docutils literal notranslate"><span class="pre">SC_POSITION</span></code>
+alone, and the velocity is then obtained by differentiating it, with a warning. That is
+accurate at the native 30 s sampling — it is what the committed reference is made with —
+but it degrades quickly if the file is thinned.</p>
+<p><strong>Older files write <code class="docutils literal notranslate"><span class="pre">MJDREFF</span></code> in Fortran notation.</strong> <code class="docutils literal notranslate"><span class="pre">7.428703703703703D-4</span></code> is a string
+as far as FITS is concerned, not a number. It is read anyway; without that, <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code> is
+unreadable and the file’s <code class="docutils literal notranslate"><span class="pre">DATE-OBS</span></code> cannot be recomputed. Note that <code class="docutils literal notranslate"><span class="pre">gtbary</span></code> keeps its
+dates in UTC while we write the date of the time the file now records, so the two differ
+by TT − UTC — 66.2 s in 2009. That is the same convention difference as XMM and Swift;
+see “The keywords derived from <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code>” in the technical details.</p>
+<p><strong>Fermi’s MET counts TT seconds, not UTC seconds</strong>, despite an <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code> of
+51910.00074287037 that is bit-for-bit Swift’s, whose fractional part encodes TT − UTC at
+2001-01-01. On Swift that is the signature of a MET counting UTC seconds. On Fermi it is
+not: the test observation sits 2.0 s of leap seconds after <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code>, so applying Swift’s
+term would put us 2 s from <code class="docutils literal notranslate"><span class="pre">gtbary</span></code>, and we are 30 ns from it. <code class="docutils literal notranslate"><span class="pre">MISSIONS[&quot;fermi&quot;].met_is_utc</span></code>
+is correctly False. This used to be an open question here and is now settled.</p>
+</section>
+<section id="ixpe-and-svom">
+<h2>IXPE and SVOM<a class="headerlink" href="#ixpe-and-svom" title="Link to this heading">#</a></h2>
+<p>These two have registry entries and their orbit files are read, but <strong>neither has ever
+been compared against an official tool</strong>, so treat the output as unverified. IXPE uses
+the same <code class="docutils literal notranslate"><span class="pre">ORBIT</span></code>-extension dialect as NICER; SVOM’s positions come from a
+<code class="docutils literal notranslate"><span class="pre">POSITION</span></code>/<code class="docutils literal notranslate"><span class="pre">VELOCITY</span></code> pair in metres.</p>
+</section>
+<section id="asca">
+<h2>ASCA<a class="headerlink" href="#asca" title="Link to this heading">#</a></h2>
+<p>ASCA has no native orbit reader. It can only be done by handing the job to HEASOFT
+<code class="docutils literal notranslate"><span class="pre">timeconv</span></code>, with <code class="docutils literal notranslate"><span class="pre">--apply-official</span></code>, which also means DE200 only.</p>
+</section>
+<section id="if-your-mission-is-not-here">
+<h2>If your mission is not here<a class="headerlink" href="#if-your-mission-is-not-here" title="Link to this heading">#</a></h2>
+<p>Adding one is usually about five lines of registry entry, plus the work of producing a
+reference file to check it against. See <a class="reference internal" href="adding_a_mission.html"><span class="std std-doc">Adding a mission</span></a>.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="index.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">barycenter</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="adding_a_mission.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Adding a mission</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#nustar">NuSTAR</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#rxte">RXTE</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#swift">Swift</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#xmm-newton">XMM-Newton</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#chandra">Chandra</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#nicer">NICER</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#fermi">Fermi</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#ixpe-and-svom">IXPE and SVOM</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#asca">ASCA</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#if-your-mission-is-not-here">If your mission is not here</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="_sources/missions.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright Copyright © 2025 Matteo Bachetti.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

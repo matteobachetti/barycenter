@@ -1,0 +1,607 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Known issues &#8212; barycenter  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'known_issues';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="barycenter" href="api/modules.html" />
+    <link rel="prev" title="Technical details" href="technical_details.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1.dev1+gfe04b6e7a" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">barycenter  documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="missions.html">
+    Barycentring, mission by mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="adding_a_mission.html">
+    Adding a mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="technical_details.html">
+    Technical details
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Known issues
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api/modules.html">
+    barycenter
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="missions.html">
+    Barycentring, mission by mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="adding_a_mission.html">
+    Adding a mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="technical_details.html">
+    Technical details
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Known issues
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api/modules.html">
+    barycenter
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Known issues</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="known-issues">
+<h1>Known issues<a class="headerlink" href="#known-issues" title="Link to this heading">#</a></h1>
+<p>An honest list of what is wrong or missing in the current release. Items are removed
+from this page as they are fixed, and each fix should arrive with a test.</p>
+<section id="accuracy">
+<h2>Accuracy<a class="headerlink" href="#accuracy" title="Link to this heading">#</a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">pint</span></code> sits ~116 ns from <code class="docutils literal notranslate"><span class="pre">barycorr</span></code>.</strong> PINT’s solar-system Shapiro delay
+carries an extra <code class="docutils literal notranslate"><span class="pre">2·T☉·ln(r/AU)</span></code> annual term that <code class="docutils literal notranslate"><span class="pre">axBary</span></code> omits. Neither is wrong; they
+differ by a term a pulsar fit would absorb. The default native engine uses the <code class="docutils literal notranslate"><span class="pre">axBary</span></code>
+convention and does not have the offset. See
+<a class="reference internal" href="technical_details.html#accuracy"><span class="std std-ref">Technical details</span></a>.</p>
+<p><strong>On Apple Silicon and Windows <code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">pint</span></code> is quantised at ~1.1 µs.</strong> <code class="docutils literal notranslate"><span class="pre">numpy</span></code> has no
+80-bit <code class="docutils literal notranslate"><span class="pre">longdouble</span></code> on those platforms, and PINT represents absolute times as
+<code class="docutils literal notranslate"><span class="pre">longdouble</span></code> MJDs, so subtracting two large MJDs to get a small correction loses the
+answer: measured 775 ns peak-to-peak on arm64 against 149 ns on x86. The default native
+engine computes every term as a small quantity in float64 and gives bit-identical
+answers on both.</p>
+</section>
+<section id="correctness">
+<h2>Correctness<a class="headerlink" href="#correctness" title="Link to this heading">#</a></h2>
+<p><strong>A Swift time within ~15 s of a leap second can be a second out.</strong> The leap-second term
+is a step function, and it is evaluated on the raw MET, where the step falls at the MET of
+the leap instant (457401600 for 2015-07-01). The clock file’s own −1 s step falls at the
+leap instant <em>in onboard-clock time</em>, which is 14.8 s later because the UTCF is −14.8 s
+there, minus the one second being inserted: <code class="docutils literal notranslate"><span class="pre">TSTART</span> <span class="pre">=</span> <span class="pre">457401613.791</span></code>. Between the two the
+correction and the table disagree by a second. Evaluating the leap term on the
+clock-corrected time instead would narrow the window from ~15 s to the inserted second
+itself, which is genuinely ambiguous and cannot be narrowed further — but the clock term
+must stay on the raw MET (evaluating its polynomial 4 s late costs 214 ns), so the two
+terms would no longer share an argument, and <code class="docutils literal notranslate"><span class="pre">correct_times</span></code> deliberately gives them the
+same one. No reference exists near a leap second to settle it, and Swift observations
+straddling one are rare, so this is recorded rather than guessed at. Everything more than
+15 s from a leap second is unaffected, including both committed references.</p>
+</section>
+<section id="missing-features">
+<h2>Missing features<a class="headerlink" href="#missing-features" title="Link to this heading">#</a></h2>
+<p><strong><code class="docutils literal notranslate"><span class="pre">TIERRELA</span></code> is not written.</strong> HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> writes the <em>relative</em> clock accuracy
+alongside <code class="docutils literal notranslate"><span class="pre">TIERABSO</span></code> — 1e-9 for NuSTAR — and writes it even with <code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code>. We
+write neither, because nothing here measures a relative accuracy and copying a constant
+out of a reference file for a quantity we do not compute would be asserting something we
+have no evidence for. <code class="docutils literal notranslate"><span class="pre">TIERABSO</span></code>, which we do write, is documented in
+<a class="reference internal" href="technical_details.html"><span class="std std-doc">technical_details</span></a>.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">CLOCKAPP</span></code> disagrees with <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> on Swift with no clock file.</strong> <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> sets
+<code class="docutils literal notranslate"><span class="pre">CLOCKAPP</span> <span class="pre">=</span> <span class="pre">T</span></code> for a Swift run with <code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code>; we set <code class="docutils literal notranslate"><span class="pre">F</span></code>, because no clock file
+was applied. The argument for HEASOFT’s choice is that the UTCF already in the header has
+been folded in, which is a clock correction of a sort; the argument for ours is that the
+keyword should say whether the run did what it was asked not to do. Nothing downstream is
+known to depend on it, so it is recorded rather than changed.</p>
+<p><strong>Only the new NuSTAR clock format is read.</strong> <code class="docutils literal notranslate"><span class="pre">nustar_clock_correction_fun</span></code> reads the
+<code class="docutils literal notranslate"><span class="pre">NU_FINE_CLOCK</span></code> extension. Older files carry a <code class="docutils literal notranslate"><span class="pre">CLOCK_CORRECT</span></code> extension with C0/C1/C2
+polynomial coefficients, documented by HEASOFT as accurate only to the millisecond;
+they are refused with an explanatory error rather than supported, on the grounds that a
+millisecond is four orders of magnitude worse than the target. Fetch a current clock
+file from the CALDB instead.</p>
+</section>
+<section id="performance">
+<h2>Performance<a class="headerlink" href="#performance" title="Link to this heading">#</a></h2>
+<p><strong>The whole file is still materialised in memory</strong>, at about <strong>2.3× its size</strong>: an 858 MB
+event file peaks at 1.98 GB of resident memory. It is read, modified and written as one
+<code class="docutils literal notranslate"><span class="pre">HDUList</span></code>, so that factor is one input copy plus one output copy, which is the floor for
+that approach. Fixing it means correcting and writing one extension at a time.</p>
+<p>It used to be 4.4× (3.76 GB on the same file) and the grid removed the difference, because
+on the exact path <code class="docutils literal notranslate"><span class="pre">native.barycentric_correction</span></code> runs over every event at once.
+<code class="docutils literal notranslate"><span class="pre">tools/benchmarks/bench_memsplit.py</span></code> attributes that per phase, at a million events:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>phase</p></th>
+<th class="head"><p>peak</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>astropy’s JPL ephemeris</strong> (<code class="docutils literal notranslate"><span class="pre">get_body_barycentric_posvel</span></code> + <code class="docutils literal notranslate"><span class="pre">get_body_barycentric</span></code>)</p></td>
+<td><p><strong>865 MB</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>our own vector arithmetic</p></td>
+<td><p>104 MB</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">met_to_time</span></code></p></td>
+<td><p>89 MB</p></td>
+</tr>
+<tr class="row-odd"><td><p>unpacking <code class="docutils literal notranslate"><span class="pre">.xyz.to_value(u.m).T</span></code></p></td>
+<td><p>72 MB</p></td>
+</tr>
+<tr class="row-even"><td><p>spacecraft interpolation</p></td>
+<td><p>24 MB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">erfa.dtdb</span></code></p></td>
+<td><p>8 MB</p></td>
+</tr>
+<tr class="row-even"><td><p>the whole function in one go</p></td>
+<td><p>905 MB</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>So on the exact path the memory is <strong>astropy’s ephemeris evaluation</strong>, 865 MB of the
+905 MB total, and the grid helps simply by asking it for 16 560 points instead of three
+million. The obvious way to cap it without a grid is to <strong>evaluate the correction in
+chunks</strong> of a few hundred thousand events — the correction is pointwise in time, so
+chunking is exact, and it would bound the peak regardless of file size. That is a smaller
+and safer change than restructuring the FITS write path, and it is the one to make first
+if a user hits a memory limit on <code class="docutils literal notranslate"><span class="pre">--dt</span> <span class="pre">0</span></code>.</p>
+<p><strong>A fused <code class="docutils literal notranslate"><span class="pre">numba</span></code> kernel over our own arithmetic is <em>not</em> worth including — measured.</strong>
+This was worth checking, because numba is 6× faster than numpy on the one kernel it
+already has and bit-identical, so more of it sounded attractive.
+<code class="docutils literal notranslate"><span class="pre">tools/benchmarks/bench_split.py</span></code> settles it: the arithmetic a kernel could replace — the
+<code class="docutils literal notranslate"><span class="pre">einsum</span></code>, the matrix products, the <code class="docutils literal notranslate"><span class="pre">log1p</span></code> — is <strong>0.6 % of the per-event cost</strong> (0.042 s
+of 6.9 s at a million events), against 60 % for astropy’s JPL ephemeris and 40 % for
+<code class="docutils literal notranslate"><span class="pre">erfa.dtdb</span></code>, neither of which numba can touch. On memory it is 104 MB inside an 865 MB
+envelope it does not control. A perfect fusion would therefore buy under 1 % of the
+runtime and about a tenth of the peak, for a compiled dependency and a second code path
+to keep bit-identical. <code class="docutils literal notranslate"><span class="pre">numba</span></code> stays where it is: lazily imported, an optional <code class="docutils literal notranslate"><span class="pre">[speed]</span></code>
+extra, earning its keep only on the clock kernel and only on very large files.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="technical_details.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Technical details</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="api/modules.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">barycenter</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#accuracy">Accuracy</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#correctness">Correctness</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#missing-features">Missing features</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#performance">Performance</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="_sources/known_issues.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright Copyright © 2025 Matteo Bachetti.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
