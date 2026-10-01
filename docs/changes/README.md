@@ -13,8 +13,8 @@ nextpr
 Types: `breaking`, `feature`, `bugfix`, `doc`, `maintenance`.
 
 ```bash
-echo "Read Chandra orbit files natively, so DE440 is reachable." > changes/42.feature.md
+echo "Read Chandra orbit files natively, so DE440 is reachable." > docs/changes/42.feature.md
 ```
 
 Write the fragment for the person reading the release notes: what changed for them,
-in one sentence, not what the diff did.
+in at most two sentences, not what the diff did.

@@ -136,7 +136,7 @@ max-line-length = 120
 [tool.towncrier]
 package = "barycenter"
 package_dir = "src"
-directory = "changes"
+directory = "docs/changes"
 filename = "CHANGELOG.md"
 start_string = "<!-- towncrier release notes start -->\n"
 underlines = ["", "", ""]
