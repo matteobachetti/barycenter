@@ -54,7 +54,8 @@ and so applies them.
 Several orbit files can be given at once, for an observation split across them, and
 `--clockfile` names a spacecraft clock file (NuSTAR's is fetched from the CALDB
 automatically if you do not). `barycenter --help` lists the rest; the options worth
-knowing about are `--ephem`, `--engine` and `--dt`.
+knowing about are `--ephem`, `--engine`, `--dt` and `--fill-orbit-gaps` (fit an orbit
+across long gaps in the orbit file, such as the Fermi LAT's South Atlantic Anomaly).
 
 ## Use it from Python
 

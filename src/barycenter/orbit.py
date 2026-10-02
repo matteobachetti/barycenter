@@ -247,6 +247,10 @@ class OrbitCoverage:
         Sorted times of the tabulated positions, in mission elapsed seconds.
     cadence : float
         The file's own sampling interval.
+    filled : ndarray, shape (n, 2), optional
+        Gaps inside the file, as (start, end) pairs, across which a position is supplied
+        by a fitted orbit (see :mod:`barycenter.gapfill`). Times inside them count as
+        covered: the caller has chosen to accept that position.
 
     Notes
     -----
@@ -270,9 +274,10 @@ class OrbitCoverage:
 
     samples: np.ndarray
     cadence: float
+    filled: np.ndarray = field(default_factory=lambda: np.empty((0, 2)))
 
     @classmethod
-    def from_met(cls, met):
+    def from_met(cls, met, filled=None):
         """Build the coverage of a set of sample times.
 
         The cadence is the median spacing rather than the mean: an orbit file with a
@@ -282,7 +287,8 @@ class OrbitCoverage:
         met = np.unique(np.asarray(met, dtype=np.float64))
         steps = np.diff(met)
         cadence = float(np.median(steps)) if len(steps) else 0.0
-        return cls(samples=met, cadence=cadence)
+        filled = np.empty((0, 2)) if filled is None else np.asarray(filled, dtype=np.float64)
+        return cls(samples=met, cadence=cadence, filled=filled)
 
     @classmethod
     def from_table(cls, table):
@@ -309,4 +315,7 @@ class OrbitCoverage:
             nearest = np.minimum(
                 np.abs(self.samples[right] - times), np.abs(self.samples[right - 1] - times)
             )
-        return np.maximum(nearest - self.cadence, 0.0)
+        missing = np.maximum(nearest - self.cadence, 0.0)
+        for start, end in self.filled:
+            missing = np.where((times > start) & (times < end), 0.0, missing)
+        return missing

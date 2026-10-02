@@ -119,6 +119,19 @@ def main_barycenter(args=None):
         ),
     )
 
+    parser.add_argument(
+        "--fill-orbit-gaps",
+        action="store_true",
+        default=False,
+        help=(
+            "Fit an orbit across long gaps inside the orbit file, such as the Fermi LAT's "
+            "South Atlantic Anomaly passages, instead of refusing the events that fall in "
+            "them. The position there is a fit, not a measurement: expect an error of the "
+            "order of 100 m (0.4 us of light time), up to about 1 us. The gaps used are "
+            "recorded in the output header. Native engine only."
+        ),
+    )
+
     args = parser.parse_args(args)
 
     outfile = args.outfile
@@ -151,6 +164,7 @@ def main_barycenter(args=None):
         apply_official=args.apply_official,
         engine=args.engine,
         dt=args.dt,
+        fill_orbit_gaps=args.fill_orbit_gaps,
     )
 
 

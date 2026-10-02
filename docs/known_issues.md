@@ -32,12 +32,15 @@ GBM's `SCLK_UTC` refers to, so which file is right is unknown. Left alone: the e
 is of the order of GBM's own quoted absolute timing accuracy. See
 [Missions](missions.md#fermi-gbm).
 
-**Positions across long orbit-file gaps are a cubic-spline guess.** The Fermi LAT is off
-in the South Atlantic Anomaly and its spacecraft file has no rows for tens of minutes,
-over which a cubic polynomial cannot follow a 95-minute orbit; `gtbary` fills these gaps
-better. Events there are flagged as uncovered, not silently trusted. A physical orbit fit
-(Kepler plus J2) or a harmonic fit may do better, for all gap filling; being measured in
-`tools/benchmarks/bench_gapfill.py`.
+**Positions across long orbit-file gaps are refused unless `--fill-orbit-gaps` is given.**
+The Fermi LAT is off in the South Atlantic Anomaly and its spacecraft file has no rows
+there, for tens of minutes. A cubic spline across that is wrong by kilometres, so events
+in a gap are an error by default. `--fill-orbit-gaps` fits a Kepler+J2 orbit instead,
+good to about 100 m (0.4 us) in the benchmark, up to about 1 us worst case. Only a low,
+near-circular Earth orbit has been measured; for a highly elliptical one (INTEGRAL,
+Chandra, XMM-Newton) the force model is insufficient and nothing has been tested. Native
+engine only. `gtbary` fills these gaps by another route that has not been compared.
+See [Technical details](technical_details.md#the-error-budget-of-a-position-and-what-a-gap-costs).
 
 ## Correctness
 

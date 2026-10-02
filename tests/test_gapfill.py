@@ -83,3 +83,70 @@ def test_real_gbm_gap_beats_the_spline_by_orders_of_magnitude():
     assert err_fit < 300.0
     assert err_spline > 10 * err_fit
     assert len(filled.gaps) == 1
+
+
+def test_coverage_counts_a_filled_gap_as_covered_but_not_an_unfilled_one():
+    """Choosing to fill a gap is what makes its times acceptable, and nothing else."""
+    from barycenter.orbit import OrbitCoverage
+
+    met = np.concatenate([np.arange(0, 1000, 30.0), np.arange(2000, 3000, 30.0)])
+    plain = OrbitCoverage.from_met(met)
+    filled = OrbitCoverage.from_met(met, filled=find_gaps(met))
+    assert plain.uncovered([1500.0])[0] > 100.0
+    assert filled.uncovered([1500.0])[0] == 0.0
+    assert filled.uncovered([5000.0])[0] > 100.0  # past the end: never filled
+
+
+class TestFillOrbitGapsEndToEnd:
+    """The command line, on real GBM data with ten minutes cut out of its orbit file."""
+
+    ra, dec = "254.457625", "35.342361"
+
+    def setup_method(self):
+        self.evfile = os.path.join(curdir, "data", "dummy_gbm_evt.evt")
+
+    def cut_orbit(self, tmp_path):
+        from astropy.io import fits
+
+        out = str(tmp_path / "gappy_poshist.fits")
+        with fits.open(GBM_ORBIT) as hdul:
+            t = hdul["GLAST POS HIST"].data["SCLK_UTC"]
+            hole = (t > 732198700.0) & (t < 732199300.0)
+            hdul["GLAST POS HIST"].data = hdul["GLAST POS HIST"].data[~hole]
+            hdul.writeto(out)
+        return out
+
+    def run(self, orbfile, outfile, *extra):
+        from barycenter.cli import main_barycenter
+
+        return main_barycenter(
+            [self.evfile, orbfile, "-o", outfile, "--ra", self.ra, "--dec", self.dec]
+            + ["--ephem", "DE405", "--clockfile", "none", *extra]
+        )
+
+    def test_refused_by_default_with_a_hint_and_accepted_with_the_flag(self, tmp_path):
+        """Without the flag the file is refused and the message names the switch; with it
+        the times land within 1 us of those from the complete orbit file, and the header
+        says which gap was filled."""
+        import pytest
+        from astropy.io import fits
+
+        gappy = self.cut_orbit(tmp_path)
+        with pytest.raises(ValueError, match="--fill-orbit-gaps"):
+            self.run(gappy, str(tmp_path / "refused.evt"))
+
+        filled = self.run(gappy, str(tmp_path / "filled.evt"), "--fill-orbit-gaps")
+        whole = self.run(GBM_ORBIT, str(tmp_path / "whole.evt"))
+        with fits.open(filled) as a, fits.open(whole) as b:
+            diff = a["EVENTS"].data["TIME"] - b["EVENTS"].data["TIME"]
+            assert np.max(np.abs(diff)) < 1e-6
+            assert np.max(np.abs(diff)) > 0  # it really was filled, not read
+            history = "\n".join(str(card) for card in a["EVENTS"].header["HISTORY"])
+            assert "Orbit gap filled" in history
+
+    def test_pint_engine_refuses_the_flag(self, tmp_path):
+        """Gap filling lives in the native engine only; asking the other for it is loud."""
+        import pytest
+
+        with pytest.raises(ValueError, match="native"):
+            self.run(GBM_ORBIT, str(tmp_path / "x.evt"), "--fill-orbit-gaps", "--engine", "pint")

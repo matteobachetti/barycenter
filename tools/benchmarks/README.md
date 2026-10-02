@@ -201,5 +201,13 @@ worst distance to the true 1 s position inside the gap. 300 m = 1 us of light ti
 - Both fits get *worse* with a longer window (J2 20 min gap: ~85 m at half an orbit, ~190 m
   at two orbits). What is left is probably drag and the higher gravity terms, which a
   6-parameter fit cannot absorb. Not tried yet: a drag term, J3/J4, a shorter window.
-- Positions only; velocity (present in the GBM file) would constrain the fit further.
+- **Adding the tabulated velocity to the fit** (columns `j2_v0.1`, `j2_v0.01`: velocity
+  weighted at 0.1 and 0.01 m/s against 10 m for positions) gains at most ~10 %: median
+  unchanged, worst case 272 -> 242 m at 20 min, 317 -> 293 m at 40 min. As expected for
+  an error that is model error rather than noise. The code does not use it.
+- **Timing consistency inside the GBM file**: the RMS of (d POS/dt - VEL) over the day is
+  minimal at a lag of +0.002 s (0.41 m/s; 1.2 m/s at +-0.14 s). So position and velocity
+  are stamped consistently to ~2 ms; this says nothing about the 140 ms offset against
+  the LAT file, which would shift both. The same check on a real LAT FT2 file (which does
+  carry SC_VELOCITY) would show whether it too is self-consistent.
 - Not tested: one-sided extrapolation, other orbits (NICER, Swift, XMM is not circular).

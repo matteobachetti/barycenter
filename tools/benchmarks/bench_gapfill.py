@@ -38,7 +38,7 @@ WINDOW = 95 * 60  # seconds of samples kept on each side of the gap
 GAPS_MIN = [5, 10, 20, 40]
 N_START = 25
 HARMONICS = 3
-MODELS = ("spline", "harmonic", "kepler", "j2")
+MODELS = ("spline", "harmonic", "kepler", "j2", "j2_v0.1", "j2_v0.01")
 
 
 def load(fname):
@@ -46,7 +46,9 @@ def load(fname):
         d = hdul["GLAST POS HIST"].data
         t = np.asarray(d["SCLK_UTC"], dtype=float)
         pos = np.stack([d["POS_X"], d["POS_Y"], d["POS_Z"]], axis=1).astype(float)
+        vel = np.stack([d["VEL_X"], d["VEL_Y"], d["VEL_Z"]], axis=1).astype(float)
     ok = np.all(np.isfinite(pos), axis=1) & (np.linalg.norm(pos, axis=1) > 6e6)
+    load.vel = vel[ok]
     return t[ok] - t[ok][0], pos[ok]
 
 
@@ -86,7 +88,7 @@ def _acceleration(r, with_j2):
     return a
 
 
-def orbit_model(t, p, with_j2):
+def orbit_model(t, p, with_j2, v=None, vel_sigma=0.1):
     """Fit position and velocity at ``t[0]`` and return a predictor for times > t[0]."""
     t0 = t[0]
 
@@ -100,22 +102,30 @@ def orbit_model(t, p, with_j2):
             atol=1e-5,
             method="DOP853",
         )
-        return sol.y[:3].T
+        return sol.y.T
 
     scale = np.array([1e3] * 3 + [1.0] * 3)
+
+    def residuals(s):
+        y = propagate(s * scale, t)
+        r = (y[:, :3] - p) / 10.0
+        if v is not None:
+            r = np.concatenate([r, (y[:, 3:] - v) / vel_sigma], axis=1)
+        return r.ravel()
+
     s0 = np.concatenate([p[0], (p[1] - p[0]) / (t[1] - t[0])]) / scale
     sol = least_squares(
-        lambda s: ((propagate(s * scale, t) - p) / 10.0).ravel(),
+        lambda s: residuals(s),
         s0,
         method="lm",
         xtol=1e-13,
         ftol=1e-13,
     )
     state = sol.x * scale
-    return lambda tt: propagate(state, tt)
+    return lambda tt: propagate(state, tt)[:, :3]
 
 
-def trial(t_all, p_all, start, gap_s):
+def trial(t_all, p_all, start, gap_s, v_all=None):
     """Errors in metres, per model, for one gap beginning at ``start`` seconds."""
     thin = np.arange(len(t_all)) % CADENCE == 0
     t30, p30 = t_all[thin], p_all[thin]
@@ -128,8 +138,12 @@ def trial(t_all, p_all, start, gap_s):
     out = {}
     out["spline"] = np.linalg.norm(spline_model(t, p)(tt) - pt, axis=1)
     out["harmonic"] = np.linalg.norm(harmonic_model(t, p, t.mean())(tt) - pt, axis=1)
-    for name, j2 in (("kepler", False), ("j2", True)):
-        pred = orbit_model(t, p, j2)
+    models = [("kepler", False, None), ("j2", True, None)]
+    if v_all is not None:
+        v = v_all[thin][use]
+        models += [("j2_v0.1", True, (v, 0.1)), ("j2_v0.01", True, (v, 0.01))]
+    for name, j2, vel in models:
+        pred = orbit_model(t, p, j2, *(vel or (None,)))
         # Evaluate gap times in one integration together with the sample times.
         times = np.unique(np.concatenate([t[:1], tt]))
         pos = pred(times)
@@ -148,7 +162,7 @@ def main():
     for gap in GAPS_MIN:
         starts = np.sort(rng.uniform(WINDOW + 60, t[-1] - WINDOW - gap * 60 - 60, N_START))
         for s in starts:
-            err = trial(t, p, s, gap * 60.0)
+            err = trial(t, p, s, gap * 60.0, load.vel)
             for m in MODELS:
                 rows.append((gap, s, m, err[m].max(), np.sqrt(np.mean(err[m] ** 2))))
         print(f"gap {gap} min done, {time.time() - t_begin:.0f} s", flush=True)
