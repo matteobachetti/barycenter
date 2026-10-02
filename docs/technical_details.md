@@ -312,6 +312,7 @@ It requires a working HEASOFT installation and is not exercised in CI.
 | `core.py` | The mission-agnostic workflow: `apply_barycenter_correction`, `correct_times`, region extraction. |
 | `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
 | `native.py` | The engine: the correction from astropy + ERFA + a JPL ephemeris. |
+| `gapfill.py` | `GapFilledInterpolator`: the plain spline, except inside gaps longer than 150 s, where a fitted Kepler + J2 orbit is used. Not yet wired into the correction. |
 | `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
 | `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which looks up which applies. |
 | `missions.py` | The `MISSIONS` registry: the only module that knows anything mission-specific. |
