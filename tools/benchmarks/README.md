@@ -22,6 +22,7 @@ run the first one.
 | `bench_edge.py` | is the clipping error an edge effect? |
 | `bench_split.py` | how much of the per-event cost a numba kernel could reach |
 | `bench_memsplit.py` | which phase of the native engine holds the memory |
+| `bench_gapfill.py` | position error when filling a long orbit-file gap: spline vs harmonic vs orbit fit |
 | `make_big.py` | blow `dummy_evt.evt` up to N events for the memory test |
 
 ## 1. numba
@@ -174,3 +175,31 @@ astropy's ephemeris evaluation, and the grid helps only by asking it for 16 560 
 instead of three million. If a user hits a memory limit on `--dt 0`, the fix is to
 **evaluate the correction in chunks** of a few hundred thousand events -- exact, since
 the correction is pointwise in time, and it bounds the peak whatever the file size.
+
+## Filling gaps in an orbit file (`bench_gapfill.py`)
+
+Data: the real 2024-03-15 GBM position history (1 s, J2000 inertial, metres), thinned to
+30 s positions (the LAT file's cadence). Gaps of 5-40 min are cut out at 25 random
+places each, models are fitted to 95 min of samples either side, and the error is the
+worst distance to the true 1 s position inside the gap. 300 m = 1 us of light time.
+
+| gap | cubic spline | harmonic (K=3) | Kepler | Kepler + J2 |
+|---|---|---|---|---|
+| 5 min | 380 m | 53 m | 2900 m | 67 m |
+| 10 min | 4.6 km | 86 m | 3.2 km | 101 m |
+| 20 min | 62 km | 130 m | 3.6 km | 111 m |
+| 40 min | 844 km | 147 m | 3.3 km | 116 m |
+
+(medians over the 25 gaps; worst cases are 2-3x larger, and 1.1 us for J2 at 40 min.)
+
+- The spline is useless past a few minutes, as expected for a cubic polynomial.
+- Point-mass Kepler is not enough: J2 is a few km over an orbit and must be included.
+- A harmonic fit with a free orbital frequency is as good as Kepler + J2 *when tuned*, but
+  is touchy: a second sweep (0.5/1/2 orbits of window, K = 2/3/5) moved it from 28 m to
+  2.6 km worst case; K=2 is clearly too few. Kepler + J2 stayed at 70-240 m median
+  throughout, and is the more robust choice.
+- Both fits get *worse* with a longer window (J2 20 min gap: ~85 m at half an orbit, ~190 m
+  at two orbits). What is left is probably drag and the higher gravity terms, which a
+  6-parameter fit cannot absorb. Not tried yet: a drag term, J3/J4, a shorter window.
+- Positions only; velocity (present in the GBM file) would constrain the fit further.
+- Not tested: one-sided extrapolation, other orbits (NICER, Swift, XMM is not circular).

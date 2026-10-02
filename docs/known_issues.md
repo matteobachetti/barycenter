@@ -24,6 +24,21 @@ the committed reference uses we are within 30 ns. It hides below one unit in the
 place of a 2024 float64 time (119.2 ns), so only a mean over many events shows it. Not
 yet explained. See [Missions](missions.md#fermi-gbm).
 
+**The Fermi GBM and LAT position files disagree by a constant 140 ms.** At 7.6 km/s that
+is about 1066 m, so barycentred times differ by up to 3.6 µs (m/c) depending on the
+direction to the source, swinging sinusoidally at the orbital period. The LAT
+documentation puts `SC_POSITION` at `START`; nothing authoritative was found on what
+GBM's `SCLK_UTC` refers to, so which file is right is unknown. Left alone: the effect
+is of the order of GBM's own quoted absolute timing accuracy. See
+[Missions](missions.md#fermi-gbm).
+
+**Positions across long orbit-file gaps are a cubic-spline guess.** The Fermi LAT is off
+in the South Atlantic Anomaly and its spacecraft file has no rows for tens of minutes,
+over which a cubic polynomial cannot follow a 95-minute orbit; `gtbary` fills these gaps
+better. Events there are flagged as uncovered, not silently trusted. A physical orbit fit
+(Kepler plus J2) or a harmonic fit may do better, for all gap filling; being measured in
+`tools/benchmarks/bench_gapfill.py`.
+
 ## Correctness
 
 **A Swift time within ~15 s of a leap second can be a second out.** The leap-second term

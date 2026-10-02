@@ -443,6 +443,43 @@ tolerance of `COVERAGE_TOLERANCE_S` (10 s) on top of the cadence allowance:
 - **A file with no GTI extension at all** → every time counts as good. Silence about
   which times are trustworthy is not a claim that none of them are.
 
+### The error budget of a position, and what a gap costs
+
+The barycentre correction is, to first order, the spacecraft position projected on the
+direction to the source, divided by *c*. So **a position error of Δ metres costs at most
+Δ/*c* seconds**: 1 m is 3.3 ns, 300 m is 1 µs, and the worst case needs the error to lie
+along the line of sight (for a near-circular orbit it swings between ± that value once
+per orbit). Everything below is a position error in metres; divide by 300 to get µs.
+
+*Between samples.* The cubic spline's error grows as the fourth power of the sample
+spacing *h* times the fourth derivative of the position. For a circular low-Earth orbit
+(angular rate 1.1×10⁻³ rad/s, radius 6.9×10³ km) the standard bound *h*⁴/384 · ω⁴*r*
+gives about 2 cm at Fermi's 30 s cadence, which is why the spline is not a concern for a
+file without gaps. For an **eccentric orbit that estimate is not safe**: near perigee the
+speed is high and the radius small, and the fourth derivative scales roughly as
+*v*⁴/*r*³, so the same cadence can cost orders of magnitude more there than at apogee.
+That has not been measured here; if a highly elliptical mission is added (INTEGRAL,
+Chandra and XMM-Newton are all in this class) the check to repeat is the benchmark below,
+decimating the real orbit file and comparing, with the error read at perigee.
+
+*Across a gap.* Measured with `tools/benchmarks/bench_gapfill.py` on a real day of Fermi
+GBM positions thinned to 30 s, worst position error inside a cut gap (medians over 25
+random gaps; worst cases are 2–3× larger):
+
+| gap | cubic spline | harmonic fit | Kepler + J2 |
+|---|---|---|---|
+| 5 min | 380 m | 53 m | 67 m |
+| 10 min | 4.6 km | 86 m | 101 m |
+| 20 min | 62 km | 130 m | 111 m |
+| 40 min | 844 km | 147 m | 116 m |
+
+The spline's error grows without bound because a cubic polynomial cannot follow a
+95-minute orbit; that is why a time inside such a gap is refused rather than guessed.
+Point-mass Kepler alone is wrong by 3 km, so the Earth's flattening (J2) is needed. What
+remains, about 100 m (0.4 µs) and independent of gap length, is most likely drag and
+higher gravity terms; a longer fitting window made it worse. Details and the caveats are
+in `tools/benchmarks/README.md`.
+
 ### `TSTART` and `TSTOP` are a separate case
 
 These two keywords routinely hold the range that was *requested* rather than the one that
