@@ -2,9 +2,9 @@
 
 Most missions put the good time intervals (GTIs) in an extension of the event file, and
 :mod:`barycenter.core` corrects them with everything else. Some do not. SVOM/ECLAIRs
-ships them in a separate file with one extension per criterion -- instrument status,
-South Atlantic Anomaly, Earth occultation, telemetry -- and leaves it to the user to
-decide which criteria apply and to combine them.
+ships them in a separate file with one extension per criterion -- stable attitude,
+South Atlantic Anomaly, telemetry, and no, partial or total Earth occultation of the field
+of view -- and leaves it to the user to decide which criteria apply and to combine them.
 
 This module does that combining, and writes the result into a copy of the event file as
 an ordinary ``GTI`` extension, so that barycentring then moves the GTIs together with the
@@ -14,7 +14,7 @@ The command line is ``barycenter-apply-gti``; without ``-e`` it lists the GTI ex
 a file offers::
 
     barycenter-apply-gti events.fits gtis.fits
-    barycenter-apply-gti events.fits gtis.fits -e GTICAL-STA,GTICAL-NSA,GTICAL-NEO
+    barycenter-apply-gti events.fits gtis.fits -e GTICAL-STA,GTICAL-NSA,GTICAL-NEO --filter-events
 """
 
 import logging as logger
@@ -155,7 +155,8 @@ def read_gtis(gti_file, extensions):
     gti_file : str
     extensions : list of str
         Extension names, in any case. An entry ``"A|B|C"`` means the first of these the
-        file has, for criteria that are spelt differently from file to file.
+        file has, for one criterion that different files name differently
+        (``"GTI|STDGTI"``). Do not use it to fall back between different criteria.
 
     Returns
     -------
@@ -329,7 +330,10 @@ def main_apply_gti(args=None):
         "--filter-events",
         action="store_true",
         default=False,
-        help="Also drop the events outside the merged GTIs",
+        help=(
+            "Also drop the events outside the merged GTIs. Needed by tools that read "
+            "only the event list and ignore the GTI extension"
+        ),
     )
     parser.add_argument("-o", "--outfile", default=None, help="Default: gti_<file>")
     parser.add_argument("--overwrite", action="store_true", default=False)

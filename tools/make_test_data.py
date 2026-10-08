@@ -858,8 +858,9 @@ def make_svom_reference():
         shutil.rmtree(workdir, ignore_errors=True)
 
 
-#: The GTI extensions combined for the SVOM reference, as a user would combine them.
-SVOM_GTI_EXTENSIONS = ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO|GTICAL-PEO|GTICAL-TEO"]
+#: The GTI extensions combined for the SVOM reference, as recommended for timing: stable
+#: attitude, out of the SAA, and no Earth occultation of the field of view.
+SVOM_GTI_EXTENSIONS = ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO"]
 
 
 def trim_chandra_inputs(nevents=400, margin=1200.0):

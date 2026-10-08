@@ -273,20 +273,43 @@ criterion, and choosing which criteria apply is up to you. List them first:
 barycenter-apply-gti SVOM_ECL-EVT-CAL_<...>.fits SVOM_ECL-GTI-CAL_<...>.fits
 ```
 
-The extensions seen so far are `GTICAL-NSA`, `GTICAL-STA`, `GTICAL-TLM`, `GTICAL-EGP`
-and an Earth-occultation one whose name varies between files: `GTICAL-NEO`, `GTICAL-PEO`
-or `GTICAL-TEO`. The file documents none of them, so check with the instrument team
-which apply to your analysis. A reasonable starting point for timing is `STA` and `NSA`
-together with whichever Earth-occultation extension the file has:
+The file itself does not say what the extensions mean. The ECLAIRs pipeline paper
+([arXiv:2604.24254](https://arxiv.org/abs/2604.24254), Sect. 3.1 and 4.1) lists the
+criteria GTIs are made from: outside the South Atlantic Anomaly (SAA), stable attitude,
+no telemetry gaps, good instrument functioning, and the state of Earth occultation. The
+extensions map onto them as follows (the first four guessed from their names, since neither
+the paper nor the files spell them out):
+
+| extension | good when |
+|---|---|
+| `GTICAL-NSA` | not in the SAA |
+| `GTICAL-STA` | the attitude is stable (not slewing) |
+| `GTICAL-TLM` | there is no telemetry gap |
+| `GTICAL-EGP` | not documented; presumably the instrument is working well |
+| `GTICAL-NEO` | **no** Earth occultation: the Earth is out of the field of view |
+| `GTICAL-PEO` | **partial** Earth occultation: the Earth covers part of the field of view |
+| `GTICAL-TEO` | **total** Earth occultation: the Earth covers all of the field of view |
+
+The last three are three different states of the same pass, not three spellings of one
+criterion, and a pass may have any subset of them. The paper's standard selection is
+NEO. For timing, that matters more than it looks: ECLAIRs is a coded-mask instrument
+whose count rate is dominated by background, so the rate hardly drops when the Earth
+covers the field of view, and nothing in a light curve warns that the source has gone.
+Time in TEO adds background and no pulses; time in PEO may or may not contain the
+source, depending on which part of the field of view the Earth covers. So for timing:
 
 ```bash
 barycenter-apply-gti SVOM_ECL-EVT-CAL_<...>.fits SVOM_ECL-GTI-CAL_<...>.fits \
-    -e 'GTICAL-STA,GTICAL-NSA,GTICAL-NEO|GTICAL-PEO|GTICAL-TEO' -o gti_events.fits
+    -e GTICAL-STA,GTICAL-NSA,GTICAL-NEO --filter-events -o gti_events.fits
 ```
 
-The extensions are intersected, `A|B|C` takes the first one present (quote it, or the
-shell reads `|` as a pipe), and the result is written as a `GTI` extension of a copy of
-the event file. Events outside it are kept unless you add `--filter-events`. See
+The extensions are intersected, and the result is written as a `GTI` extension of a copy
+of the event file. **Use `--filter-events`** unless you know that every tool downstream
+reads that extension: without it the events outside the GTIs are kept, and a folding or
+pulsar-search tool that only reads the event list will use them anyway. A pass with no
+`GTICAL-NEO` extension at all is an error rather than a silent fallback to PEO or TEO;
+skip it, or include PEO deliberately after checking that the source is not behind the
+Earth. See
 [Good time intervals in a separate file](technical_details.md#good-time-intervals-in-a-separate-file).
 
 ### Step 2: barycentre
@@ -313,12 +336,16 @@ for events in glob.glob("SVOM_ECL-EVT-CAL_*.fits"):
     pass_id = re.search(r"\.P-([0-9]{6}_[A-Z]{3})", events).group(1)
     (orbit,) = glob.glob(f"SVOM_SVO-ORB-CNV_*{pass_id}*.fits*")
     (gtis,) = glob.glob(f"SVOM_ECL-GTI-CAL_*{pass_id}*.fits*")
-    with_gti = add_gti_extension(
-        events,
-        gtis,
-        ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO|GTICAL-PEO|GTICAL-TEO"],
-        overwrite=True,
-    )
+    try:
+        with_gti = add_gti_extension(
+            events,
+            gtis,
+            ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO"],
+            filter_events=True,
+            overwrite=True,
+        )
+    except KeyError:  # no Earth-free time in this pass
+        continue
     apply_barycenter_correction(
         with_gti, orbit, ra=RA, dec=DEC, ephem="DE440",
         outfile="bary_" + with_gti, overwrite=True,

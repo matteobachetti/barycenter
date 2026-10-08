@@ -1538,7 +1538,7 @@ class TestSVOM:
         with_gti = add_gti_extension(
             self.evfile,
             self.gtifile,
-            ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO|GTICAL-PEO|GTICAL-TEO"],
+            ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO"],
             outfile=str(tmp_path / "gti.evt"),
         )
         return main_barycenter(

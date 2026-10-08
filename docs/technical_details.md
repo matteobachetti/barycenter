@@ -537,14 +537,17 @@ barycentring like any other. It is mission-agnostic: extensions are named by the
 
 ```bash
 barycenter-apply-gti events.fits gtis.fits             # list the GTI extensions
-barycenter-apply-gti events.fits gtis.fits -e 'GTICAL-STA,GTICAL-NSA,GTICAL-NEO|GTICAL-PEO'
+barycenter-apply-gti events.fits gtis.fits -e GTICAL-STA,GTICAL-NSA,GTICAL-NEO --filter-events
 ```
 
 - **Intersection by default.** Independent quality criteria all have to hold, so the
   default keeps time that is good in every extension; `--union` keeps time good in any,
   as for per-CCD GTIs.
-- **`A|B|C`** means the first of these extensions present in the file, so one recipe
-  covers files that carry differently named variants of a criterion.
+- **`A|B|C`** means the first of these extensions present in the file, for one
+  criterion that different files store under different names (`GTI|STDGTI`). It is not
+  a fallback between *different* criteria: SVOM's `GTICAL-NEO`, `-PEO` and `-TEO` are
+  no, partial and total Earth occultation, and falling back from one to the next would
+  silently admit time when the source is behind the Earth.
 - **A missing extension is an error**, listing the ones present. A misspelt criterion
   that was silently skipped would widen the GTIs without anyone noticing.
 - **The epoch is checked.** The GTI extensions must count from the same `MJDREF` +
@@ -554,7 +557,9 @@ barycenter-apply-gti events.fits gtis.fits -e 'GTICAL-STA,GTICAL-NSA,GTICAL-NEO|
   barycentring.
 - **An existing `GTI` extension is never replaced**: applying the helper twice is refused.
 - **Events are kept** unless `--filter-events` is given; the `GTI` extension alone
-  records which are good, and downstream tools can apply it.
+  records which are good. Many timing tools read only the event list and never look at
+  an extra `GTI` extension, so for them `--filter-events` is what makes the selection
+  take effect.
 
 (the-pint-engine)=
 ## The PINT engine

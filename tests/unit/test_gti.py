@@ -93,8 +93,8 @@ class TestReading:
         assert [len(g) for g in gtis] == [2, 1]
 
     def test_alternatives_take_the_first_one_present(self, gti_file):
-        """``A|B|C`` uses the first extension the file has, so one recipe fits all files."""
-        (gti,) = read_gtis(gti_file, ["GTICAL-NEO|GTICAL-PEO|GTICAL-TEO"])
+        """``A|B`` uses the first extension the file has, for a criterion named differently by different files."""
+        (gti,) = read_gtis(gti_file, ["STDGTI|GTICAL-PEO"])
         assert np.array_equal(gti, [[0, 80], [220, 300]])
 
     def test_a_missing_extension_is_an_error_naming_what_is_there(self, gti_file):
@@ -148,7 +148,7 @@ class TestAddingToEvents:
     def test_command_line(self, event_file, gti_file, tmp_path):
         """The command intersects the listed extensions and returns the output name."""
         out = str(tmp_path / "cli.fits")
-        args = [event_file, gti_file, "-e", "GTICAL-STA,GTICAL-NSA,GTICAL-NEO|GTICAL-PEO"]
+        args = [event_file, gti_file, "-e", "GTICAL-STA,GTICAL-NSA,GTICAL-PEO"]
         assert main_apply_gti(args + ["-o", out]) == out
         with fits.open(out) as hdul:
             assert np.array_equal(hdul["GTI"].data["START"], [50, 220])
