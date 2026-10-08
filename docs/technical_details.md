@@ -312,6 +312,7 @@ It requires a working HEASOFT installation and is not exercised in CI.
 | `core.py` | The mission-agnostic workflow: `apply_barycenter_correction`, `correct_times`, region extraction. |
 | `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
 | `native.py` | The engine: the correction from astropy + ERFA + a JPL ephemeris. |
+| `gti.py` | Good time intervals shipped in a separate file: `read_gtis`, `intersect_gtis`/`union_gtis`, `add_gti_extension`, and the `barycenter-apply-gti` command. Run before barycentring. |
 | `gapfill.py` | `GapFilledInterpolator`: the plain spline, except inside gaps longer than 150 s, where a fitted Kepler + J2 orbit is used. Switched on by `--fill-orbit-gaps`. |
 | `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
 | `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which looks up which applies. |
@@ -520,6 +521,40 @@ and corrects that. Where the file has no GTIs the event times stand in, which is
 intent. Only these two keywords are ever moved, and only when they miss by more than the
 tolerance; on the M82 file the events and GTIs come out bit-identical either way, and only
 `TSTART` and the `DATE-OBS` derived from it change.
+
+(gtis-in-a-separate-file)=
+## Good time intervals in a separate file
+
+Barycentring moves every `START`/`STOP` column it finds together with the events, so a
+`GTI` extension inside the event file stays consistent with the events at no cost.
+Some missions do not put one there. SVOM/ECLAIRs ships its GTIs as a separate file with
+one extension per criterion (instrument status, South Atlantic Anomaly, Earth
+occultation, telemetry), and which criteria apply is the user's choice.
+
+[`gti.py`](../src/barycenter/gti.py) combines the chosen extensions and writes them into
+a copy of the event file as a single binary-table `GTI` extension, which then goes through
+barycentring like any other. It is mission-agnostic: extensions are named by the caller.
+
+```bash
+barycenter-apply-gti events.fits gtis.fits             # list the GTI extensions
+barycenter-apply-gti events.fits gtis.fits -e 'GTICAL-STA,GTICAL-NSA,GTICAL-NEO|GTICAL-PEO'
+```
+
+- **Intersection by default.** Independent quality criteria all have to hold, so the
+  default keeps time that is good in every extension; `--union` keeps time good in any,
+  as for per-CCD GTIs.
+- **`A|B|C`** means the first of these extensions present in the file, so one recipe
+  covers files that carry differently named variants of a criterion.
+- **A missing extension is an error**, listing the ones present. A misspelt criterion
+  that was silently skipped would widen the GTIs without anyone noticing.
+- **The epoch is checked.** The GTI extensions must count from the same `MJDREF` +
+  `TIMEZERO` as the events, to 1 us (SVOM writes `MJDREFF` with different rounding in the
+  two files, 1e-13 s apart). The new extension gets the events' `TIMESYS`, `TIMEREF`,
+  `MJDREF*` and `TIMEZERO`, so it says which time scale it is on before and after
+  barycentring.
+- **An existing `GTI` extension is never replaced**: applying the helper twice is refused.
+- **Events are kept** unless `--filter-events` is given; the `GTI` extension alone
+  records which are good, and downstream tools can apply it.
 
 (the-pint-engine)=
 ## The PINT engine

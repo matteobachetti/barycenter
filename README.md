@@ -57,6 +57,13 @@ automatically if you do not). `barycenter --help` lists the rest; the options wo
 knowing about are `--ephem`, `--engine`, `--dt` and `--fill-orbit-gaps` (fit an orbit
 across long gaps in the orbit file, such as the Fermi LAT's South Atlantic Anomaly).
 
+If the good time intervals come in a separate file, as for SVOM, merge the ones you want
+into the event file first with `barycenter-apply-gti` (run it without `-e` to list them):
+
+```bash
+barycenter-apply-gti events.fits gtis.fits -e GTICAL-STA,GTICAL-NSA -o gti_events.fits
+```
+
 ## Use it from Python
 
 The whole command line is one function:
