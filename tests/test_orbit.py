@@ -22,6 +22,7 @@ CHANDRA_ORBIT = os.path.join(datadir, "dummy_chandra_orb.fits.gz")
 SWIFT_ORBIT = os.path.join(datadir, "dummy_swift_orb.fits.gz")
 FERMI_ORBIT = os.path.join(datadir, "dummy_fermi_orb.fits.gz")
 GBM_ORBIT = os.path.join(datadir, "dummy_gbm_poshist.fits.gz")
+SVOM_ORBIT = os.path.join(datadir, "dummy_svom_orb.fits.gz")
 
 
 def write_fporbit(path, met, pos, vel=None, telescope="NICER", extname="ORBIT"):
@@ -151,6 +152,24 @@ class TestRealFile:
         # Fermi flies about 530 km up, so metres were not mistaken for kilometres.
         radius = np.hypot(np.hypot(table["X"].value, table["Y"].value), table["Z"].value)
         assert np.all((radius > 6.85e6) & (radius < 6.95e6))
+
+    def test_svoms_float32_vectors_are_read_as_metres(self, caplog):
+        """SVOM's ``SVO-ORB-CNV`` holds float32 ``POSITION``/``VELOCITY`` vectors in metres.
+
+        Same column names as Swift and NuSTAR, which tabulate kilometres: reading SVOM's
+        as kilometres would put it a thousand Earth radii out. Nothing may be
+        differentiated, and the extension name must be the one the spec expects.
+        """
+        with caplog.at_level("WARNING"):
+            table = read_orbit(SVOM_ORBIT)
+        assert not caplog.records
+        with fits.open(SVOM_ORBIT) as hdul:
+            orbit = hdul["SVO-ORB-CNV"].data
+            assert np.array_equal(table["MET"].value, orbit["TIME"])
+            assert np.array_equal(table["X"].value, orbit["POSITION"][:, 0])
+            assert np.array_equal(table["Vz"].value, orbit["VELOCITY"][:, 2])
+        radius = np.hypot(np.hypot(table["X"].value, table["Y"].value), table["Z"].value)
+        assert np.all((radius > 6.95e6) & (radius < 7.05e6))
 
     def test_the_lat_spacecraft_file_is_still_read_from_sc_data(self):
         """Adding GBM's layout must not change which one a LAT file is read with."""

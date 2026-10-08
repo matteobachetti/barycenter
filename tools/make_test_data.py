@@ -627,6 +627,241 @@ def trim_gbm_inputs(nevents=400, margin=60.0):
     subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
 
 
+#: SVOM's epoch, 2017-01-01T00:00:00 UTC written as MJD(TT), as in every SVOM file.
+SVOM_MJDREFI, SVOM_MJDREFF = 57754, 0.000800740741
+
+#: The synthetic SVOM dataset: a start MET (2025-03-29), a span, and a circular orbit at
+#: SVOM's altitude and inclination. Nothing in it comes from a real observation.
+SVOM_T0, SVOM_SPAN = 260000000.0, 1500.0
+SVOM_RADIUS_M, SVOM_INCLINATION_DEG, SVOM_RAAN_DEG = 7003.0e3, 29.0, 40.0
+
+#: How the SVOM reference is made. No tool barycentres SVOM, so ``barycorr`` is handed
+#: the same events and positions relabelled as a NICER observation; see
+#: :func:`svom_as_nicer`. The source position is arbitrary.
+SVOM_REFERENCE = {
+    "outfile": "dummy_svom_bary_DE440.evt.gz",
+    "args": {
+        "clockfile": "NONE",
+        "refframe": "ICRS",
+        "ephem": "JPLEPH.440",
+        "ra": "270.0",
+        "dec": "-25.0",
+    },
+}
+
+
+def _svom_header(hdu, card, creator):
+    """The timing keywords every SVOM file carries, as the mission writes them."""
+    for key, value, comment in [
+        ("ORIGIN", "FSC", "Science Center"),
+        ("TELESCOP", "SVOM", "Official acronym for the mission"),
+        ("INSTRUME", "ECL" if card.startswith("ECL") else "INS", "Instrument acronym"),
+        ("CREATOR", creator, "Pipeline that created or modified this file"),
+        ("CARD", card, "Product card"),
+        ("TIMEREF", "LOCAL", "Time reference frame"),
+        ("TIMESYS", "TT", "Time frame system"),
+        ("TIMEUNIT", "s", "Time unit"),
+        ("MJDREFI", SVOM_MJDREFI, "integer portion in MJD for reference time"),
+        ("MJDREFF", SVOM_MJDREFF, "fractional portion of MJD for reference time"),
+        ("DATEREF", "2017-01-01T00:00:00.0", "Reference UTC time in ISO-8601"),
+        ("CLOCKCOR", card.startswith("ECL"), "Time corrected for any spacecraft clock drift"),
+        ("RADESYS", "ICRS", "Celestial coordinate system"),
+    ]:
+        hdu.header[key] = (value, comment)
+    hdu.header.add_history("Synthetic SVOM-format file, by tools/make_test_data.py")
+
+
+def make_svom_inputs(nevents=400, seed=20261008):
+    """Write a synthetic SVOM/ECLAIRs event file, orbit file and GTI file.
+
+    Synthetic rather than trimmed from an observation, but in the files' real layout:
+
+    - events in ``ECL-EVT-CAL``, with ``TIME`` not quite sorted (ECLAIRs event lists step
+      back by up to tens of microseconds) and no source position in the header;
+    - the orbit in ``SVO-ORB-CNV`` at 1 s, ``POSITION``/``VELOCITY`` as *float32* vectors
+      in m and m/s in the J2000 frame, ``POSITION_SPHERICAL`` as ITRS lon/lat/alt, and
+      the ``ORBIT_ID``/``FLAG_PVT``/``ORIGIN`` columns;
+    - the GTIs in a separate file, one extension per criterion, behind a group table
+      that lists them.
+
+    The orbit is circular, which is all the reader and the barycentring need: what is
+    tested is the file layout and the time scale, against ``barycorr`` fed the same
+    numbers.
+    """
+    import astropy.units as u
+    import numpy as np
+    from astropy.coordinates import GCRS, ITRS, CartesianRepresentation
+    from astropy.io import fits
+    from astropy.time import Time
+
+    rng = np.random.default_rng(seed)
+    evt_out = os.path.join(DATA, "dummy_svom_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_svom_orb.fits")
+    gti_out = os.path.join(DATA, "dummy_svom_gti.fits")
+
+    # Orbit: 1 s steps with the ~1 ms jitter of the real PVT time tags.
+    met = SVOM_T0 + np.arange(int(SVOM_SPAN) + 1) + rng.normal(0, 1e-3, int(SVOM_SPAN) + 1)
+    gm = 3.986004418e14
+    n = np.sqrt(gm / SVOM_RADIUS_M**3)
+    inc, raan = np.radians(SVOM_INCLINATION_DEG), np.radians(SVOM_RAAN_DEG)
+    p_hat = np.array([np.cos(raan), np.sin(raan), 0.0])
+    q_hat = np.array([-np.sin(raan) * np.cos(inc), np.cos(raan) * np.cos(inc), np.sin(inc)])
+    phase = n * (met - SVOM_T0)
+    pos = SVOM_RADIUS_M * (np.outer(np.cos(phase), p_hat) + np.outer(np.sin(phase), q_hat))
+    vel = SVOM_RADIUS_M * n * (-np.outer(np.sin(phase), p_hat) + np.outer(np.cos(phase), q_hat))
+
+    obstime = Time(SVOM_MJDREFI, SVOM_MJDREFF, format="mjd", scale="tt") + met * u.s
+    gcrs = GCRS(CartesianRepresentation(pos.T * u.m), obstime=obstime)
+    geodetic = gcrs.transform_to(ITRS(obstime=obstime)).earth_location.to_geodetic()
+    spherical = np.column_stack(
+        [geodetic.lon.deg % 360, geodetic.lat.deg, geodetic.height.to_value(u.m)]
+    )
+    orbit = fits.BinTableHDU.from_columns(
+        [
+            fits.Column(name="TIME", format="D", unit="s", array=met),
+            fits.Column(name="ORBIT_ID", format="I", array=np.full(met.size, 9999)),
+            fits.Column(name="POSITION", format="3E", unit="m", array=pos),
+            fits.Column(name="POSITION_SPHERICAL", format="3E", array=spherical),
+            fits.Column(name="VELOCITY", format="3E", unit="m /s", array=vel),
+            fits.Column(name="FLAG_PVT", format="B", array=np.zeros(met.size)),
+            fits.Column(name="ORIGIN", format="B", array=np.zeros(met.size)),
+        ],
+        name="SVO-ORB-CNV",
+    )
+    _svom_header(orbit, "SVO-ORB-CNV", "X-BAND-PREPROC")
+    orbit.header["TSTART"], orbit.header["TSTOP"] = float(met[0]), float(met[-1])
+    primary = fits.PrimaryHDU()
+    _svom_header(primary, "SVO-ORB-CNV", "X-BAND-PREPROC")
+    fits.HDUList([primary, orbit]).writeto(orb_out, overwrite=True)
+    subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
+    print(f"    wrote {orb_out}.gz ({met.size} rows)")
+
+    # GTIs: two criteria cut different pieces, so their intersection is not either one.
+    t1, t2 = SVOM_T0 + 120.0, SVOM_T0 + SVOM_SPAN - 120.0
+    criteria = {
+        "GTICAL-NSA": [[t1, t2]],
+        "GTICAL-STA": [[t1 + 5.0, t1 + 600.0], [t1 + 700.0, t2 - 5.0]],
+        "GTICAL-TLM": [[t1, t2]],
+        "GTICAL-NEO": [[t1, t1 + 1000.0]],
+    }
+    group = fits.BinTableHDU.from_columns(
+        [
+            fits.Column(name="MEMBER_XTENSION", format="8A", array=["BINTABLE"] * len(criteria)),
+            fits.Column(name="MEMBER_NAME", format="10A", array=list(criteria)),
+            fits.Column(name="GTI_NAME", format="10A", array=list(criteria)),
+        ],
+        name="ECL-GTI-CAL-GRP",
+    )
+    _svom_header(group, "ECL-GTI-CAL", "ECLAIR-PIPELINE")
+    hdus = [fits.PrimaryHDU(), group]
+    _svom_header(hdus[0], "ECL-GTI-CAL", "ECLAIR-PIPELINE")
+    for name, intervals in criteria.items():
+        intervals = np.array(intervals)
+        hdu = fits.BinTableHDU.from_columns(
+            [
+                fits.Column(name="START", format="D", unit="s", array=intervals[:, 0]),
+                fits.Column(name="STOP", format="D", unit="s", array=intervals[:, 1]),
+                fits.Column(name="SJDSTART", format="D", unit="d", array=intervals[:, 0] / 86400),
+                fits.Column(name="SJDSTOP", format="D", unit="d", array=intervals[:, 1] / 86400),
+            ],
+            name=name,
+        )
+        _svom_header(hdu, "ECL-GTI-CAL", "ECLAIR-PIPELINE")
+        # The GTI file rounds MJDREFF differently from the event file, as the real one does.
+        hdu.header["MJDREFF"] = 0.000800740740999999
+        hdus.append(hdu)
+    fits.HDUList(hdus).writeto(gti_out, overwrite=True)
+    print(f"    wrote {gti_out}")
+
+    # Events: spread over the whole span, some outside the GTIs, locally out of order.
+    times = np.sort(rng.uniform(SVOM_T0 + 60.0, SVOM_T0 + SVOM_SPAN - 60.0, nevents))
+    # 20 events land 1-12 us *before* the one listed ahead of them, as in ECLAIRs lists.
+    pairs = rng.choice(np.arange(0, nevents - 1, 2), 20, replace=False)
+    times[pairs + 1] = times[pairs] - rng.uniform(1e-6, 1.2e-5, pairs.size)
+    events = fits.BinTableHDU.from_columns(
+        [
+            fits.Column(name="TIME", format="D", unit="s", array=times),
+            fits.Column(name="JDET", format="B", array=rng.integers(0, 80, nevents)),
+            fits.Column(name="IDET", format="B", array=rng.integers(0, 80, nevents)),
+            fits.Column(name="PHA", format="I", array=rng.integers(80, 1000, nevents)),
+            fits.Column(name="PI", format="I", array=rng.integers(0, 500, nevents)),
+            fits.Column(name="FLAG", format="B", array=np.zeros(nevents)),
+        ],
+        name="ECL-EVT-CAL",
+    )
+    _svom_header(events, "ECL-EVT-CAL", "ECLAIR-PIPELINE")
+    events.header["TSTART"], events.header["TSTOP"] = float(times.min()), float(times.max())
+    primary = fits.PrimaryHDU()
+    _svom_header(primary, "ECL-EVT-CAL", "ECLAIR-PIPELINE")
+    fits.HDUList([primary, events]).writeto(evt_out, overwrite=True)
+    print(f"    wrote {evt_out} ({nevents} events)")
+
+
+def svom_as_nicer(evt, orb, workdir):
+    """Relabel an SVOM event file (with its ``GTI``) and orbit file as NICER's.
+
+    ``barycorr`` refuses ``TELESCOP=SVOM``, but takes a NICER orbit file: an ``ORBIT``
+    extension with scalar ``X``/``Y``/``Z``/``Vx``/``Vy``/``Vz`` in metres and m/s,
+    which is what SVOM's vector columns hold. ``MJDREF``, ``TIMESYS`` and every number
+    are kept, so ``barycorr``'s answer is what it would give for SVOM if it knew it.
+    Returns the paths of the two relabelled files.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(workdir, "svom_as_nicer.evt")
+    orb_out = os.path.join(workdir, "svom_as_nicer.orb")
+    with fits.open(evt) as hdul:
+        for hdu in hdul:
+            hdu.header["TELESCOP"], hdu.header["INSTRUME"] = "NICER", "XTI"
+        hdul[1].name = "EVENTS"
+        hdul.writeto(evt_out, overwrite=True)
+    with fits.open(orb) as hdul:
+        data = hdul[1].data
+        pos = np.asarray(data["POSITION"], dtype=np.float64)
+        vel = np.asarray(data["VELOCITY"], dtype=np.float64)
+        columns = [fits.Column(name="TIME", format="D", unit="s", array=data["TIME"])]
+        for i, axis in enumerate("XYZ"):
+            columns.append(fits.Column(name=axis, format="D", unit="m", array=pos[:, i]))
+        for i, axis in enumerate("xyz"):
+            columns.append(fits.Column(name="V" + axis, format="D", unit="m/s", array=vel[:, i]))
+        orbit = fits.BinTableHDU.from_columns(columns, name="ORBIT")
+        for key in ("TIMESYS", "TIMEREF", "TIMEUNIT", "MJDREFI", "MJDREFF", "TSTART", "TSTOP"):
+            orbit.header[key] = hdul[1].header[key]
+        orbit.header["TELESCOP"] = "NICER"
+        fits.HDUList([fits.PrimaryHDU(), orbit]).writeto(orb_out, overwrite=True)
+    return evt_out, orb_out
+
+
+def make_svom_reference():
+    """Run ``barycorr`` on the SVOM dummy, GTIs merged in, dressed as NICER."""
+    import subprocess as sp
+
+    sys.path.insert(0, os.path.join(HERE, os.pardir, "src"))
+    from barycenter.gti import add_gti_extension
+
+    workdir = tempfile.mkdtemp(prefix="svom_ref_")
+    try:
+        with_gti = add_gti_extension(
+            os.path.join(DATA, "dummy_svom_evt.evt"),
+            os.path.join(DATA, "dummy_svom_gti.fits"),
+            SVOM_GTI_EXTENSIONS,
+            outfile=os.path.join(workdir, "gti.evt"),
+        )
+        evt, orb = svom_as_nicer(with_gti, os.path.join(DATA, "dummy_svom_orb.fits.gz"), workdir)
+        target = os.path.join(DATA, SVOM_REFERENCE["outfile"])
+        raw = target[: -len(".gz")]
+        run_barycorr(evt, [orb], raw, SVOM_REFERENCE["args"])
+        sp.run(["gzip", "-9", "-f", raw], check=True)
+        print(f"    wrote {target}")
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
+#: The GTI extensions combined for the SVOM reference, as a user would combine them.
+SVOM_GTI_EXTENSIONS = ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO|GTICAL-PEO|GTICAL-TEO"]
+
+
 def trim_chandra_inputs(nevents=400, margin=1200.0):
     """Cut the Chandra event and orbit files down to something committable.
 
@@ -950,6 +1185,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_gbm_evt.evt")):
         print("--- dummy_gbm_evt.evt, dummy_gbm_poshist.fits.gz")
         trim_gbm_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_svom_evt.evt")):
+        print("--- dummy_svom_evt.evt, dummy_svom_orb.fits.gz, dummy_svom_gti.fits")
+        make_svom_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target
@@ -977,6 +1215,9 @@ def main():
         )
         subprocess.run(["gzip", "-9", "-f", raw], check=True)
         print(f"    wrote {target}")
+
+    print(f"--- {SVOM_REFERENCE['outfile']}")
+    make_svom_reference()
 
     target = os.path.join(DATA, FERMI_REFERENCE["outfile"])
     raw = target[: -len(".gz")]

@@ -1172,6 +1172,10 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_fermi_bary_DE405.evt.gz` | the Fermi `gtbary` reference for those events, `solareph="JPL DE405"`, GTIs corrected too |
 | `dummy_gbm_evt.evt` | 401 real GBM events, every 6652nd row of NaI 0's `glg_tte_n0_240315_12z_v00.fit.gz`, so the sample spans the hour, with its `EBOUNDS` and `GTI` extensions |
 | `dummy_gbm_poshist.fits.gz` | 2922 rows of that day's `glg_poshist_all_240315_v00.fit`, every column at the native 1 s over the events plus 60 s. No reference file: `gtbary` refuses GBM, and the test compares against the same positions in LAT layout instead |
+| `dummy_svom_evt.evt` | 400 **synthetic** ECLAIRs events in SVOM's `ECL-EVT-CAL` layout over 1.5 ks, 20 of them listed out of time order by 1–12 µs as in real ECLAIRs lists |
+| `dummy_svom_orb.fits.gz` | a synthetic circular 625 km orbit in SVOM's `SVO-ORB-CNV` layout: 1501 rows at 1 s, float32 `POSITION`/`VELOCITY` in m, `POSITION_SPHERICAL` computed from them in ITRS |
+| `dummy_svom_gti.fits` | a synthetic SVOM GTI file: a group table and four criteria (`GTICAL-NSA`, `-STA`, `-TLM`, `-NEO`), with `MJDREFF` rounded the way the real GTI files round it |
+| `dummy_svom_bary_DE440.evt.gz` | `barycorr` on those events, with `STA`∩`NSA`∩`NEO` merged in, after relabelling events and orbit as NICER's — see below |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
 triples of identical length — `GEI_*` is geocentric equatorial and is the one the
@@ -1201,6 +1205,15 @@ reason: `time` in the events, `Time` in the orbit file, `START`/`STOP` in capita
 case-insensitivity the FITS standard grants and most missions never use, and the failure
 it guards against is silent — a case-sensitive lookup corrects the GTIs and leaves the
 events alone.
+
+The SVOM files are synthetic rather than trimmed from an observation. Their layout is
+the real one, column formats, extension names and keywords included, and that is what the
+reader and the GTI merging are tested on; the orbit itself only needs to be a plausible
+low-Earth orbit. With no tool that barycentres SVOM, the reference is `barycorr` run on
+the same events and positions relabelled as a NICER observation (`svom_as_nicer`): the
+NICER orbit layout holds the same metre and m/s numbers as scalar columns, and `MJDREF`
+and `TIMESYS` are kept, so `barycorr`'s answer is the one it would give for SVOM. We
+agree with it to one float64 ulp (29.8 ns), events and GTIs alike.
 
 `tools/make_test_data.py` regenerates all of them, including the trimming, and it now
 allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and

@@ -1511,3 +1511,52 @@ class TestFermiGBM:
             assert np.array_equal(a["GTI"].data["START"], b["GTI"].data["START"])
             # And the times did move: a barycentred hour is minutes away from the input.
             assert np.all(np.abs(a["EVENTS"].data["TIME"] - raw["EVENTS"].data["TIME"]) > 1)
+
+
+class TestSVOM:
+    """SVOM/ECLAIRs, on a synthetic dataset in the mission's real file layout.
+
+    No tool barycentres SVOM, so the reference is HEASOFT ``barycorr`` run on the same
+    events and positions relabelled as a NICER observation, whose orbit layout ``barycorr``
+    reads; ``MJDREF``, ``TIMESYS`` and every number are unchanged. See
+    ``make_svom_inputs`` and ``svom_as_nicer`` in ``tools/make_test_data.py``.
+
+    The GTIs come in a separate file, as SVOM ships them, and are merged in first with
+    :func:`barycenter.gti.add_gti_extension`, so the run is the one a user would do.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_svom_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_svom_orb.fits.gz")
+        cls.gtifile = os.path.join(datadir, "dummy_svom_gti.fits")
+        cls.reference = os.path.join(datadir, "dummy_svom_bary_DE440.evt.gz")
+
+    def run(self, tmp_path):
+        from barycenter.gti import add_gti_extension
+
+        with_gti = add_gti_extension(
+            self.evfile,
+            self.gtifile,
+            ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO|GTICAL-PEO|GTICAL-TEO"],
+            outfile=str(tmp_path / "gti.evt"),
+        )
+        return main_barycenter(
+            [with_gti, self.orbfile, "-o", str(tmp_path / "bary.evt")]
+            + ["--ra", "270.0", "--dec", "-25.0", "--ephem", "DE440"]
+        )
+
+    def test_agrees_with_barycorr_events_and_gtis(self, tmp_path):
+        """Events and merged GTIs both match barycorr to 100 ns, row by row.
+
+        Row by row also shows the events keep their original, not quite sorted, order.
+        No ``--clockfile``: SVOM needs no clock correction and none must be looked for.
+        """
+        outfile = self.run(tmp_path)
+        with fits.open(outfile) as ours, fits.open(self.reference) as ref:
+            assert_times_agree(ours[1].data["TIME"], ref[1].data["TIME"])
+            assert_times_agree(ours["GTI"].data["START"], ref["GTI"].data["START"])
+            assert_times_agree(ours["GTI"].data["STOP"], ref["GTI"].data["STOP"])
+            assert ours[1].header["TIMESYS"] == "TDB"
+            assert ours["GTI"].header["TIMEREF"] == "SOLARSYSTEM"
+            assert np.any(np.diff(ours[1].data["TIME"]) < 0)
