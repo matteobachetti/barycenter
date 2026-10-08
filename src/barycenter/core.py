@@ -8,6 +8,7 @@ column and time keyword in every extension.
 
 import logging as logger
 import os
+import textwrap
 import tempfile
 from functools import partial
 
@@ -23,6 +24,7 @@ from .native import (
     native_barycentric_correction,
 )
 from .official import apply_mission_specific_barycenter_correction
+from .gapfill import MIN_GAP_S, find_gaps
 from .orbit import OrbitCoverage, read_orbit
 from .remote import download_locally
 from .utils import (
@@ -351,6 +353,7 @@ def get_barycentric_correction(
     engine="native",
     dt=None,
     met_range=None,
+    fill_gaps=False,
 ):
     """Get a function to compute the barycentric correction, from MET(TT) to MET(TDB).
 
@@ -382,6 +385,9 @@ def get_barycentric_correction(
     met_range : tuple of float, optional
         ``(start, stop)`` in mission elapsed time, to keep a grid from spanning the whole
         orbit file when only a short observation is being corrected.
+    fill_gaps : bool, optional
+        Fit an orbit across the long gaps in the orbit file, rather than refusing the
+        times that fall in them. Native engine only. See :mod:`barycenter.gapfill`.
 
     Returns
     -------
@@ -410,7 +416,9 @@ def get_barycentric_correction(
     # Carried on the returned callable rather than returned beside it, because every
     # caller wants the correction and only one wants the coverage -- and that one would
     # otherwise have to read the orbit file a second time to find out where it ends.
-    coverage = OrbitCoverage.from_met(met)
+    if fill_gaps and engine != "native":
+        raise ValueError("Filling orbit gaps is only implemented for the native engine")
+    coverage = OrbitCoverage.from_met(met, filled=find_gaps(met, MIN_GAP_S) if fill_gaps else None)
 
     if engine == "native":
         if ra is None or dec is None:
@@ -423,6 +431,7 @@ def get_barycentric_correction(
             frame=radecsys,
             dt=dt,
             met_range=met_range,
+            fill_gaps=fill_gaps,
         )
         bary_fun.coverage = coverage
         return bary_fun
@@ -553,6 +562,14 @@ def _warn_outside_grid(bary_fun, times, where, timezero=0.0, clock_fun=None, lea
 #: guess silently written into an event list is indistinguishable from a measurement.
 COVERAGE_TOLERANCE_S = 10.0
 
+#: What to tell a user whose times fall in a hole in the middle of the orbit file.
+FILL_HINT = (
+    "Some of them lie in a gap inside the orbit file (for the Fermi LAT, the South "
+    "Atlantic Anomaly): rerun with --fill-orbit-gaps to fit an orbit across it. That "
+    "costs a position error of the order of 100 m (0.4 us of light time), up to about "
+    "1 us in the worst case, against kilometres for the spline."
+)
+
 
 def gti_intervals(hdul):
     """The good time intervals of a file, raw and unsorted, or ``None`` if it has none.
@@ -662,6 +679,7 @@ def enforce_orbit_coverage(
     clock_fun=None,
     leap_fun=None,
     tolerance=COVERAGE_TOLERANCE_S,
+    fill_hint=True,
 ):
     """Drop rows the orbit file cannot place, and refuse the ones that matter.
 
@@ -693,9 +711,14 @@ def enforce_orbit_coverage(
             if column is None or not len(data):
                 continue
             raw = np.asarray(data[column], dtype=np.float64)
-            missing = coverage.uncovered(pre_bary_shift(raw, timezero, clock_fun, leap_fun))
+            shifted = pre_bary_shift(raw, timezero, clock_fun, leap_fun)
+            missing = coverage.uncovered(shifted)
             if not np.any(missing > tolerance):
                 continue
+            # Only a hole *inside* the file can be filled; past either end there is
+            # nothing to fit an orbit to.
+            interior = (shifted > coverage.samples[0]) & (shifted < coverage.samples[-1])
+            hint = f" {FILL_HINT}" if fill_hint and np.any(interior & (missing > tolerance)) else ""
 
             good = inside_gti(raw, gti)
             fatal = (missing > tolerance) & good
@@ -706,7 +729,7 @@ def enforce_orbit_coverage(
                     f"orbit file, which only covers "
                     f"{coverage.samples[0]:.3f} to {coverage.samples[-1]:.3f}. The "
                     "spacecraft position there would be an extrapolation, so these times "
-                    "cannot be barycentred. Supply an orbit file covering the observation."
+                    "cannot be barycentred. Supply an orbit file covering the observation." + hint
                 )
 
             drop = (missing > tolerance) & ~good
@@ -714,12 +737,35 @@ def enforce_orbit_coverage(
                 f"{hdu.name}/{column}: dropping {np.count_nonzero(drop)} rows that fall "
                 f"outside every good time interval AND up to {missing[drop].max():.3f} s "
                 f"outside the orbit file. The spacecraft position there is unknown, so "
-                f"these times cannot be barycentred."
+                f"these times cannot be barycentred." + hint
             )
             hdu.data = data[~drop]
             data = hdu.data
             dropped += int(np.count_nonzero(drop))
     return dropped
+
+
+def filled_gap_report(filler):
+    """One line per gap whose position was fitted rather than tabulated.
+
+    Only gaps that the correction has actually been asked about are listed. The fit's own
+    residual is quoted, with the caveat that it understates the error inside the gap.
+    """
+    if filler is None or not filler.fit_rms:
+        return []
+    lines = [
+        "POSITIONS FITTED, NOT TABULATED: the orbit file has gaps, and the spacecraft "
+        "position inside them comes from a Kepler+J2 orbit fitted to the samples around "
+        "each (--fill-orbit-gaps). Error of the order of 100 m (0.4 us), up to about "
+        "1 us in the worst case."
+    ]
+    for index in sorted(filler.fit_rms):
+        start, end = filler.gaps[index]
+        lines.append(
+            f"Orbit gap filled: MET {start:.1f} to {end:.1f} ({end - start:.0f} s), "
+            f"fit residual {filler.fit_rms[index]:.0f} m"
+        )
+    return lines
 
 
 def correct_times(times, bary_fun, clock_fun=None, leap_fun=None):
@@ -841,6 +887,7 @@ def apply_barycenter_correction(
     apply_official=False,
     engine="native",
     dt=None,
+    fill_orbit_gaps=False,
 ):
     """Apply barycenter correction to a FITS event file.
 
@@ -878,6 +925,11 @@ def apply_barycenter_correction(
         at every event. The default, ``None``, decides from the file's size: see
         :func:`grid_spacing_for` and :data:`AUTO_GRID_EVENTS`. Zero forces the exact
         per-event path whatever the size.
+    fill_orbit_gaps : bool, optional
+        Fit an orbit across long gaps inside the orbit file (the Fermi LAT's South
+        Atlantic Anomaly passages, for instance) instead of refusing the times that fall
+        in them. The position there then has an error of the order of 100 m (0.4 us of
+        light time); see :mod:`barycenter.gapfill`. Native engine only.
     """
     cloud = "SCISERVER_USER_ID" in os.environ or "/home/jovyan" in os.environ.get("HOME", "")
 
@@ -1016,6 +1068,7 @@ def apply_barycenter_correction(
             engine=engine,
             dt=grid_dt,
             met_range=met_range,
+            fill_gaps=fill_orbit_gaps,
         )
 
         # Before anything is written: refuse the file if the orbit does not reach the
@@ -1111,6 +1164,13 @@ def apply_barycenter_correction(
                 hdu.header.add_history(f"Position used: RA={ra}, DEC={dec}")
             hdu.header.add_history(f"Ephemeris: JPL-{ephem}")
             hdu.header.add_history(f"Coordinate system: {radecsys}")
+
+        filled_report = filled_gap_report(getattr(bary_fun, "gap_filler", None))
+        for line in filled_report:
+            logger.warning(line)
+            for hdu in hdul:
+                for piece in textwrap.wrap(line, 70):
+                    hdu.header.add_history(piece)
 
         hdul.writeto(outfile, overwrite=overwrite, output_verify="ignore")
 

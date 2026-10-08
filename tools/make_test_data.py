@@ -98,6 +98,20 @@ FERMI_ORBIT = os.path.join(FERMI_OBS, "simscdata_1week.fits")
 #: is one thing it does better than ``axbary``.
 FERMI_ENV = os.path.expanduser("~/mamba/envs/fermi")
 
+#: The Fermi GBM dataset: one hour of NaI detector 0 and that day's position history,
+#: real data from the HEASARC daily directory
+#:
+#:     https://heasarc.gsfc.nasa.gov/FTP/fermi/data/gbm/daily/2024/03/15/current/
+#:         glg_tte_n0_240315_12z_v00.fit.gz      (14.6 MB)
+#:         glg_poshist_all_240315_v00.fit        (9.2 MB)
+#:
+#: There is no ``gtbary`` reference for it, because ``gtbary`` refuses GBM event files;
+#: the test instead compares the position-history route with the LAT spacecraft-file
+#: route, which the reference above already pins. See ``trim_gbm_inputs``.
+GBM_OBS = os.path.expanduser("~/tmp/fermi_gbm")
+GBM_EVENTS = os.path.join(GBM_OBS, "glg_tte_n0_240315_12z_v00.fit.gz")
+GBM_POSHIST = os.path.join(GBM_OBS, "glg_poshist_all_240315_v00.fit")
+
 #: How the Fermi reference is made.  ``ra``/``dec`` are the simulated pulsar's position,
 #: passed explicitly like everywhere else.  DE405 because that and DE200 are the only two
 #: ``gtbary`` offers, and DE405 is the one paired with ICRS.
@@ -563,6 +577,56 @@ def trim_fermi_inputs(nevents=400, margin=600.0):
     subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
 
 
+def trim_gbm_inputs(nevents=400, margin=60.0):
+    """Cut the GBM event and position-history files down to something committable.
+
+    The event list keeps every extension -- ``EBOUNDS``, ``EVENTS`` (decimated to about
+    ``nevents`` rows spanning the hour) and ``GTI`` -- because a GBM file carries
+    ``TSTART`` and ``TIMESYS`` in all of them, and all of them get corrected. The
+    position history keeps every column and its native 1 s sampling over the span of the
+    events and GTIs plus ``margin``; it is the file's real layout, not a simplified one,
+    that the reader has to cope with.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(DATA, "dummy_gbm_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_gbm_poshist.fits")
+
+    with fits.open(GBM_EVENTS) as hdul:
+        events = hdul["EVENTS"]
+        nrows = len(events.data)
+        step = max(1, nrows // nevents)
+        rows = slice(None, None, step)
+        trimmed = subset_table(events, rows)
+        trimmed.header.add_history(
+            f"Every {step}th row of {os.path.basename(GBM_EVENTS)}, by tools/make_test_data.py"
+        )
+        times = np.array(events.data["TIME"][rows])
+        starts, stops = np.array(hdul["GTI"].data["START"]), np.array(hdul["GTI"].data["STOP"])
+        fits.HDUList([hdul[0].copy(), hdul["EBOUNDS"].copy(), trimmed, hdul["GTI"].copy()]).writeto(
+            evt_out, overwrite=True
+        )
+    print(f"    wrote {evt_out} ({len(times)} of {nrows} rows, {len(starts)} GTIs)")
+
+    low = min(times.min(), starts.min()) - margin
+    high = max(times.max(), stops.max()) + margin
+    with fits.open(GBM_POSHIST) as hdul:
+        orbit = hdul["GLAST POS HIST"]
+        met = orbit.data["SCLK_UTC"]
+        keep = np.flatnonzero((met > low) & (met < high))
+        trimmed = subset_table(orbit, keep)
+        trimmed.header["TSTART"] = float(met[keep].min())
+        trimmed.header["TSTOP"] = float(met[keep].max())
+        trimmed.header.add_history(
+            f"Rows of {os.path.basename(GBM_POSHIST)} covering the events, "
+            "by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), trimmed]).writeto(orb_out, overwrite=True)
+    print(f"    wrote {orb_out} ({len(keep)} of {len(met)} rows)")
+    subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
+
+
 def trim_chandra_inputs(nevents=400, margin=1200.0):
     """Cut the Chandra event and orbit files down to something committable.
 
@@ -883,6 +947,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_fermi_evt.evt")):
         print("--- dummy_fermi_evt.evt, dummy_fermi_orb.fits.gz")
         trim_fermi_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_gbm_evt.evt")):
+        print("--- dummy_gbm_evt.evt, dummy_gbm_poshist.fits.gz")
+        trim_gbm_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target

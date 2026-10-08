@@ -20,6 +20,8 @@ NUSTAR_ORBIT = os.path.join(datadir, "dummy_orb.fits.gz")
 XMM_ORBIT = os.path.join(datadir, "dummy_xmm_orb.fits.gz")
 CHANDRA_ORBIT = os.path.join(datadir, "dummy_chandra_orb.fits.gz")
 SWIFT_ORBIT = os.path.join(datadir, "dummy_swift_orb.fits.gz")
+FERMI_ORBIT = os.path.join(datadir, "dummy_fermi_orb.fits.gz")
+GBM_ORBIT = os.path.join(datadir, "dummy_gbm_poshist.fits.gz")
 
 
 def write_fporbit(path, met, pos, vel=None, telescope="NICER", extname="ORBIT"):
@@ -130,6 +132,31 @@ class TestRealFile:
             assert np.allclose(table["Vx"].value, orbit["VELOCITY"][:, 0] * 1000.0)
         radius = np.hypot(np.hypot(table["X"].value, table["Y"].value), table["Z"].value)
         assert np.all((radius > 6.9e6) & (radius < 7.0e6))
+
+    def test_gbms_position_history_is_read_with_its_own_velocities(self, caplog):
+        """A GBM ``poshist`` says TELESCOP=GLAST like a LAT file, and must still be read.
+
+        Its layout is nothing like the LAT spacecraft file's: extension ``GLAST POS
+        HIST``, time in ``SCLK_UTC``, scalar ``POS_*`` and ``VEL_*`` columns in metres.
+        The velocities are tabulated, so nothing may be differentiated.
+        """
+        with caplog.at_level("WARNING"):
+            table = read_orbit(GBM_ORBIT)
+        assert not any("differentiating" in r.message for r in caplog.records)
+        with fits.open(GBM_ORBIT) as hdul:
+            orbit = hdul["GLAST POS HIST"].data
+            assert np.array_equal(table["MET"].value, orbit["SCLK_UTC"])
+            assert np.array_equal(table["X"].value, orbit["POS_X"])
+            assert np.array_equal(table["Vz"].value, orbit["VEL_Z"])
+        # Fermi flies about 530 km up, so metres were not mistaken for kilometres.
+        radius = np.hypot(np.hypot(table["X"].value, table["Y"].value), table["Z"].value)
+        assert np.all((radius > 6.85e6) & (radius < 6.95e6))
+
+    def test_the_lat_spacecraft_file_is_still_read_from_sc_data(self):
+        """Adding GBM's layout must not change which one a LAT file is read with."""
+        table = read_orbit(FERMI_ORBIT)
+        with fits.open(FERMI_ORBIT) as hdul:
+            assert np.array_equal(table["MET"].value, hdul["SC_DATA"].data["START"])
 
 
 class TestCleaning:

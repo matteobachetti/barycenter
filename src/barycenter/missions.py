@@ -55,8 +55,12 @@ class Mission:
         Lower-case substrings of the ``TELESCOP`` keyword that identify this mission.
         Substrings, because the keyword is written inconsistently: ``XTE`` and ``RXTE``,
         ``NuSTAR`` and ``NUSTAR``, ``AXAF`` and ``CHANDRA``.
-    orbit : ~barycenter.orbit.OrbitSpec or None
-        How to read the orbit file. ``None`` if there is no native reader.
+    orbit : ~barycenter.orbit.OrbitSpec, tuple of them, or None
+        How to read the orbit file. ``None`` if there is no native reader. A tuple when
+        the mission has more than one kind of orbit file under the same ``TELESCOP``:
+        each spec then names its extension in ``hdu``, and the one whose extension the
+        file has is used. Fermi is the case, with the LAT spacecraft file and the GBM
+        position history.
     clock : callable or None
         ``clock(clockfile, instrument)`` returning
         ``(correction_function, path, accuracy)``, where ``accuracy`` is a callable of the
@@ -81,7 +85,7 @@ class Mission:
 
     name: str
     telescop: tuple
-    orbit: "OrbitSpec | None" = None
+    orbit: "OrbitSpec | tuple | None" = None
     clock: "Callable | None" = None
     official: "str | None" = None
     official_ephem: "str | None" = None
@@ -125,11 +129,29 @@ MISSIONS = {
     "fermi": Mission(
         name="fermi",
         telescop=("fermi", "glast"),
-        orbit=OrbitSpec(
-            pos="SC_POSITION",
-            vel="SC_VELOCITY",
-            time_col="START",
-            expected_extnames=("SC_DATA",),
+        orbit=(
+            # The LAT spacecraft (FT2) file. Its gaps over the South Atlantic Anomaly,
+            # when the LAT is off, are times GBM is already taking data again.
+            OrbitSpec(
+                pos="SC_POSITION",
+                vel="SC_VELOCITY",
+                hdu="SC_DATA",
+                time_col="START",
+                expected_extnames=("SC_DATA",),
+            ),
+            # The GBM daily position history, `glg_poshist_all_<yymmdd>_v*.fit`, at 1 s.
+            # Its time column is called SCLK_UTC but holds the same TT-based mission
+            # elapsed time as the event files: compared against a LAT file of the same
+            # day, a leap second of difference would be a 7.5 km disagreement, and there
+            # is none. The two files do disagree by a constant 140 ms in when the
+            # spacecraft was at a given point; see docs/missions.md.
+            OrbitSpec(
+                pos=("POS_X", "POS_Y", "POS_Z"),
+                vel=("VEL_X", "VEL_Y", "VEL_Z"),
+                hdu="GLAST POS HIST",
+                time_col="SCLK_UTC",
+                expected_extnames=("GLAST POS HIST",),
+            ),
         ),
     ),
     "svom": Mission(

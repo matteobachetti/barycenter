@@ -389,6 +389,7 @@ def native_barycentric_correction(
     met_range=None,
     shapiro="axbary",
     distance_kpc=None,
+    fill_gaps=False,
 ):
     """Barycentric correction from an orbit table, as a function of mission elapsed time.
 
@@ -416,6 +417,11 @@ def native_barycentric_correction(
         Shapiro delay convention; see the module docstring.
     distance_kpc : float, optional
         Source distance, for the parallax term.
+    fill_gaps : bool, optional
+        Fit an orbit across the long gaps of the orbit file instead of letting a cubic
+        spline coast through them; see :mod:`barycenter.gapfill`. The returned callable
+        then carries the :class:`~barycenter.gapfill.GapFilledInterpolator` as
+        ``gap_filler``.
 
     Returns
     -------
@@ -428,7 +434,12 @@ def native_barycentric_correction(
     met = np.asarray(orbit_table["MET"].value, dtype=np.float64)
     position = np.column_stack([orbit_table[c].value for c in ("X", "Y", "Z")])
     velocity = np.column_stack([orbit_table[c].value for c in ("Vx", "Vy", "Vz")])
-    sc = spacecraft_interpolator(met, position, velocity)
+    if fill_gaps:
+        from .gapfill import GapFilledInterpolator  # gapfill imports this module
+
+        sc = GapFilledInterpolator(met, position, velocity)
+    else:
+        sc = spacecraft_interpolator(met, position, velocity)
 
     def correction(times):
         """The correction at arbitrary times, preserving the shape it was given."""
@@ -446,6 +457,7 @@ def native_barycentric_correction(
         )
         return values.reshape(asked.shape) if asked.ndim else values[0]
 
+    correction.gap_filler = sc if fill_gaps else None
     if dt is None:
         return correction
 
@@ -460,4 +472,6 @@ def native_barycentric_correction(
         start = max(start, met_range[0] - 2 * dt)
         stop = min(stop, met_range[1] + 2 * dt)
     grid = np.arange(start, stop + dt, dt)
-    return CubicSpline(grid, correction(grid), extrapolate=True)
+    gridded = CubicSpline(grid, correction(grid), extrapolate=True)
+    gridded.gap_filler = correction.gap_filler
+    return gridded

@@ -140,7 +140,7 @@ directory = "docs/changes"
 filename = "CHANGELOG.md"
 start_string = "<!-- towncrier release notes start -->\n"
 underlines = ["", "", ""]
-title_format = "## [{version}](https://github.com/matteobachetti/barycenter/tree/{version}) - {project_date}"
+title_format = "## [{version}](https://github.com/matteobachetti/barycenter/tree/v{version}) - {project_date}"
 issue_format = "[#{issue}](https://github.com/matteobachetti/barycenter/pull/{issue})"
 
 [[tool.towncrier.type]]

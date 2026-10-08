@@ -312,6 +312,7 @@ It requires a working HEASOFT installation and is not exercised in CI.
 | `core.py` | The mission-agnostic workflow: `apply_barycenter_correction`, `correct_times`, region extraction. |
 | `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
 | `native.py` | The engine: the correction from astropy + ERFA + a JPL ephemeris. |
+| `gapfill.py` | `GapFilledInterpolator`: the plain spline, except inside gaps longer than 150 s, where a fitted Kepler + J2 orbit is used. Switched on by `--fill-orbit-gaps`. |
 | `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
 | `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which looks up which applies. |
 | `missions.py` | The `MISSIONS` registry: the only module that knows anything mission-specific. |
@@ -372,7 +373,8 @@ mission's [registry entry](#the-mission-registry):
 
 | Mission | Extension | Position column | Velocity column | Units in the file |
 |---|---|---|---|---|
-| Fermi | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
+| Fermi LAT | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
+| Fermi GBM | `GLAST POS HIST` | scalar `POS_X`,`POS_Y`,`POS_Z` | scalar `VEL_X`,`VEL_Y`,`VEL_Z` | m |
 | NuSTAR | 1 | `POSITION` | `VELOCITY` | **km** |
 | SVOM | 1 | `POSITION` | `VELOCITY` | m |
 | NICER, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
@@ -441,6 +443,49 @@ tolerance of `COVERAGE_TOLERANCE_S` (10 s) on top of the cadence allowance:
   junk the orbit file also happens not to cover.
 - **A file with no GTI extension at all** → every time counts as good. Silence about
   which times are trustworthy is not a claim that none of them are.
+
+### The error budget of a position, and what a gap costs
+
+The barycentre correction is, to first order, the spacecraft position projected on the
+direction to the source, divided by *c*. So **a position error of Δ metres costs at most
+Δ/*c* seconds**: 1 m is 3.3 ns, 300 m is 1 µs, and the worst case needs the error to lie
+along the line of sight (for a near-circular orbit it swings between ± that value once
+per orbit). Everything below is a position error in metres; divide by 300 to get µs.
+
+*Between samples.* The cubic spline's error grows as the fourth power of the sample
+spacing *h* times the fourth derivative of the position. For a circular low-Earth orbit
+(angular rate 1.1×10⁻³ rad/s, radius 6.9×10³ km) the standard bound *h*⁴/384 · ω⁴*r*
+gives about 2 cm at Fermi's 30 s cadence, which is why the spline is not a concern for a
+file without gaps. For an **eccentric orbit that estimate is not safe**: near perigee the
+speed is high and the radius small, and the fourth derivative scales roughly as
+*v*⁴/*r*³, so the same cadence can cost orders of magnitude more there than at apogee.
+That has not been measured here; if a highly elliptical mission is added (INTEGRAL,
+Chandra and XMM-Newton are all in this class) the check to repeat is the benchmark below,
+decimating the real orbit file and comparing, with the error read at perigee.
+
+*Across a gap.* Measured with `tools/benchmarks/bench_gapfill.py` on a real day of Fermi
+GBM positions thinned to 30 s, worst position error inside a cut gap (medians over 25
+random gaps; worst cases are 2–3× larger):
+
+| gap | cubic spline | harmonic fit | Kepler + J2 |
+|---|---|---|---|
+| 5 min | 380 m | 53 m | 67 m |
+| 10 min | 4.6 km | 86 m | 101 m |
+| 20 min | 62 km | 130 m | 111 m |
+| 40 min | 844 km | 147 m | 116 m |
+
+The spline's error grows without bound because a cubic polynomial cannot follow a
+95-minute orbit; that is why a time inside such a gap is refused by default, and why
+`--fill-orbit-gaps` exists. With it, `GapFilledInterpolator` evaluates the fitted orbit
+inside gaps longer than 150 s, `OrbitCoverage` counts them as covered, a warning lists
+every gap used with its fit residual, and the same lines go into the `HISTORY` of the
+output. Without it the error message names the switch.
+Point-mass Kepler alone is wrong by 3 km, so the Earth's flattening (J2) is needed. What
+remains, about 100 m (0.4 µs) and independent of gap length, is most likely drag and
+higher gravity terms; a longer fitting window made it worse. Adding the tabulated
+velocity to the fit gains at most about 10 % (median unchanged, worst case 272 m → 242 m
+at 20 min), which is why the fit does not use it. Details and the caveats are
+in `tools/benchmarks/README.md`.
 
 ### `TSTART` and `TSTOP` are a separate case
 
@@ -1049,7 +1094,8 @@ When a comparison disagrees, check these before looking for a bug:
 | NICER | `ni<obsid>.orb` | none needed | works |
 | RXTE | `orbit/FPorbit_*` | HEASOFT `tdc.dat`, bundled with the package | validated to 100 ns |
 | IXPE | `FPorbit`-style | none needed | works |
-| Fermi | FT2 `SC_DATA`, `SC_POSITION` in m, timed by `START` | none needed | validated to 100 ns |
+| Fermi LAT | FT2 `SC_DATA`, `SC_POSITION` in m, timed by `START` | none needed | validated to 100 ns |
+| Fermi GBM | `glg_poshist_all_*.fit`, `GLAST POS HIST`, `POS_*` in m, timed by `SCLK_UTC` | none needed | identical to the LAT route given the same positions; no official tool accepts GBM files, see [Missions](missions.md#fermi-gbm) |
 | SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
@@ -1089,6 +1135,8 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_fermi_evt.evt` | 413 simulated LAT events, every 10th row of the ScienceTools tutorial's `fakepulsar_event.fits`, so the sample spans the whole week, plus all 70 of its `GTI` rows |
 | `dummy_fermi_orb.fits.gz` | 20199 rows of the matching `simscdata_1week.fits` FT2 file, at its native 30 s over the events and GTIs plus 600 s, cut to `START`, `STOP`, `SC_POSITION` — **not** decimated, see below |
 | `dummy_fermi_bary_DE405.evt.gz` | the Fermi `gtbary` reference for those events, `solareph="JPL DE405"`, GTIs corrected too |
+| `dummy_gbm_evt.evt` | 401 real GBM events, every 6652nd row of NaI 0's `glg_tte_n0_240315_12z_v00.fit.gz`, so the sample spans the hour, with its `EBOUNDS` and `GTI` extensions |
+| `dummy_gbm_poshist.fits.gz` | 2922 rows of that day's `glg_poshist_all_240315_v00.fit`, every column at the native 1 s over the events plus 60 s. No reference file: `gtbary` refuses GBM, and the test compares against the same positions in LAT layout instead |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
 triples of identical length — `GEI_*` is geocentric equatorial and is the one the

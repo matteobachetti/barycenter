@@ -1441,3 +1441,73 @@ class TestFermi:
             assert hdul["EVENTS"].header["TSTART"] == pytest.approx(
                 hdul["GTI"].data["START"].min(), abs=1e-6
             )
+
+
+def poshist_in_lat_layout(poshist, outfile):
+    """Rewrite a GBM position history as a LAT spacecraft file holding the same numbers.
+
+    ``SC_DATA`` with ``START``/``STOP`` and the position and velocity as vector columns:
+    the layout :class:`TestFermi` already pins against ``gtbary``.
+    """
+    with fits.open(poshist) as hdul:
+        data, header = hdul["GLAST POS HIST"].data, hdul["GLAST POS HIST"].header
+        met = data["SCLK_UTC"]
+        columns = [
+            fits.Column(name="START", format="D", array=met),
+            fits.Column(name="STOP", format="D", array=met + 1.0),
+            fits.Column(
+                name="SC_POSITION",
+                format="3D",
+                array=np.column_stack([data["POS_X"], data["POS_Y"], data["POS_Z"]]),
+            ),
+            fits.Column(
+                name="SC_VELOCITY",
+                format="3D",
+                array=np.column_stack([data["VEL_X"], data["VEL_Y"], data["VEL_Z"]]),
+            ),
+        ]
+        sc_data = fits.BinTableHDU.from_columns(columns, name="SC_DATA")
+        for keyword in ("TELESCOP", "TIMESYS", "TIMEUNIT", "MJDREFI", "MJDREFF", "TSTART", "TSTOP"):
+            sc_data.header[keyword] = header[keyword]
+        fits.HDUList([fits.PrimaryHDU(header=hdul[0].header), sc_data]).writeto(outfile)
+    return str(outfile)
+
+
+class TestFermiGBM:
+    """Fermi GBM, read from its own position history rather than the LAT spacecraft file.
+
+    The LAT file cannot stand in for it: the LAT is off in the South Atlantic Anomaly,
+    and its spacecraft file has gaps there -- nine a day, 3.3 hours in all on 2024-03-15
+    -- where GBM is already taking data. So GBM needs its own ``poshist`` file, which
+    shares ``TELESCOP=GLAST`` with the LAT one and nothing else.
+
+    ``gtbary`` refuses GBM event files, so there is no official reference. The test
+    instead shows that the ``poshist`` route gives exactly the times the LAT-layout route
+    gives for the same positions -- and that route is the one :class:`TestFermi` checks
+    against ``gtbary``. The data are real: 401 events from one hour of NaI 0, with the
+    position history at its native 1 s sampling. See ``trim_gbm_inputs``.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_gbm_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_gbm_poshist.fits.gz")
+        # Her X-1. GBM event files carry no source position, so it must always be given.
+        cls.ra, cls.dec = "254.457625", "35.342361"
+
+    def run(self, orbfile, outfile):
+        return main_barycenter(
+            [self.evfile, orbfile, "-o", outfile, "--ra", self.ra, "--dec", self.dec]
+            + ["--ephem", "DE405", "--clockfile", "none"]
+        )
+
+    def test_poshist_gives_the_times_its_lat_layout_gives(self, tmp_path):
+        """The same positions in either layout give bit-identical events and GTIs."""
+        lat_layout = poshist_in_lat_layout(self.orbfile, tmp_path / "sc.fits")
+        ours = self.run(self.orbfile, str(tmp_path / "poshist.evt"))
+        theirs = self.run(lat_layout, str(tmp_path / "lat_layout.evt"))
+        with fits.open(ours) as a, fits.open(theirs) as b, fits.open(self.evfile) as raw:
+            assert np.array_equal(a["EVENTS"].data["TIME"], b["EVENTS"].data["TIME"])
+            assert np.array_equal(a["GTI"].data["START"], b["GTI"].data["START"])
+            # And the times did move: a barycentred hour is minutes away from the input.
+            assert np.all(np.abs(a["EVENTS"].data["TIME"] - raw["EVENTS"].data["TIME"]) > 1)

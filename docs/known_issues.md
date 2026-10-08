@@ -18,6 +18,30 @@ answer: measured 775 ns peak-to-peak on arm64 against 149 ns on x86. The default
 engine computes every term as a small quantity in float64 and gives bit-identical
 answers on both.
 
+**On real 2024 Fermi data we sit +122.6 ns from `gtbary`.** Constant over an hour of GBM
+events and the same with either spacecraft-position file, while on the 2008 tutorial file
+the committed reference uses we are within 30 ns. It hides below one unit in the last
+place of a 2024 float64 time (119.2 ns), so only a mean over many events shows it. Not
+yet explained. See [Missions](missions.md#fermi-gbm).
+
+**The Fermi GBM and LAT position files disagree by a constant 140 ms.** At 7.6 km/s that
+is about 1066 m, so barycentred times differ by up to 3.6 µs (m/c) depending on the
+direction to the source, swinging sinusoidally at the orbital period. The LAT
+documentation puts `SC_POSITION` at `START`; nothing authoritative was found on what
+GBM's `SCLK_UTC` refers to, so which file is right is unknown. Left alone: the effect
+is of the order of GBM's own quoted absolute timing accuracy. See
+[Missions](missions.md#fermi-gbm).
+
+**Positions across long orbit-file gaps are refused unless `--fill-orbit-gaps` is given.**
+The Fermi LAT is off in the South Atlantic Anomaly and its spacecraft file has no rows
+there, for tens of minutes. A cubic spline across that is wrong by kilometres, so events
+in a gap are an error by default. `--fill-orbit-gaps` fits a Kepler+J2 orbit instead,
+good to about 100 m (0.4 us) in the benchmark, up to about 1 us worst case. Only a low,
+near-circular Earth orbit has been measured; for a highly elliptical one (INTEGRAL,
+Chandra, XMM-Newton) the force model is insufficient and nothing has been tested. Native
+engine only. `gtbary` fills these gaps by another route that has not been compared.
+See [Technical details](technical_details.md#the-error-budget-of-a-position-and-what-a-gap-costs).
+
 ## Correctness
 
 **A Swift time within ~15 s of a leap second can be a second out.** The leap-second term

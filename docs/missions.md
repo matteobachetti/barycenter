@@ -193,6 +193,47 @@ not: the test observation sits 2.0 s of leap seconds after `MJDREF`, so applying
 term would put us 2 s from `gtbary`, and we are 30 ns from it. `MISSIONS["fermi"].met_is_utc`
 is correctly False. This used to be an open question here and is now settled.
 
+### Fermi GBM
+
+GBM's spacecraft positions come from its own daily position history,
+`glg_poshist_all_<yymmdd>_v*.fit` in the HEASARC daily directory: extension
+`GLAST POS HIST`, sampled every second, with scalar `POS_*` and `VEL_*` columns in metres
+and the time in a column called `SCLK_UTC`. It says `TELESCOP = GLAST`, exactly like a
+LAT spacecraft file, so Fermi's registry entry lists both layouts and the reader takes
+the one whose extension the file has.
+
+**The LAT spacecraft file cannot stand in for it.** The LAT is switched off in the South
+Atlantic Anomaly and its spacecraft file has no rows there, while GBM comes back on
+sooner. On 2024-03-15 the LAT file had nine such gaps, 3.3 hours in all, and on one hour
+of NaI 0 it left 42 000 of 2.67 million good events with no spacecraft position.
+
+**`SCLK_UTC` is not UTC.** It holds the same TT-based mission elapsed time as the event
+files. Against the LAT spacecraft file for the same day, a leap second of difference
+would show as a 7.5 km disagreement in position; there is none.
+
+**There is no official reference.** `gtbary` refuses a GBM event file outright
+("Unsupported timing extension"). It can be made to run only by relabelling the file
+`INSTRUME = LAT` and dropping its `EBOUNDS` extension, which is fine for a check by hand
+but not something to build a committed reference on. The test therefore shows that
+the position-history route gives bit-identical times to the LAT-layout route given the
+same positions, and that route is the one checked against `gtbary` above.
+
+Three numbers from that hand check, on 2024-03-15, NaI 0, 12:00–13:00, at Her X-1's
+position, recorded here because they are not explained yet:
+
+- **The two position files disagree by a constant 140 ms.** The GBM position history
+  places the spacecraft where the LAT spacecraft file places it 140 ms later: the
+  residual is 1066 m along the direction of motion, and shifting by 140 ms reduces it to
+  1 m. The barycentred times then differ by up to ±3.6 µs, depending on the direction to
+  the source. Which file is right is not known.
+- **We sit +122.6 ns from `gtbary` on this 2024 file**, constant across the hour, the
+  same with either position file, while on the 2008 tutorial file above we are within
+  30 ns. One unit in the last place at this epoch is 119.2 ns, so a committed reference
+  could not tell the two apart, but the mean over 2.5 million events can. The PINT
+  engine was too noisy here (268 ns scatter) to say which side is off.
+- One hour of one detector, 2.67 million events, takes 17 s with the exact per-event
+  path (`dt=0`).
+
 ## IXPE and SVOM
 
 These two have registry entries and their orbit files are read, but **neither has ever

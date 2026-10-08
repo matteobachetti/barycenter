@@ -17,10 +17,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # This fetch element is only important if you are use SCM based
-          # versioning (that looks at git tags to gather the version).
-          # setuptools-scm needs tags to form a valid version number
-          fetch-tags: true
+          # Full history and tags are needed for VCS-based versioning.
+          # (fetch-tags: true fails on release events, where the tag is also the ref.)
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v5
