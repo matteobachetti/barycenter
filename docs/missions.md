@@ -347,8 +347,13 @@ for events in glob.glob("SVOM_ECL-EVT-CAL_*.fits"):
     except KeyError:  # no Earth-free time in this pass
         continue
     apply_barycenter_correction(
-        with_gti, orbit, ra=RA, dec=DEC, ephem="DE440",
-        outfile="bary_" + with_gti, overwrite=True,
+        with_gti,
+        orbit,
+        ra=RA,
+        dec=DEC,
+        ephem="DE440",
+        outfile="bary_" + with_gti,
+        overwrite=True,
     )
 ```
 
