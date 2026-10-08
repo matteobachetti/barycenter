@@ -377,7 +377,7 @@ mission's [registry entry](#the-mission-registry):
 | Fermi LAT | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
 | Fermi GBM | `GLAST POS HIST` | scalar `POS_X`,`POS_Y`,`POS_Z` | scalar `VEL_X`,`VEL_Y`,`VEL_Z` | m |
 | NuSTAR | 1 | `POSITION` | `VELOCITY` | **km** |
-| SVOM | 1 | `POSITION` | `VELOCITY` | m |
+| SVOM | `SVO-ORB-CNV` | `POSITION` (float32) | `VELOCITY` (float32) | m |
 | NICER, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | RXTE | `XTE_PE` (or `ORBIT`) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | XMM-Newton | `ORBIT` | scalar `GEI_X`,`GEI_Y`,`GEI_Z` | scalar `VX`,`VY`,`VZ` | **km** |
@@ -1131,7 +1131,7 @@ When a comparison disagrees, check these before looking for a bug:
 | IXPE | `FPorbit`-style | none needed | works |
 | Fermi LAT | FT2 `SC_DATA`, `SC_POSITION` in m, timed by `START` | none needed | validated to 100 ns |
 | Fermi GBM | `glg_poshist_all_*.fit`, `GLAST POS HIST`, `POS_*` in m, timed by `SCLK_UTC` | none needed | identical to the LAT route given the same positions; no official tool accepts GBM files, see [Missions](missions.md#fermi-gbm) |
-| SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
+| SVOM | `SVOM_SVO-ORB-CNV_*.fits`, `SVO-ORB-CNV`, `POSITION`/`VELOCITY` in m; GTIs in a separate file, see [GTIs in a separate file](#good-time-intervals-in-a-separate-file) | none needed (`CLOCKCOR = T`) | no official tool; 1 ulp from `barycorr` on synthetic SVOM-format data relabelled as NICER, see [Missions](missions.md#svom) |
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
 | Swift | `auxil/sw<obsid>sao.fits`, `PREFILTER` in km | `swclockcor*.fits`, `CLOCK_CORRECT` extension (the UTCF) | validated to 100 ns |
