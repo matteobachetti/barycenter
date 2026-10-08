@@ -102,6 +102,18 @@ controlling terminal, `barycen` edits its input in place, `axbary` exits 0 on fa
 Those are written up in
 [Technical details](technical_details.md#test-data).
 
+**If the mission has no tool of its own**, relabel its files as a mission `barycorr`
+does read and keep every number. SVOM is done that way: its events and orbit go to
+`barycorr` as a NICER observation (`TELESCOP=NICER`, the orbit vectors split into NICER's
+scalar `X`…`Vz` columns), with `MJDREF`, `TIMESYS` and every time and position untouched.
+That checks the barycentring against an independent implementation. It cannot check the
+things the relabelling copies over — units, frame, which `MJDREF` the orbit times count
+from — so check those from the files themselves. For SVOM, the orbit file's Earth-fixed
+`POSITION_SPHERICAL`, rotated to the inertial frame at each `TIME`, has to land on
+`POSITION`, and does to a metre only with the right time scale. Synthetic data in the
+mission's real layout is fine for the committed reference when real data cannot be
+shared; see `make_svom_inputs`.
+
 ## 5. Add the test
 
 The test asserts agreement with the reference to 100 ns, through `assert_times_agree`,

@@ -31,7 +31,8 @@ centre of mass, where they can be compared between missions and across years.
 The workflow lives in :mod:`barycenter.core`, the command line in
 :mod:`barycenter.cli`, the physics in :mod:`barycenter.native` (with
 :mod:`barycenter.pintengine` as an optional second opinion), the orbit file dialects in
-:mod:`barycenter.orbit`, and the spacecraft clock in :mod:`barycenter.clock`.
+:mod:`barycenter.orbit`, the spacecraft clock in :mod:`barycenter.clock`, and the merging
+of good time intervals shipped in separate files in :mod:`barycenter.gti`.
 """
 
 from ._version import __version__
@@ -41,6 +42,7 @@ from .core import (
     correct_times,
     get_barycentric_correction,
 )
+from .gti import add_gti_extension, intersect_gtis, union_gtis
 from .missions import MISSIONS, Mission, mission_for
 from .native import barycentric_correction
 from .orbit import OrbitSpec, read_orbit
@@ -50,11 +52,14 @@ __all__ = [
     "Mission",
     "OrbitSpec",
     "__version__",
+    "add_gti_extension",
     "apply_barycenter_correction",
     "barycentric_correction",
     "correct_times",
     "get_barycentric_correction",
+    "intersect_gtis",
     "main_barycenter",
     "mission_for",
     "read_orbit",
+    "union_gtis",
 ]

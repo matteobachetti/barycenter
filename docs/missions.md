@@ -234,12 +234,156 @@ position, recorded here because they are not explained yet:
 - One hour of one detector, 2.67 million events, takes 17 s with the exact per-event
   path (`dt=0`).
 
-## IXPE and SVOM
+## IXPE
 
-These two have registry entries and their orbit files are read, but **neither has ever
-been compared against an official tool**, so treat the output as unverified. IXPE uses
-the same `ORBIT`-extension dialect as NICER; SVOM's positions come from a
-`POSITION`/`VELOCITY` pair in metres.
+IXPE has a registry entry and its orbit file is read, but **it has never been compared
+against an official tool**, so treat the output as unverified. It uses the same
+`ORBIT`-extension dialect as NICER.
+
+(svom)=
+## SVOM
+
+| | |
+|---|---|
+| Event file | `SVOM_ECL-EVT-CAL_<program>.B-<burst>.O-<obsid>.P-<pass>.v1.fits`, extension `ECL-EVT-CAL` |
+| Orbit file | `SVOM_SVO-ORB-CNV_ALL.P-<pass>.000.v1.fits`, extension `SVO-ORB-CNV` |
+| GTI file | `SVOM_ECL-GTI-CAL_<program>.B-<burst>.O-<obsid>.P-<pass>.v1.fits`, **separate**, one extension per criterion |
+| Clock file | none needed: the event files are written already clock-corrected (`CLOCKCOR = T`) |
+| Reference | no official tool exists; 1 ulp (29.8 ns) against `barycorr` on synthetic SVOM-format data relabelled as NICER |
+
+There is no official SVOM barycentring tool, and HEASOFT `barycorr` refuses
+`TELESCOP=SVOM`. What is checked is everything SVOM-specific — the file layout, units,
+frame and time scale — and the barycentring itself against `barycorr` given the same
+numbers in NICER's layout, which it does read. See the test data notes in
+[Technical details](technical_details.md).
+
+### Which files go together
+
+The ECLAIRs data of one observation arrive in pieces, one per X-band downlink **pass**,
+and each piece has its own event, GTI and orbit file. They are matched by the pass
+identifier, `P-<6 digits>_<3-letter ground station>` in the file name and the `PASS_ID`
+keyword, not by the observation ID: an orbit file covers one pass and nothing else.
+
+### Step 1: merge the good time intervals
+
+The GTIs are not in the event file. They come in their own file, as one extension per
+criterion, and choosing which criteria apply is up to you. List them first:
+
+```bash
+barycenter-apply-gti SVOM_ECL-EVT-CAL_<...>.fits SVOM_ECL-GTI-CAL_<...>.fits
+```
+
+The file itself does not say what the extensions mean. The ECLAIRs pipeline paper
+([arXiv:2604.24254](https://arxiv.org/abs/2604.24254), Sect. 3.1 and 4.1) lists the
+criteria GTIs are made from: outside the South Atlantic Anomaly (SAA), stable attitude,
+no telemetry gaps, good instrument functioning, and the state of Earth occultation. The
+extensions map onto them as follows (the first four guessed from their names, since neither
+the paper nor the files spell them out):
+
+| extension | good when |
+|---|---|
+| `GTICAL-NSA` | not in the SAA |
+| `GTICAL-STA` | the attitude is stable (not slewing) |
+| `GTICAL-TLM` | there is no telemetry gap |
+| `GTICAL-EGP` | not documented; presumably the instrument is working well |
+| `GTICAL-NEO` | **no** Earth occultation: the Earth is out of the field of view |
+| `GTICAL-PEO` | **partial** Earth occultation: the Earth covers part of the field of view |
+| `GTICAL-TEO` | **total** Earth occultation: the Earth covers all of the field of view |
+
+The last three are three different states of the same pass, not three spellings of one
+criterion, and a pass may have any subset of them. The paper's standard selection is
+NEO. For timing, that matters more than it looks: ECLAIRs is a coded-mask instrument
+whose count rate is dominated by background, so the rate hardly drops when the Earth
+covers the field of view, and nothing in a light curve warns that the source has gone.
+Time in TEO adds background and no pulses; time in PEO may or may not contain the
+source, depending on which part of the field of view the Earth covers. So for timing:
+
+```bash
+barycenter-apply-gti SVOM_ECL-EVT-CAL_<...>.fits SVOM_ECL-GTI-CAL_<...>.fits \
+    -e GTICAL-STA,GTICAL-NSA,GTICAL-NEO --filter-events -o gti_events.fits
+```
+
+The extensions are intersected, and the result is written as a `GTI` extension of a copy
+of the event file. **Use `--filter-events`** unless you know that every tool downstream
+reads that extension: without it the events outside the GTIs are kept, and a folding or
+pulsar-search tool that only reads the event list will use them anyway. A pass with no
+`GTICAL-NEO` extension at all is an error rather than a silent fallback to PEO or TEO;
+skip it, or include PEO deliberately after checking that the source is not behind the
+Earth. See
+[Good time intervals in a separate file](technical_details.md#good-time-intervals-in-a-separate-file).
+
+### Step 2: barycentre
+
+The event headers carry no source position (`RA_PNT` and friends are empty), so it
+always has to be given, as `--ra`/`--dec` in degrees or with `--parfile`:
+
+```bash
+barycenter gti_events.fits SVOM_SVO-ORB-CNV_ALL.P-<pass>.000.v1.fits \
+    --ra <deg> --dec <deg> --ephem DE440
+```
+
+Both steps from Python, for every pass in a directory:
+
+```python
+import glob
+import re
+
+from barycenter import add_gti_extension, apply_barycenter_correction
+
+RA, DEC = 244.97956, -15.64022  # the source, in degrees (here Sco X-1)
+
+for events in glob.glob("SVOM_ECL-EVT-CAL_*.fits"):
+    pass_id = re.search(r"\.P-([0-9]{6}_[A-Z]{3})", events).group(1)
+    (orbit,) = glob.glob(f"SVOM_SVO-ORB-CNV_*{pass_id}*.fits*")
+    (gtis,) = glob.glob(f"SVOM_ECL-GTI-CAL_*{pass_id}*.fits*")
+    try:
+        with_gti = add_gti_extension(
+            events,
+            gtis,
+            ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO"],
+            filter_events=True,
+            overwrite=True,
+        )
+    except KeyError:  # no Earth-free time in this pass
+        continue
+    apply_barycenter_correction(
+        with_gti,
+        orbit,
+        ra=RA,
+        dec=DEC,
+        ephem="DE440",
+        outfile="bary_" + with_gti,
+        overwrite=True,
+    )
+```
+
+### Things worth knowing
+
+- **The time scale.** `TIME` counts TT seconds from `MJDREF = 57754.000800740741`,
+  which is 2017-01-01T00:00:00 UTC (`DATEREF`) written in TT. That epoch follows the
+  most recent leap second, so whether SVOM's MET would count UTC seconds across a future
+  one — as Swift's does — cannot be told yet. The orbit file says `TIMESYS = TT` too, and
+  that it means it can be checked from the file itself: its Earth-fixed
+  `POSITION_SPHERICAL` turned into the inertial frame agrees with `POSITION` to about a
+  metre only if `TIME` is read that way. A one-second mistake would show up as 500 m,
+  and the 18 s between GPS time and UTC as 9 km.
+- **Orbit units and frame.** `POSITION` is in metres in the J2000 frame and `VELOCITY` in
+  m/s, both as float32 vectors. The column names are the same as Swift's and NuSTAR's,
+  which hold kilometres; reading SVOM's as kilometres would be a 20 ms error, which is
+  why the units are declared in the registry rather than guessed. Float32 rounds the
+  position to 0.5 m, about 2 ns of light travel time.
+- **The orbit file says `CLOCKCOR = F`** where the events say `T`. If the orbit time tags
+  were off by a millisecond, the spacecraft would be misplaced by 7.5 m, 25 ns: harmless.
+- **Event times are not strictly sorted.** Consecutive ECLAIRs events can step back by
+  some microseconds. Barycentring keeps the file's order; sort afterwards if a later
+  tool needs sorted times.
+- **`SIMFLAG = 1`** ("simulated") is set on flight data. Do not read anything into it.
+- **The files are large**, tens of millions of events per pass for a bright field. The default grid (`--dt`, used above
+  100 000 events) evaluates the correction every 5 s and interpolates, which costs about
+  1.6 ns and is about 50 times faster than evaluating it at every event.
+- **Barycentring is not absolute timing.** It corrects for where the spacecraft was. Any
+  delay between a photon's arrival and its time tag inside the instrument is a separate
+  calibration, and nothing here applies one.
 
 ## ASCA
 

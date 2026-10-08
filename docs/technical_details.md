@@ -312,6 +312,7 @@ It requires a working HEASOFT installation and is not exercised in CI.
 | `core.py` | The mission-agnostic workflow: `apply_barycenter_correction`, `correct_times`, region extraction. |
 | `orbit.py` | The mission-agnostic orbit file reader: one `OrbitSpec` per mission, one table out. |
 | `native.py` | The engine: the correction from astropy + ERFA + a JPL ephemeris. |
+| `gti.py` | Good time intervals shipped in a separate file: `read_gtis`, `intersect_gtis`/`union_gtis`, `add_gti_extension`, and the `barycenter-apply-gti` command. Run before barycentring. |
 | `gapfill.py` | `GapFilledInterpolator`: the plain spline, except inside gaps longer than 150 s, where a fitted Kepler + J2 orbit is used. Switched on by `--fill-orbit-gaps`. |
 | `pintengine.py` | The optional PINT engine, for `.par` models and as an independent cross-check. |
 | `clock.py` | Spacecraft clock corrections: NuSTAR's CALDB fine clock files, RXTE's `tdc.dat`, the CALDB fetcher, and `clock_correction_fun`, which looks up which applies. |
@@ -376,7 +377,7 @@ mission's [registry entry](#the-mission-registry):
 | Fermi LAT | `SC_DATA` | `SC_POSITION` | `SC_VELOCITY` | m |
 | Fermi GBM | `GLAST POS HIST` | scalar `POS_X`,`POS_Y`,`POS_Z` | scalar `VEL_X`,`VEL_Y`,`VEL_Z` | m |
 | NuSTAR | 1 | `POSITION` | `VELOCITY` | **km** |
-| SVOM | 1 | `POSITION` | `VELOCITY` | m |
+| SVOM | `SVO-ORB-CNV` | `POSITION` (float32) | `VELOCITY` (float32) | m |
 | NICER, IXPE | `ORBIT` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | RXTE | `XTE_PE` (or `ORBIT`) | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | XMM-Newton | `ORBIT` | scalar `GEI_X`,`GEI_Y`,`GEI_Z` | scalar `VX`,`VY`,`VZ` | **km** |
@@ -520,6 +521,45 @@ and corrects that. Where the file has no GTIs the event times stand in, which is
 intent. Only these two keywords are ever moved, and only when they miss by more than the
 tolerance; on the M82 file the events and GTIs come out bit-identical either way, and only
 `TSTART` and the `DATE-OBS` derived from it change.
+
+(gtis-in-a-separate-file)=
+## Good time intervals in a separate file
+
+Barycentring moves every `START`/`STOP` column it finds together with the events, so a
+`GTI` extension inside the event file stays consistent with the events at no cost.
+Some missions do not put one there. SVOM/ECLAIRs ships its GTIs as a separate file with
+one extension per criterion (instrument status, South Atlantic Anomaly, Earth
+occultation, telemetry), and which criteria apply is the user's choice.
+
+[`gti.py`](../src/barycenter/gti.py) combines the chosen extensions and writes them into
+a copy of the event file as a single binary-table `GTI` extension, which then goes through
+barycentring like any other. It is mission-agnostic: extensions are named by the caller.
+
+```bash
+barycenter-apply-gti events.fits gtis.fits             # list the GTI extensions
+barycenter-apply-gti events.fits gtis.fits -e GTICAL-STA,GTICAL-NSA,GTICAL-NEO --filter-events
+```
+
+- **Intersection by default.** Independent quality criteria all have to hold, so the
+  default keeps time that is good in every extension; `--union` keeps time good in any,
+  as for per-CCD GTIs.
+- **`A|B|C`** means the first of these extensions present in the file, for one
+  criterion that different files store under different names (`GTI|STDGTI`). It is not
+  a fallback between *different* criteria: SVOM's `GTICAL-NEO`, `-PEO` and `-TEO` are
+  no, partial and total Earth occultation, and falling back from one to the next would
+  silently admit time when the source is behind the Earth.
+- **A missing extension is an error**, listing the ones present. A misspelt criterion
+  that was silently skipped would widen the GTIs without anyone noticing.
+- **The epoch is checked.** The GTI extensions must count from the same `MJDREF` +
+  `TIMEZERO` as the events, to 1 us (SVOM writes `MJDREFF` with different rounding in the
+  two files, 1e-13 s apart). The new extension gets the events' `TIMESYS`, `TIMEREF`,
+  `MJDREF*` and `TIMEZERO`, so it says which time scale it is on before and after
+  barycentring.
+- **An existing `GTI` extension is never replaced**: applying the helper twice is refused.
+- **Events are kept** unless `--filter-events` is given; the `GTI` extension alone
+  records which are good. Many timing tools read only the event list and never look at
+  an extra `GTI` extension, so for them `--filter-events` is what makes the selection
+  take effect.
 
 (the-pint-engine)=
 ## The PINT engine
@@ -1096,7 +1136,7 @@ When a comparison disagrees, check these before looking for a bug:
 | IXPE | `FPorbit`-style | none needed | works |
 | Fermi LAT | FT2 `SC_DATA`, `SC_POSITION` in m, timed by `START` | none needed | validated to 100 ns |
 | Fermi GBM | `glg_poshist_all_*.fit`, `GLAST POS HIST`, `POS_*` in m, timed by `SCLK_UTC` | none needed | identical to the LAT route given the same positions; no official tool accepts GBM files, see [Missions](missions.md#fermi-gbm) |
-| SVOM | `POSITION`/`VELOCITY` in m | to be determined | works |
+| SVOM | `SVOM_SVO-ORB-CNV_*.fits`, `SVO-ORB-CNV`, `POSITION`/`VELOCITY` in m; GTIs in a separate file, see [GTIs in a separate file](#good-time-intervals-in-a-separate-file) | none needed (`CLOCKCOR = T`) | no official tool; 1 ulp from `barycorr` on synthetic SVOM-format data relabelled as NICER, see [Missions](missions.md#svom) |
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
 | Swift | `auxil/sw<obsid>sao.fits`, `PREFILTER` in km | `swclockcor*.fits`, `CLOCK_CORRECT` extension (the UTCF) | validated to 100 ns |
@@ -1137,6 +1177,10 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_fermi_bary_DE405.evt.gz` | the Fermi `gtbary` reference for those events, `solareph="JPL DE405"`, GTIs corrected too |
 | `dummy_gbm_evt.evt` | 401 real GBM events, every 6652nd row of NaI 0's `glg_tte_n0_240315_12z_v00.fit.gz`, so the sample spans the hour, with its `EBOUNDS` and `GTI` extensions |
 | `dummy_gbm_poshist.fits.gz` | 2922 rows of that day's `glg_poshist_all_240315_v00.fit`, every column at the native 1 s over the events plus 60 s. No reference file: `gtbary` refuses GBM, and the test compares against the same positions in LAT layout instead |
+| `dummy_svom_evt.evt` | 400 **synthetic** ECLAIRs events in SVOM's `ECL-EVT-CAL` layout over 1.5 ks, 20 of them listed out of time order by 1–12 µs as in real ECLAIRs lists |
+| `dummy_svom_orb.fits.gz` | a synthetic circular 625 km orbit in SVOM's `SVO-ORB-CNV` layout: 1501 rows at 1 s, float32 `POSITION`/`VELOCITY` in m, `POSITION_SPHERICAL` computed from them in ITRS |
+| `dummy_svom_gti.fits` | a synthetic SVOM GTI file: a group table and four criteria (`GTICAL-NSA`, `-STA`, `-TLM`, `-NEO`), with `MJDREFF` rounded the way the real GTI files round it |
+| `dummy_svom_bary_DE440.evt.gz` | `barycorr` on those events, with `STA`∩`NSA`∩`NEO` merged in, after relabelling events and orbit as NICER's — see below |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
 triples of identical length — `GEI_*` is geocentric equatorial and is the one the
@@ -1166,6 +1210,15 @@ reason: `time` in the events, `Time` in the orbit file, `START`/`STOP` in capita
 case-insensitivity the FITS standard grants and most missions never use, and the failure
 it guards against is silent — a case-sensitive lookup corrects the GTIs and leaves the
 events alone.
+
+The SVOM files are synthetic rather than trimmed from an observation. Their layout is
+the real one, column formats, extension names and keywords included, and that is what the
+reader and the GTI merging are tested on; the orbit itself only needs to be a plausible
+low-Earth orbit. With no tool that barycentres SVOM, the reference is `barycorr` run on
+the same events and positions relabelled as a NICER observation (`svom_as_nicer`): the
+NICER orbit layout holds the same metre and m/s numbers as scalar columns, and `MJDREF`
+and `TIMESYS` are kept, so `barycorr`'s answer is the one it would give for SVOM. We
+agree with it to one float64 ulp (29.8 ns), events and GTIs alike.
 
 `tools/make_test_data.py` regenerates all of them, including the trimming, and it now
 allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and

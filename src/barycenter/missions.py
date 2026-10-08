@@ -157,7 +157,24 @@ MISSIONS = {
     "svom": Mission(
         name="svom",
         telescop=("svom",),
-        orbit=OrbitSpec(pos="POSITION", vel="VELOCITY"),
+        # `SVOM_SVO-ORB-CNV_ALL.P-<pass>.*.fits`, extension SVO-ORB-CNV, at 1 s from the
+        # onboard GPS. `POSITION` is in the J2000 frame and in metres, despite sharing
+        # its name with Swift's and NuSTAR's kilometre columns; both vectors are float32,
+        # a 0.5 m (2 ns) step at this radius. The `POSITION_SPHERICAL` beside it is the
+        # same point in Earth-fixed coordinates, and agrees with `POSITION` to a metre
+        # only if `TIME` is TT seconds from MJDREF, which is how it was checked.
+        orbit=OrbitSpec(
+            pos="POSITION",
+            vel="VELOCITY",
+            pos_unit=u.m,
+            vel_unit=u.m / u.s,
+            expected_extnames=("SVO-ORB-CNV",),
+        ),
+        # The event files are written with CLOCKCOR=T, and no clock file is published.
+        # MET counts TT seconds from 2017-01-01T00:00:00 UTC, after the last leap second
+        # so far, so whether it would count UTC ones is not yet observable.
+        # No official tool: `barycorr` refuses TELESCOP=SVOM. The test reference is
+        # `barycorr` run on the same numbers relabelled as NICER; see tools/make_test_data.py.
     ),
     "xmm": Mission(
         name="xmm",

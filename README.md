@@ -57,6 +57,13 @@ automatically if you do not). `barycenter --help` lists the rest; the options wo
 knowing about are `--ephem`, `--engine`, `--dt` and `--fill-orbit-gaps` (fit an orbit
 across long gaps in the orbit file, such as the Fermi LAT's South Atlantic Anomaly).
 
+If the good time intervals come in a separate file, as for SVOM, merge the ones you want
+into the event file first with `barycenter-apply-gti` (run it without `-e` to list them):
+
+```bash
+barycenter-apply-gti events.fits gtis.fits -e GTICAL-STA,GTICAL-NSA -o gti_events.fits
+```
+
 ## Use it from Python
 
 The whole command line is one function:
@@ -103,13 +110,16 @@ command line checks this for you and warns.
 | NICER | `ni<obsid>.orb` | none needed | +53 ns vs `barycorr`, one-off check |
 | Fermi LAT | FT2 spacecraft file | none needed | 30 ns vs `gtbary` |
 | Fermi GBM | `glg_poshist_all_*.fit` | none needed | `gtbary` refuses GBM files; identical to the LAT route given the same positions |
-| IXPE, SVOM | see the docs | none implemented | orbit file read, never checked against a tool |
+| SVOM | `SVOM_SVO-ORB-CNV_*.fits`, one per pass; GTIs in a separate file | none needed | no official tool; 1 ulp vs `barycorr` on SVOM-format data relabelled as NICER |
+| IXPE | see the docs | none implemented | orbit file read, never checked against a tool |
 
 The first five rows and Fermi LAT have a reference file committed to the repository, so continuous
 integration re-checks them on every change. The NICER figure comes from a single
-comparison against a `barycorr` run on a Crab observation too large to commit, and the
-last three missions have never been compared against an official tool at all — their
-orbit files are read correctly, which is a different claim.
+comparison against a `barycorr` run on a Crab observation too large to commit. GBM and
+SVOM have no official tool at all, so they are checked against the official tool of a
+mission with the same kind of orbit file, given the same numbers; see
+[docs/missions.md](docs/missions.md). IXPE has never been compared against anything —
+its orbit file is read correctly, which is a different claim.
 
 XMM-Newton and Chandra are worth singling out: `barycorr` cannot do either mission, and
 `axbary` can only reach DE200 and DE405, so this is the only way to barycentre them
