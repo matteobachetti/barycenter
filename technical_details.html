@@ -1,0 +1,2432 @@
+
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="./" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Technical details &#8212; barycenter  documentation</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=a95f357e85573c9b56d5" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="_static/scripts/fontawesome.js?digest=a95f357e85573c9b56d5"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5" />
+
+    <script src="_static/documentation_options.js?v=5929fcd5"></script>
+    <script src="_static/doctools.js?v=9bcbadda"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'technical_details';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Known issues" href="known_issues.html" />
+    <link rel="prev" title="Adding a mission" href="adding_a_mission.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="0.1.dev1+gb7cf067d8" />
+  
+    
+    <script src="_static/searchtools.js"></script>
+    <script src="_static/language_data.js"></script>
+    <script src="searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+  
+    <p class="title logo__title">barycenter  documentation</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="missions.html">
+    Barycentring, mission by mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="adding_a_mission.html">
+    Adding a mission
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Technical details
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="known_issues.html">
+    Known issues
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api/modules.html">
+    barycenter
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="missions.html">
+    Barycentring, mission by mission
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="adding_a_mission.html">
+    Adding a mission
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="#">
+    Technical details
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="known_issues.html">
+    Known issues
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="api/modules.html">
+    barycenter
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg fa-fw" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg fa-fw" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg fa-fw" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg fa-fw me-1"></i>System Settings</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg fa-fw me-1"></i>Light</button></li>
+    <li><button class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg fa-fw me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar"><svg class="pst-icon svg-inline--fa" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"></div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-home"></i>
+      </a>
+    </li>
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">Technical details</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="technical-details">
+<h1>Technical details<a class="headerlink" href="#technical-details" title="Link to this heading">#</a></h1>
+<p>This page describes how <code class="docutils literal notranslate"><span class="pre">barycenter</span></code> actually works: what happens, in what order,
+which module does it, and where the answer can go wrong. It documents the code as it
+is today, not as it is planned to be.</p>
+<section id="what-the-tool-is-for">
+<h2>What the tool is for<a class="headerlink" href="#what-the-tool-is-for" title="Link to this heading">#</a></h2>
+<p>An X-ray satellite timestamps each photon with its own onboard clock, in seconds since
+a mission-specific reference epoch (the <em>mission elapsed time</em>, MET). Two things make
+those times unusable for timing science directly:</p>
+<ol class="arabic simple">
+<li><p>The spacecraft is moving. Over a year the Earth’s orbit alone changes the light
+travel time to a source by up to ±500 s, and the spacecraft’s own orbit adds a few
+tens of milliseconds on top.</p></li>
+<li><p>Clocks tick at different rates depending on where they are. A clock on Earth and a
+clock at the solar-system barycentre disagree by up to ~1.7 ms over a year.</p></li>
+</ol>
+<p>Barycentring removes both, giving the arrival time the photon <em>would</em> have had at the
+solar-system barycentre, measured in Barycentric Dynamical Time (TDB). That is the
+time you can safely fold on a pulsar period.</p>
+<p>The official tools that do this are HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code>, XMM-SAS <code class="docutils literal notranslate"><span class="pre">barycen</span></code> and CIAO
+<code class="docutils literal notranslate"><span class="pre">axbary</span></code>. Each needs a multi-gigabyte software installation, and each brings its own
+limitations. This package does the same arithmetic in Python.</p>
+</section>
+<section id="the-two-workflows">
+<h2>The two workflows<a class="headerlink" href="#the-two-workflows" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">main_barycenter</span></code> (the <code class="docutils literal notranslate"><span class="pre">barycenter</span></code> command) parses arguments and calls
+<code class="docutils literal notranslate"><span class="pre">apply_barycenter_correction</span></code>, which then branches in one of two directions.</p>
+<section id="the-pure-python-workflow-the-default">
+<h3>1. The pure-Python workflow (the default)<a class="headerlink" href="#the-pure-python-workflow-the-default" title="Link to this heading">#</a></h3>
+<p>This is the one that matters. It is <code class="docutils literal notranslate"><span class="pre">apply_barycenter_correction</span></code> in
+<a class="reference download internal" download="" href="_downloads/1c1bded7885dbaec17c31a2e63297718/core.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">core.py</span></code></span></a>, and it runs as follows.</p>
+<p><strong>Step 1 — fetch the inputs.</strong> <code class="docutils literal notranslate"><span class="pre">download_locally</span></code> pulls the event and orbit files if
+they are <code class="docutils literal notranslate"><span class="pre">http(s)://</span></code> or <code class="docutils literal notranslate"><span class="pre">s3://</span></code> URLs. On SciServer (detected from the
+<code class="docutils literal notranslate"><span class="pre">SCISERVER_USER_ID</span></code> environment variable or a <code class="docutils literal notranslate"><span class="pre">/home/jovyan</span></code> home directory) the HEASARC
+archive is already mounted under <code class="docutils literal notranslate"><span class="pre">/FTP</span></code>, so nothing is downloaded.</p>
+<p>A local path is never copied: it comes back as the absolute path of the file where it is,
+with a relative path resolved from the caller’s directory. It used to be copied into the
+current directory, but only when no file of that name was there yet, so reprocessing an
+observation silently barycentred the stale copy of the old one, and parallel runs sharing a
+working directory read each other’s copies. Nothing is ever written next to an input, which
+may sit in a read-only directory; anything that has to change a file (the ASCA <code class="docutils literal notranslate"><span class="pre">timeconv</span></code>
+path, which also gunzips) works on a private copy in the system temporary directory.
+Downloaded <code class="docutils literal notranslate"><span class="pre">http(s)://</span></code> and <code class="docutils literal notranslate"><span class="pre">s3://</span></code> files do still land in the current directory (the
+output’s directory, on the ASCA path) and are reused when already there, since that is the
+cache.</p>
+<p><strong>Step 2 — optional region cut.</strong> If <code class="docutils literal notranslate"><span class="pre">--source-region-deg</span></code> is given,
+<code class="docutils literal notranslate"><span class="pre">extract_events_in_region</span></code> keeps only the events inside a circle on the sky, using the
+<code class="docutils literal notranslate"><span class="pre">X</span></code>/<code class="docutils literal notranslate"><span class="pre">Y</span></code> sky columns and the WCS keywords in the event header. Doing this first means
+everything after it works on a much smaller file.</p>
+<p><strong>Step 3 — decide where the source is.</strong> The correction depends entirely on the source
+direction: an error of 0.1 arcsec is 172 µs of light travel time, which is a thousand
+times our accuracy target. The position comes from, in order of preference:</p>
+<ul class="simple">
+<li><p>a TEMPO/TEMPO2/PINT <code class="docutils literal notranslate"><span class="pre">.par</span></code> file given with <code class="docutils literal notranslate"><span class="pre">-p</span></code>, read by <code class="docutils literal notranslate"><span class="pre">pint.models.get_model</span></code>;</p></li>
+<li><p>explicit <code class="docutils literal notranslate"><span class="pre">--ra</span></code> and <code class="docutils literal notranslate"><span class="pre">--dec</span></code> on the command line;</p></li>
+<li><p>the event header, via <code class="docutils literal notranslate"><span class="pre">get_coordinates_from_fits_header</span></code>, which tries
+<code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_OBJ</span></code>, then <code class="docutils literal notranslate"><span class="pre">RA_TARG</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_TARG</span></code>, then <code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_NOM</span></code>, then
+<code class="docutils literal notranslate"><span class="pre">RA_PNT</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_PNT</span></code>, then plain <code class="docutils literal notranslate"><span class="pre">RA</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC</span></code>. That order is a deliberate departure from
+HEASOFT’s — see <a class="reference internal" href="#the-coordinate-keyword-order">below</a>.</p></li>
+</ul>
+<p>A <code class="docutils literal notranslate"><span class="pre">.par</span></code> file is the only thing on this path that needs PINT installed, since it is the
+one source of coordinates we do not parse ourselves. Its <code class="docutils literal notranslate"><span class="pre">EPHEM</span></code> also wins over
+<code class="docutils literal notranslate"><span class="pre">--ephem</span></code>, because the model was fitted with it, and the output header is stamped with
+the one actually used.</p>
+<p><strong>Step 4 — build the barycentric correction function.</strong> This is
+<code class="docutils literal notranslate"><span class="pre">get_barycentric_correction</span></code>, and it is the heart of the package. First,
+<a class="reference internal" href="#the-orbit-reader"><code class="docutils literal notranslate"><span class="pre">orbit.read_orbit</span></code></a> reads the orbit file (or the list of them) into
+one cleaned table, taking <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code> from <code class="docutils literal notranslate"><span class="pre">MJDREFI</span></code>+<code class="docutils literal notranslate"><span class="pre">MJDREFF</span></code> in extended precision. Then
+one of two engines turns it into a callable:</p>
+<ul class="simple">
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">native</span></code></strong> (the default) builds a cubic Hermite spline through the
+spacecraft positions and evaluates <a class="reference internal" href="#the-native-engine">the four terms</a> directly at
+whatever times it is asked for. No grid, no interpolation of the correction itself.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">pint</span></code></strong> registers the table with PINT as a moving observatory via
+<a class="reference internal" href="#the-pint-engine"><code class="docutils literal notranslate"><span class="pre">pintengine.TableSatelliteObs</span></code></a>, lays down a <strong>grid of TOAs every
+5 seconds</strong>, and Akima-interpolates between them. PINT fits its own cubic splines
+through the position columns, so the correction is only valid where those splines are.
+On the PINT path, <code class="docutils literal notranslate"><span class="pre">model.get_barycentric_toas(ts)</span></code> computes the barycentric arrival time
+for each grid point — internally <code class="docutils literal notranslate"><span class="pre">tdbld</span> <span class="pre">-</span> <span class="pre">delay</span></code>, where PINT’s delay chain contains the
+geometric (Roemer) delay, the solar-system Shapiro delay, and whatever else the timing
+model happened to switch on — and the difference (barycentric MJD − spacecraft MJD) in
+seconds is wrapped in a <code class="docutils literal notranslate"><span class="pre">scipy.interpolate.Akima1DInterpolator</span></code> against MET.</p></li>
+</ul>
+<p>So with <code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">pint</span></code> the correction is <em>never</em> evaluated at the event times
+themselves. An Akima spline over a smooth 5 s-sampled function contributes well under a
+nanosecond, so that is not a precision problem — but the grid covers the whole orbit
+file rather than the events, which is a performance one (see
+<a class="reference internal" href="known_issues.html"><span class="std std-doc">Known issues</span></a>). The native engine has no grid, and takes an optional
+<code class="docutils literal notranslate"><span class="pre">dt</span></code> if one is ever wanted for speed.</p>
+<p><strong>Step 5 — build the clock correction function.</strong> <code class="docutils literal notranslate"><span class="pre">clock_correction_fun</span></code> is the single
+entry point: it is given the mission, whatever the user passed as <code class="docutils literal notranslate"><span class="pre">-c/--clockfile</span></code> and the
+<code class="docutils literal notranslate"><span class="pre">INSTRUME</span></code> keyword, and returns the correction function together with the file it came
+from, or <code class="docutils literal notranslate"><span class="pre">(None,</span> <span class="pre">None)</span></code> for a mission with no clock correction of its own. Keeping that
+decision in <code class="docutils literal notranslate"><span class="pre">clock.py</span></code> is what lets <code class="docutils literal notranslate"><span class="pre">core.py</span></code> stay mission-agnostic.</p>
+</section>
+<section id="nustar">
+<h3>NuSTAR<a class="headerlink" href="#nustar" title="Link to this heading">#</a></h3>
+<p>If no <code class="docutils literal notranslate"><span class="pre">-c/--clockfile</span></code> is given, <code class="docutils literal notranslate"><span class="pre">get_latest_clock_file</span></code> scrapes
+the CALDB HTML directory index, picks the highest-versioned file matching that mission’s
+<code class="docutils literal notranslate"><span class="pre">ClockSource.pattern</span></code> (<code class="docutils literal notranslate"><span class="pre">nuCclock*.fits*</span></code> for NuSTAR) and caches
+it under the user’s cache directory — these files are about 12 MB, so they are fetched
+once per machine, not once per run. If the index cannot be reached, the newest cached
+file is used.</p>
+<p><code class="docutils literal notranslate"><span class="pre">nustar_clock_correction_fun</span></code> reads the <code class="docutils literal notranslate"><span class="pre">NU_FINE_CLOCK</span></code> extension (columns <code class="docutils literal notranslate"><span class="pre">TIME</span></code>,
+<code class="docutils literal notranslate"><span class="pre">CLOCK_OFF_CORR</span></code>, <code class="docutils literal notranslate"><span class="pre">CLOCK_FREQ_CORR</span></code>, <code class="docutils literal notranslate"><span class="pre">CLOCK_ERR_CORR</span></code>) and returns a function that
+evaluates <code class="docutils literal notranslate"><span class="pre">interpolate_clock_function</span></code> directly at whatever times it is asked for. That
+in turn uses <code class="docutils literal notranslate"><span class="pre">cubic_interpolation</span></code>, a numba port of the <code class="docutils literal notranslate"><span class="pre">cubeterp</span></code> routine from HEASOFT’s
+<code class="docutils literal notranslate"><span class="pre">seekinterp.c</span></code>, so the Hermite interpolation through the tabulated offsets and their
+derivatives is HEASOFT’s own. On the test observation the correction is 20–29 ms, on a
+grid sampled every 1000 s.</p>
+<p>Clock files from before 2019 carry a <code class="docutils literal notranslate"><span class="pre">CLOCK_CORRECT</span></code> extension instead — a per-interval
+C0/C1/C2 polynomial that HEASOFT documents as accurate only to the millisecond. Those are
+<strong>refused</strong>, with an error naming the extension found: a millisecond is four orders of
+magnitude worse than the target, and a file corrected with it would look clock-corrected
+while being nothing of the kind.</p>
+</section>
+<section id="rxte">
+<h3>RXTE<a class="headerlink" href="#rxte" title="Link to this heading">#</a></h3>
+<p>RXTE’s coefficients are not in a FITS file at all but in <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code>, 800 sets of quadratic
+coefficients in free-format ASCII. HEASOFT’s <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> <strong>ignores its own <code class="docutils literal notranslate"><span class="pre">clockfile</span></code>
+parameter</strong> for RXTE and always reads <code class="docutils literal notranslate"><span class="pre">$LHEA_DATA/tdc.dat</span></code>, so reproducing it means
+reading the same file. A copy ships with this package, under <code class="docutils literal notranslate"><span class="pre">src/barycenter/data/</span></code>: RXTE
+stopped observing in January 2012 and the file is final, it is 53 kB, and bundling it is
+what makes an RXTE run work without HEASOFT installed. <code class="docutils literal notranslate"><span class="pre">TIMING_DIR</span></code> and <code class="docutils literal notranslate"><span class="pre">LHEA_DATA</span></code> are
+still checked first, so an installation’s own copy wins.</p>
+<p><code class="docutils literal notranslate"><span class="pre">read_tdc_file</span></code> is translated from
+<a class="reference external" href="https://heasarc.gsfc.nasa.gov/docs/xte/abc/xCC.c"><code class="docutils literal notranslate"><span class="pre">xCC.c</span></code></a> by A. Rots, the reader
+<code class="docutils literal notranslate"><span class="pre">axBary</span></code> itself uses, and the format is worth spelling out because nothing else documents
+it. The file is a stream of rows of four numbers, in two kinds:</p>
+<ul class="simple">
+<li><p>a row whose fourth number is negative starts a block — its first number is the mission
+day the block’s polynomials are measured from, its second the value of <code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code> there;</p></li>
+<li><p>any other row gives <code class="docutils literal notranslate"><span class="pre">C0</span></code>, <code class="docutils literal notranslate"><span class="pre">C1</span></code>, <code class="docutils literal notranslate"><span class="pre">C2</span></code> of a quadratic in days since that day, valid until
+the fourth number (also in days since that day).</p></li>
+</ul>
+<p>The first set whose end is later than the time asked for wins. The original reader walks
+the file from the top to find it; since the ends never go backwards, that is a
+<code class="docutils literal notranslate"><span class="pre">searchsorted</span></code>. The trailing comment block is what terminates the file — the C reader’s
+<code class="docutils literal notranslate"><span class="pre">fscanf</span></code> loop stops at the first row that fails to parse, which is why the comments are at
+the <em>end</em> of <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> and not the beginning.</p>
+<p>Two things are deliberately left out and one is added:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code> is not applied here. The event file’s header already carries it, and step 6
+folds that in.</p></li>
+<li><p>Anything whose <code class="docutils literal notranslate"><span class="pre">INSTRUME</span></code> is not <code class="docutils literal notranslate"><span class="pre">HEXTE</span></code> — in practice the PCA — has a further 16 µs of
+detector delay subtracted, which is what <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code> does.</p></li>
+<li><p>HEASOFT evaluates the correction <strong>once</strong>, at the middle of the observation, and folds
+that one number into <code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code>. This package evaluates it at each event time instead.
+The coefficients drift by about 25 ns per hour, so on a short observation the difference
+is far below the float64 granularity of the stored times (119 ns at RXTE’s 5.4e8 s) and
+on a long one ours is the better answer.</p></li>
+</ul>
+<p>On the test observation the correction is 17.4 µs: small, but 170 times the target.</p>
+<p>Passing <code class="docutils literal notranslate"><span class="pre">--clockfile</span> <span class="pre">none</span></code> skips all of this. Passing a clock file for RXTE warns and uses
+<code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> anyway, which is also what HEASOFT does with that parameter.</p>
+</section>
+<section id="swift">
+<h3>Swift<a class="headerlink" href="#swift" title="Link to this heading">#</a></h3>
+<p>Swift’s correction is not a fine clock correction at all but the <strong>UTC correction factor</strong>,
+the offset between the onboard clock and UTC. It is tens of seconds — −15.56 s on the test
+observation — where NuSTAR’s is tens of milliseconds and RXTE’s tens of microseconds, so a
+sign error is not subtle.</p>
+<p>The file is <code class="docutils literal notranslate"><span class="pre">swclockcor*.fits</span></code> in <code class="docutils literal notranslate"><span class="pre">swift/mis/bcf/clock/</span></code>, and the numbers live in a
+<code class="docutils literal notranslate"><span class="pre">CLOCK_CORRECT</span></code> extension: one row per fit interval, with <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>, <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> and quadratic
+coefficients <code class="docutils literal notranslate"><span class="pre">C0</span></code>, <code class="docutils literal notranslate"><span class="pre">C1</span></code>, <code class="docutils literal notranslate"><span class="pre">C2</span></code>. The correction is</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">met</span> <span class="o">-</span> <span class="n">TSTART</span><span class="p">)</span> <span class="o">/</span> <span class="mi">86400</span>
+<span class="n">correction</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">C0</span> <span class="o">+</span> <span class="n">C1</span> <span class="n">x</span> <span class="o">+</span> <span class="n">C2</span> <span class="n">x</span><span class="o">^</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="mf">1e-6</span>
+</pre></div>
+</div>
+<p>microseconds, and negated, because the table gives the clock’s excess over UTC while the
+correction has to remove it. The sign was settled against the <code class="docutils literal notranslate"><span class="pre">UTCFINIT</span></code> keyword in the
+event files themselves rather than reasoned about.</p>
+<p>Three properties of the table are worth knowing, because the reader depends on all three:</p>
+<ul class="simple">
+<li><p><strong>The intervals are contiguous and gap-free</strong> — each <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> is the next <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>
+exactly — so the row containing a time is found with one <code class="docutils literal notranslate"><span class="pre">searchsorted</span></code> and a boundary
+time belongs to the later row.</p></li>
+<li><p><strong>The polynomial matters.</strong> The clock drifts 4616 µs/day, which is 342 µs across the
+6.4 ks test observation. A reader that took <code class="docutils literal notranslate"><span class="pre">C0</span></code> and stopped would be within 100 ns for
+the first two seconds of an interval and 3400 times the target out by the end of a day.</p></li>
+<li><p><strong>The table steps by −1 s at each leap second</strong>, because the UTCF’s destination is UTC
+and UTC is what steps. That is the mirror image of the leap-second term described below,
+which steps +1 s because <em>its</em> destination is TT, and the two cancel.</p></li>
+</ul>
+<p>A time the table does not cover raises, rather than extrapolating a quadratic off the end
+of it — the same choice made for a NuSTAR observation predating its clock file. The message
+says which way out the time fell and offers the two ways forward: fetch a newer CALDB file,
+or run with <code class="docutils literal notranslate"><span class="pre">--clockfile</span> <span class="pre">none</span></code> and accept the 15 s.</p>
+<p><strong>Step 6 — correct the times.</strong> <code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code> is folded in first. <code class="docutils literal notranslate"><span class="pre">TIMEPIXR</span></code> deliberately is
+not: this step used to add <code class="docutils literal notranslate"><span class="pre">(0.5</span> <span class="pre">-</span> <span class="pre">TIMEPIXR)</span> <span class="pre">*</span> <span class="pre">TIMEDEL</span></code> as well, moving a timestamp from
+the start of its bin to its centre. <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> does not do that, and on RXTE PCA data,
+where <code class="docutils literal notranslate"><span class="pre">TIMEDEL</span></code> is one 954 ns clock tick and <code class="docutils literal notranslate"><span class="pre">TIMEPIXR</span></code> is 0, it put every event 477 ns
+away from the reference — five times the target, from a single line. It also left
+<code class="docutils literal notranslate"><span class="pre">TIMEPIXR</span></code> itself untouched in the output header, so the file went on claiming a
+convention its times no longer followed. Where a timestamp sits inside its bin is not the
+barycentring tool’s business. Then <code class="docutils literal notranslate"><span class="pre">correct_times</span></code> computes</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">t_clk</span> <span class="o">=</span> <span class="n">t_in</span> <span class="o">+</span> <span class="n">clock_fun</span><span class="p">(</span><span class="n">t_in</span><span class="p">)</span> <span class="o">+</span> <span class="n">leap_fun</span><span class="p">(</span><span class="n">t_in</span><span class="p">)</span>
+<span class="n">t_out</span> <span class="o">=</span> <span class="n">t_clk</span> <span class="o">+</span> <span class="n">bary_fun</span><span class="p">(</span><span class="n">t_clk</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>for every <code class="docutils literal notranslate"><span class="pre">TIME</span></code>, <code class="docutils literal notranslate"><span class="pre">START</span></code>, <code class="docutils literal notranslate"><span class="pre">STOP</span></code>, <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> <strong>column</strong>, and every <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>
+and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> <strong>keyword</strong>, in <em>every</em> HDU of the file. Doing all the HDUs matters: GTIs
+left behind on the spacecraft clock while the events move to the barycentre would
+silently truncate up to ~500 s of data.</p>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p><strong>The order matters, and it is not the obvious one.</strong> The clock correction goes on first,
+and the barycentric correction is then evaluated <em>at the clock-corrected time</em> — which
+also means the spacecraft position is looked up there, since <code class="docutils literal notranslate"><span class="pre">bary_fun</span></code> interpolates the
+orbit at whatever time it is given. That is what <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> does.</p>
+<p>Adding the two corrections independently, <code class="docutils literal notranslate"><span class="pre">t</span> <span class="pre">+</span> <span class="pre">clock(t)</span> <span class="pre">+</span> <span class="pre">bary(t)</span></code>, is what this package
+used to do, and it is wrong by the clock correction times the rate of change of the
+barycentric one. Measured against the reference generated with the clock file on:
+<strong>+1146 ns mean, 1878 ns peak</strong>, against <strong>+22 ns mean, 60 ns peak</strong> for the correct
+order. It is an order of magnitude above the target, from a line that looks harmless.</p>
+</div>
+</section>
+<section id="missions-whose-met-counts-utc-seconds">
+<h3>Missions whose MET counts UTC seconds<a class="headerlink" href="#missions-whose-met-counts-utc-seconds" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">leap_fun</span></code> above is present for exactly one mission, and is the reason the formula has
+three terms rather than two.</p>
+<p>Almost every mission counts its mission elapsed time in <strong>TT</strong> seconds, so <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code> is all
+you need: <code class="docutils literal notranslate"><span class="pre">MJD(TT)</span> <span class="pre">=</span> <span class="pre">MJDREF</span> <span class="pre">+</span> <span class="pre">MET/86400</span></code>. Swift counts <strong>UTC</strong> seconds. Its clock is
+effectively held back by one second every time a leap second is inserted, so the number of
+TT seconds that have really elapsed since the epoch is larger than the MET by however many
+leap seconds fell in between. <code class="docutils literal notranslate"><span class="pre">utils.leap_seconds_since_mjdref</span></code> returns that difference,
+measured from the file’s own epoch — which is what <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code> means. Swift’s
+<code class="docutils literal notranslate"><span class="pre">MJDREFF</span> <span class="pre">=</span> <span class="pre">0.00074287037</span></code> is 64.184 s, TT − UTC on 2001-01-01, when TAI − UTC was 32 s;
+for a December 2015 observation four more leap seconds have been inserted, so the term
+is +4 s.</p>
+<p>Two things about it are deliberate:</p>
+<ul class="simple">
+<li><p><strong>It is not a clock correction, and <code class="docutils literal notranslate"><span class="pre">--clockfile</span> <span class="pre">none</span></code> does not switch it off.</strong> It is a
+time-system conversion, and it belongs to the file regardless of whether anyone has a
+clock model for it. Leaving it out puts a Swift observation four seconds from
+<code class="docutils literal notranslate"><span class="pre">barycorr</span></code> — forty million times the target — and a flag should not be able to cause
+that. It is opt-in per mission, through <code class="docutils literal notranslate"><span class="pre">Mission.met_is_utc</span></code>.</p></li>
+<li><p><strong>Both the clock term and the leap term are evaluated on the raw time.</strong> Swift’s clock
+correction drifts 4616 µs/day, so evaluating its polynomial 4 s later moves every event
+214 ns. That is above the target, and it is not what <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> does.</p></li>
+</ul>
+<p>The leap-second epochs come from ERFA’s own table, converted to METs once, so an
+observation straddling a leap second gets the step in the right place rather than rounded
+to the nearest day — a whole second, silently, in the middle of a file.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><strong>Fermi shares Swift’s exact <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code></strong> (51910.00074287037) and does <em>not</em> need this term.
+That used to be an open question: the shared value was reason to suspect Fermi’s MET also
+counted UTC seconds, and being wrong about it is a whole-second error. The <code class="docutils literal notranslate"><span class="pre">gtbary</span></code>
+reference settles it. The test observation sits 2.0 s of leap seconds after <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code>, so
+applying the term would put us 2 s away from <code class="docutils literal notranslate"><span class="pre">gtbary</span></code>; we are 29.8 ns away without it.
+<code class="docutils literal notranslate"><span class="pre">met_is_utc</span></code> is False for Fermi and that is now measured rather than assumed.</p>
+</div>
+<p><strong>Step 7 — stamp the headers and write.</strong> Every HDU gets <code class="docutils literal notranslate"><span class="pre">TIMESYS</span> <span class="pre">=</span> <span class="pre">TDB</span></code>,
+<code class="docutils literal notranslate"><span class="pre">TIMEREF</span> <span class="pre">=</span> <span class="pre">SOLARSYSTEM</span></code>, <code class="docutils literal notranslate"><span class="pre">TREFPOS</span> <span class="pre">=</span> <span class="pre">BARYCENTER</span></code>, <code class="docutils literal notranslate"><span class="pre">TREFDIR</span> <span class="pre">=</span> <span class="pre">RA_OBJ,DEC_OBJ</span></code>,
+<code class="docutils literal notranslate"><span class="pre">TIMEZERO</span> <span class="pre">=</span> <span class="pre">0</span></code>, <code class="docutils literal notranslate"><span class="pre">PLEPHEM</span> <span class="pre">=</span> <span class="pre">JPL-&lt;ephem&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">RADECSYS</span></code>, <code class="docutils literal notranslate"><span class="pre">CLOCKAPP</span></code>, the coordinates
+actually used in <code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_OBJ</span></code>, and a <code class="docutils literal notranslate"><span class="pre">HISTORY</span></code> block naming the orbit file, clock
+file, par file, ephemeris and frame. The whole <code class="docutils literal notranslate"><span class="pre">HDUList</span></code> is then written out in one go.</p>
+</section>
+<section id="the-apply-official-workflow">
+<h3>2. The <code class="docutils literal notranslate"><span class="pre">--apply-official</span></code> workflow<a class="headerlink" href="#the-apply-official-workflow" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">apply_mission_specific_barycenter_correction</span></code> shells out to the mission’s own tool
+instead of computing anything:</p>
+<ul class="simple">
+<li><p>NuSTAR, NICER, RXTE, Swift and Chandra go through <code class="docutils literal notranslate"><span class="pre">official_barycorr</span></code>, which calls
+<code class="docutils literal notranslate"><span class="pre">heasoftpy.barycorr</span></code> in a temporary working directory (HEASOFT tools are sensitive to
+the current directory and to <code class="docutils literal notranslate"><span class="pre">PFILES</span></code>).</p></li>
+<li><p>ASCA goes through a <code class="docutils literal notranslate"><span class="pre">timeconv</span></code> call. <code class="docutils literal notranslate"><span class="pre">timeconv</span></code> rewrites the file it is given and
+looks for its reference files by name in its current directory, so it runs in a private
+temporary directory holding a copy of the events (decompressed on the way if the input
+is gzipped) and links to <code class="docutils literal notranslate"><span class="pre">earth.dat</span></code> and <code class="docutils literal notranslate"><span class="pre">frf.orbit.255</span></code> under short names. That makes
+the run independent of where it was started, leaves nothing beside the output, and
+keeps every path short of the 80 characters at which FTOOLS truncate file names. The two
+reference files never change (ASCA stopped operating in 2001), so they are fetched once
+per machine into astropy’s download cache by <code class="docutils literal notranslate"><span class="pre">cached_download</span></code>, which also repairs the
+broken cache entries that older versions of this package left for exactly these files.</p></li>
+</ul>
+<p>This path exists for cross-checking and for missions we do not yet implement natively.
+It requires a working HEASOFT installation and is not exercised in CI.</p>
+</section>
+</section>
+<section id="module-map">
+<h2>Module map<a class="headerlink" href="#module-map" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Module</p></th>
+<th class="head"><p>Role</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cli.py</span></code></p></td>
+<td><p>Argument parsing, the default output file name, and <code class="docutils literal notranslate"><span class="pre">main_barycenter</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">core.py</span></code></p></td>
+<td><p>The mission-agnostic workflow: <code class="docutils literal notranslate"><span class="pre">apply_barycenter_correction</span></code>, <code class="docutils literal notranslate"><span class="pre">correct_times</span></code>, region extraction.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">orbit.py</span></code></p></td>
+<td><p>The mission-agnostic orbit file reader: one <code class="docutils literal notranslate"><span class="pre">OrbitSpec</span></code> per mission, one table out.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">native.py</span></code></p></td>
+<td><p>The engine: the correction from astropy + ERFA + a JPL ephemeris.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">gti.py</span></code></p></td>
+<td><p>Good time intervals shipped in a separate file: <code class="docutils literal notranslate"><span class="pre">read_gtis</span></code>, <code class="docutils literal notranslate"><span class="pre">intersect_gtis</span></code>/<code class="docutils literal notranslate"><span class="pre">union_gtis</span></code>, <code class="docutils literal notranslate"><span class="pre">add_gti_extension</span></code>, and the <code class="docutils literal notranslate"><span class="pre">barycenter-apply-gti</span></code> command. Run before barycentring.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">gapfill.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GapFilledInterpolator</span></code>: the plain spline, except inside gaps longer than 150 s, where a fitted Kepler + J2 orbit is used. Switched on by <code class="docutils literal notranslate"><span class="pre">--fill-orbit-gaps</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">pintengine.py</span></code></p></td>
+<td><p>The optional PINT engine, for <code class="docutils literal notranslate"><span class="pre">.par</span></code> models and as an independent cross-check.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">clock.py</span></code></p></td>
+<td><p>Spacecraft clock corrections: NuSTAR’s CALDB fine clock files, RXTE’s <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code>, the CALDB fetcher, and <code class="docutils literal notranslate"><span class="pre">clock_correction_fun</span></code>, which looks up which applies.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">missions.py</span></code></p></td>
+<td><p>The <code class="docutils literal notranslate"><span class="pre">MISSIONS</span></code> registry: the only module that knows anything mission-specific.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">official.py</span></code></p></td>
+<td><p>Shelling out to HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> and <code class="docutils literal notranslate"><span class="pre">timeconv</span></code> under <code class="docutils literal notranslate"><span class="pre">--apply-official</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">remote.py</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">download_locally</span></code>: local paths, <code class="docutils literal notranslate"><span class="pre">https://</span></code> and <code class="docutils literal notranslate"><span class="pre">s3://</span></code>; <code class="docutils literal notranslate"><span class="pre">cached_download</span></code> for files that never change.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">utils.py</span></code></p></td>
+<td><p>FITS I/O that also works on <code class="docutils literal notranslate"><span class="pre">http(s)://</span></code> and <code class="docutils literal notranslate"><span class="pre">s3://</span></code> URLs (<code class="docutils literal notranslate"><span class="pre">fits_open_including_remote</span></code>), column slimming (<code class="docutils literal notranslate"><span class="pre">slim_down_hdu_list</span></code>), HTML directory listing for the CALDB scrape, the <code class="docutils literal notranslate"><span class="pre">MJDREFI</span></code>+<code class="docutils literal notranslate"><span class="pre">MJDREFF</span></code> reader, and <code class="docutils literal notranslate"><span class="pre">splitext_improved</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Until this release all of that lived in one 979-line <code class="docutils literal notranslate"><span class="pre">barycenter.py</span></code>. Nothing outside
+the package needs to change: <code class="docutils literal notranslate"><span class="pre">main_barycenter</span></code> and the other public names are still
+importable from <code class="docutils literal notranslate"><span class="pre">barycenter</span></code> itself, and the <code class="docutils literal notranslate"><span class="pre">barycenter</span></code> command is unaffected. Code
+that imported from <code class="docutils literal notranslate"><span class="pre">barycenter.barycenter</span></code> has to be updated.</p>
+</section>
+<section id="the-mission-registry">
+<span id="id1"></span><h2>The mission registry<a class="headerlink" href="#the-mission-registry" title="Link to this heading">#</a></h2>
+<p>Everything mission-specific lives in one dict in
+<a class="reference download internal" download="" href="_downloads/a74f87a863151648f200513abfe5f853/missions.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">missions.py</span></code></span></a>. Nothing else in the package branches on a
+mission name — <code class="docutils literal notranslate"><span class="pre">core.py</span></code> does not mention one, and <code class="docutils literal notranslate"><span class="pre">clock.py</span></code> and <code class="docutils literal notranslate"><span class="pre">official.py</span></code> only look
+entries up.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">MISSIONS</span><span class="p">[</span><span class="s2">"nustar"</span><span class="p">]</span> <span class="o">=</span> <span class="n">Mission</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"nustar"</span><span class="p">,</span>
+    <span class="n">telescop</span><span class="o">=</span><span class="p">(</span><span class="s2">"nustar"</span><span class="p">,),</span>
+    <span class="n">orbit</span><span class="o">=</span><span class="n">OrbitSpec</span><span class="p">(</span><span class="n">pos</span><span class="o">=</span><span class="s2">"POSITION"</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="s2">"VELOCITY"</span><span class="p">,</span> <span class="n">pos_unit</span><span class="o">=</span><span class="n">u</span><span class="o">.</span><span class="n">km</span><span class="p">,</span> <span class="n">vel_unit</span><span class="o">=</span><span class="n">u</span><span class="o">.</span><span class="n">km</span> <span class="o">/</span> <span class="n">u</span><span class="o">.</span><span class="n">s</span><span class="p">),</span>
+    <span class="n">clock</span><span class="o">=</span><span class="n">nustar_clock_builder</span><span class="p">,</span>
+    <span class="n">official</span><span class="o">=</span><span class="s2">"barycorr"</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>field</p></th>
+<th class="head"><p>meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">name</span></code></p></td>
+<td><p>canonical short name; must match the dict key</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">telescop</span></code></p></td>
+<td><p>lower-case <em>substrings</em> of the <code class="docutils literal notranslate"><span class="pre">TELESCOP</span></code> keyword that identify the mission — substrings because the keyword is written <code class="docutils literal notranslate"><span class="pre">XTE</span></code> and <code class="docutils literal notranslate"><span class="pre">RXTE</span></code>, <code class="docutils literal notranslate"><span class="pre">NuSTAR</span></code> and <code class="docutils literal notranslate"><span class="pre">NUSTAR</span></code>, <code class="docutils literal notranslate"><span class="pre">AXAF</span></code> and <code class="docutils literal notranslate"><span class="pre">CHANDRA</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">orbit</span></code></p></td>
+<td><p>an <code class="docutils literal notranslate"><span class="pre">OrbitSpec</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> for no native reader</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">clock</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">clock(clockfile,</span> <span class="pre">instrument)</span> <span class="pre">-&gt;</span> <span class="pre">(function,</span> <span class="pre">path)</span></code>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> for a mission that needs no correction</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">official</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;barycorr&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;timeconv&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">None</span></code> — which branch of <code class="docutils literal notranslate"><span class="pre">official.py</span></code> <code class="docutils literal notranslate"><span class="pre">--apply-official</span></code> takes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">official_ephem</span></code></p></td>
+<td><p>the only ephemeris that tool can manage, if it is stuck on one: DE200 for ASCA’s <code class="docutils literal notranslate"><span class="pre">timeconv</span></code>, DE405 for CIAO’s <code class="docutils literal notranslate"><span class="pre">axbary</span></code>. The native engine has no such limit, which is the main reason to prefer it for those two.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<section id="adding-a-mission">
+<h3>Adding a mission<a class="headerlink" href="#adding-a-mission" title="Link to this heading">#</a></h3>
+<p>Step by step, with the traps, in <a class="reference internal" href="adding_a_mission.html"><span class="std std-doc">Adding a mission</span></a>. The short
+version: the registry entry is usually five lines, and producing a reference file to
+check it against is the work. That is why a mission is listed with <code class="docutils literal notranslate"><span class="pre">orbit=None</span></code> — “known
+about, not yet validated” — until there is a file to check it against.</p>
+<p><code class="docutils literal notranslate"><span class="pre">Mission</span></code> is a frozen dataclass, so a misspelt field is a <code class="docutils literal notranslate"><span class="pre">TypeError</span></code> at import rather
+than a silently ignored setting, and <code class="docutils literal notranslate"><span class="pre">mission_for</span></code> raises with the list of known missions
+rather than guessing.</p>
+</section>
+</section>
+<section id="the-orbit-reader">
+<span id="id2"></span><h2>The orbit reader<a class="headerlink" href="#the-orbit-reader" title="Link to this heading">#</a></h2>
+<p>Every mission tabulates the same three things — time, geocentric position, geocentric
+velocity — and differs only in the dialect. So <a class="reference download internal" download="" href="_downloads/cd64649c70f044316bee0c85ec190923/orbit.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">orbit.py</span></code></span></a>
+has one reader driven by a declarative <code class="docutils literal notranslate"><span class="pre">OrbitSpec</span></code>, which is the <code class="docutils literal notranslate"><span class="pre">orbit</span></code> field of a
+mission’s <a class="reference internal" href="#the-mission-registry">registry entry</a>:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mission</p></th>
+<th class="head"><p>Extension</p></th>
+<th class="head"><p>Position column</p></th>
+<th class="head"><p>Velocity column</p></th>
+<th class="head"><p>Units in the file</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Fermi LAT</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SC_DATA</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SC_POSITION</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SC_VELOCITY</span></code></p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fermi GBM</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">GLAST</span> <span class="pre">POS</span> <span class="pre">HIST</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">POS_X</span></code>,<code class="docutils literal notranslate"><span class="pre">POS_Y</span></code>,<code class="docutils literal notranslate"><span class="pre">POS_Z</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">VEL_X</span></code>,<code class="docutils literal notranslate"><span class="pre">VEL_Y</span></code>,<code class="docutils literal notranslate"><span class="pre">VEL_Z</span></code></p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-even"><td><p>NuSTAR</p></td>
+<td><p>1</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POSITION</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">VELOCITY</span></code></p></td>
+<td><p><strong>km</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>SVOM</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SVO-ORB-CNV</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POSITION</span></code> (float32)</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">VELOCITY</span></code> (float32)</p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-even"><td><p>NICER, IXPE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ORBIT</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">X</span></code>,<code class="docutils literal notranslate"><span class="pre">Y</span></code>,<code class="docutils literal notranslate"><span class="pre">Z</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">Vx</span></code>,<code class="docutils literal notranslate"><span class="pre">Vy</span></code>,<code class="docutils literal notranslate"><span class="pre">Vz</span></code></p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-odd"><td><p>RXTE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">XTE_PE</span></code> (or <code class="docutils literal notranslate"><span class="pre">ORBIT</span></code>)</p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">X</span></code>,<code class="docutils literal notranslate"><span class="pre">Y</span></code>,<code class="docutils literal notranslate"><span class="pre">Z</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">Vx</span></code>,<code class="docutils literal notranslate"><span class="pre">Vy</span></code>,<code class="docutils literal notranslate"><span class="pre">Vz</span></code></p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-even"><td><p>XMM-Newton</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ORBIT</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">GEI_X</span></code>,<code class="docutils literal notranslate"><span class="pre">GEI_Y</span></code>,<code class="docutils literal notranslate"><span class="pre">GEI_Z</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">VX</span></code>,<code class="docutils literal notranslate"><span class="pre">VY</span></code>,<code class="docutils literal notranslate"><span class="pre">VZ</span></code></p></td>
+<td><p><strong>km</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Chandra</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ORBITEPHEM</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">X</span></code>,<code class="docutils literal notranslate"><span class="pre">Y</span></code>,<code class="docutils literal notranslate"><span class="pre">Z</span></code></p></td>
+<td><p>scalar <code class="docutils literal notranslate"><span class="pre">Vx</span></code>,<code class="docutils literal notranslate"><span class="pre">Vy</span></code>,<code class="docutils literal notranslate"><span class="pre">Vz</span></code></p></td>
+<td><p>m</p></td>
+</tr>
+<tr class="row-even"><td><p>Swift</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">PREFILTER</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">POSITION</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">VELOCITY</span></code></p></td>
+<td><p><strong>km</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The units are declared in the spec, not read from <code class="docutils literal notranslate"><span class="pre">TUNITn</span></code>, because orbit files are
+unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
+The table that comes out is always in metres and metres per second.</p>
+<p>The column names in that table are what the spec asks for, not what the file wrote:
+every lookup goes through <code class="docutils literal notranslate"><span class="pre">utils.column_named</span></code>, which matches without regard to case.
+FITS column names are case-insensitive by standard and missions use that freedom —
+Chandra spells its orbit time <code class="docutils literal notranslate"><span class="pre">Time</span></code> and its velocities <code class="docutils literal notranslate"><span class="pre">Vx</span></code>, <code class="docutils literal notranslate"><span class="pre">Vy</span></code>, <code class="docutils literal notranslate"><span class="pre">Vz</span></code>, and its event
+times <code class="docutils literal notranslate"><span class="pre">time</span></code>. The reason to be careful about it is that neither failure is loud: on the
+orbit side a velocity that is not found is silently replaced by a numerical derivative of
+the position, and on the event side a <code class="docutils literal notranslate"><span class="pre">time</span></code> column that is not found leaves the events
+untouched while the capitalised <code class="docutils literal notranslate"><span class="pre">START</span></code>/<code class="docutils literal notranslate"><span class="pre">STOP</span></code> of the <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension beside them are
+corrected, so the file comes out with its events and its good-time intervals on
+different time scales. <code class="docutils literal notranslate"><span class="pre">core.TIME_COLUMNS</span></code> lists every column a correction must move:
+<code class="docutils literal notranslate"><span class="pre">TIME</span></code>, <code class="docutils literal notranslate"><span class="pre">START</span></code>, <code class="docutils literal notranslate"><span class="pre">STOP</span></code>, <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>, <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code>.</p>
+<p>Three cleanups are applied to <strong>every</strong> mission, not just to <code class="docutils literal notranslate"><span class="pre">FPorbit</span></code> files as PINT
+does: sort by time, drop rows repeated at the same time (a spline through a repeated
+abscissa is undefined, and repeats are common where two files overlap), and drop
+all-zero placeholder rows (a zero position is a 6400 km error).</p>
+<p>The output table carries both time bases — <code class="docutils literal notranslate"><span class="pre">MJD_TT</span></code>, which is what PINT’s
+<code class="docutils literal notranslate"><span class="pre">SatelliteObs</span></code> expects, and <code class="docutils literal notranslate"><span class="pre">MET</span></code>, which is what the native engine uses. Reading the
+orbit file once, in one place, is what makes the native-versus-PINT comparison
+meaningful: the two engines cannot disagree about where the spacecraft was.</p>
+</section>
+<section id="where-the-orbit-file-stops">
+<span id="id3"></span><h2>Where the orbit file stops<a class="headerlink" href="#where-the-orbit-file-stops" title="Link to this heading">#</a></h2>
+<p>An interpolating spline answers every time it is asked about. Past its last knot it
+extrapolates, and through an interior gap it coasts, and in neither case does it say so.
+That is the behaviour we want for the sub-second shortfalls orbit files routinely have,
+and exactly the wrong one for a file that is missing half an orbit: the answer is then a
+guess written into an event list, indistinguishable from a measurement.</p>
+<p><code class="docutils literal notranslate"><span class="pre">OrbitCoverage</span></code> in <code class="docutils literal notranslate"><span class="pre">orbit.py</span></code> draws the line. It holds the sample times and the file’s
+own <strong>cadence</strong> — the median spacing — and <code class="docutils literal notranslate"><span class="pre">uncovered(times)</span></code> returns, per time, how many
+seconds it reaches beyond what the file covers: zero between two samples, zero within one
+cadence of either end, and positive past that or deep inside a gap.</p>
+<p>The cadence allowance is not a nicety. Fermi tabulates the spacecraft position every
+30 s, so a rule based on distance to the nearest <em>sample</em> would count <strong>33.5 % of a
+healthy LAT file</strong> as uncovered purely for sitting between two samples. With the
+allowance, the same file reports zero uncovered events out of 143 569 and zero uncovered
+boundaries out of 1 308 GTIs — and still isolates the one time that really is outside.</p>
+<section id="what-happens-to-a-time-that-is-not-covered">
+<h3>What happens to a time that is not covered<a class="headerlink" href="#what-happens-to-a-time-that-is-not-covered" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">enforce_orbit_coverage</span></code> tests every time column where the correction is actually
+evaluated — after <code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code>, the leap seconds and the clock correction, since that is
+what the orbit file gets asked about — and sorts the failures into three cases, against a
+tolerance of <code class="docutils literal notranslate"><span class="pre">COVERAGE_TOLERANCE_S</span></code> (10 s) on top of the cadence allowance:</p>
+<ul class="simple">
+<li><p><strong>Inside a good time interval</strong> → <code class="docutils literal notranslate"><span class="pre">ValueError</span></code>. There is no honest time to write, and
+silently dropping real events would be worse than refusing the file. A GTI boundary is
+a good time by definition, so a GTI reaching past the orbit file is always an error.</p></li>
+<li><p><strong>Outside every good time interval</strong> → the row is dropped, with a loud warning. It is
+junk the orbit file also happens not to cover.</p></li>
+<li><p><strong>A file with no GTI extension at all</strong> → every time counts as good. Silence about
+which times are trustworthy is not a claim that none of them are.</p></li>
+</ul>
+</section>
+<section id="the-error-budget-of-a-position-and-what-a-gap-costs">
+<h3>The error budget of a position, and what a gap costs<a class="headerlink" href="#the-error-budget-of-a-position-and-what-a-gap-costs" title="Link to this heading">#</a></h3>
+<p>The barycentre correction is, to first order, the spacecraft position projected on the
+direction to the source, divided by <em>c</em>. So <strong>a position error of Δ metres costs at most
+Δ/<em>c</em> seconds</strong>: 1 m is 3.3 ns, 300 m is 1 µs, and the worst case needs the error to lie
+along the line of sight (for a near-circular orbit it swings between ± that value once
+per orbit). Everything below is a position error in metres; divide by 300 to get µs.</p>
+<p><em>Between samples.</em> The cubic spline’s error grows as the fourth power of the sample
+spacing <em>h</em> times the fourth derivative of the position. For a circular low-Earth orbit
+(angular rate 1.1×10⁻³ rad/s, radius 6.9×10³ km) the standard bound <em>h</em>⁴/384 · ω⁴<em>r</em>
+gives about 2 cm at Fermi’s 30 s cadence, which is why the spline is not a concern for a
+file without gaps. For an <strong>eccentric orbit that estimate is not safe</strong>: near perigee the
+speed is high and the radius small, and the fourth derivative scales roughly as
+<em>v</em>⁴/<em>r</em>³, so the same cadence can cost orders of magnitude more there than at apogee.
+That has not been measured here; if a highly elliptical mission is added (INTEGRAL,
+Chandra and XMM-Newton are all in this class) the check to repeat is the benchmark below,
+decimating the real orbit file and comparing, with the error read at perigee.</p>
+<p><em>Across a gap.</em> Measured with <code class="docutils literal notranslate"><span class="pre">tools/benchmarks/bench_gapfill.py</span></code> on a real day of Fermi
+GBM positions thinned to 30 s, worst position error inside a cut gap (medians over 25
+random gaps; worst cases are 2–3× larger):</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>gap</p></th>
+<th class="head"><p>cubic spline</p></th>
+<th class="head"><p>harmonic fit</p></th>
+<th class="head"><p>Kepler + J2</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>5 min</p></td>
+<td><p>380 m</p></td>
+<td><p>53 m</p></td>
+<td><p>67 m</p></td>
+</tr>
+<tr class="row-odd"><td><p>10 min</p></td>
+<td><p>4.6 km</p></td>
+<td><p>86 m</p></td>
+<td><p>101 m</p></td>
+</tr>
+<tr class="row-even"><td><p>20 min</p></td>
+<td><p>62 km</p></td>
+<td><p>130 m</p></td>
+<td><p>111 m</p></td>
+</tr>
+<tr class="row-odd"><td><p>40 min</p></td>
+<td><p>844 km</p></td>
+<td><p>147 m</p></td>
+<td><p>116 m</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The spline’s error grows without bound because a cubic polynomial cannot follow a
+95-minute orbit; that is why a time inside such a gap is refused by default, and why
+<code class="docutils literal notranslate"><span class="pre">--fill-orbit-gaps</span></code> exists. With it, <code class="docutils literal notranslate"><span class="pre">GapFilledInterpolator</span></code> evaluates the fitted orbit
+inside gaps longer than 150 s, <code class="docutils literal notranslate"><span class="pre">OrbitCoverage</span></code> counts them as covered, a warning lists
+every gap used with its fit residual, and the same lines go into the <code class="docutils literal notranslate"><span class="pre">HISTORY</span></code> of the
+output. Without it the error message names the switch.
+Point-mass Kepler alone is wrong by 3 km, so the Earth’s flattening (J2) is needed. What
+remains, about 100 m (0.4 µs) and independent of gap length, is most likely drag and
+higher gravity terms; a longer fitting window made it worse. Adding the tabulated
+velocity to the fit gains at most about 10 % (median unchanged, worst case 272 m → 242 m
+at 20 min), which is why the fit does not use it. Details and the caveats are
+in <code class="docutils literal notranslate"><span class="pre">tools/benchmarks/README.md</span></code>.</p>
+</section>
+<section id="tstart-and-tstop-are-a-separate-case">
+<h3><code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> are a separate case<a class="headerlink" href="#tstart-and-tstop-are-a-separate-case" title="Link to this heading">#</a></h3>
+<p>These two keywords routinely hold the range that was <em>requested</em> rather than the one that
+was delivered. A Fermi LAT extraction is the clearest example: the server returns
+<code class="docutils literal notranslate"><span class="pre">TSTART</span></code> set to the start of the requested window, while the GTIs and the spacecraft file
+begin whenever the data really does. On one M82 observation that gap is <strong>1455.6 s</strong>, and
+it is why <code class="docutils literal notranslate"><span class="pre">gtbary</span></code> refuses the file outright:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Cannot</span> <span class="n">get</span> <span class="n">Fermi</span> <span class="n">spacecraft</span> <span class="n">position</span> <span class="k">for</span> <span class="mi">412041603</span> <span class="n">Fermi</span> <span class="n">MET</span> <span class="p">(</span><span class="n">TT</span><span class="p">):</span>
+<span class="n">the</span> <span class="n">time</span> <span class="ow">is</span> <span class="ow">not</span> <span class="n">covered</span> <span class="n">by</span> <span class="n">spacecraft</span> <span class="n">file</span> <span class="o">...</span><span class="n">SC00</span><span class="o">.</span><span class="n">fits</span><span class="p">[</span><span class="n">SC_DATA</span><span class="p">]</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">gtbary</span></code> is right, and the time it names is the <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> keyword — not an event. Every
+one of the 143 569 events and all 1 308 GTI boundaries in that file are properly covered.</p>
+<p>Refusing the whole file over a keyword would be unhelpful, and extrapolating it is what
+we used to do: the correction came out 300.4644 s, from a spacecraft position extrapolated
+a quarter of an orbit past the end of the file. Chopping the first 49 samples off a real
+Fermi spacecraft file and asking it to predict them back measures what that costs:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head text-right"><p>extrapolated back</p></th>
+<th class="head text-right"><p>position error</p></th>
+<th class="head text-right"><p>timing error</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-right"><p>300 s</p></td>
+<td class="text-right"><p>1.7 km</p></td>
+<td class="text-right"><p>0.002 ms</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>600 s</p></td>
+<td class="text-right"><p>38 km</p></td>
+<td class="text-right"><p>0.008 ms</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>1450 s</p></td>
+<td class="text-right"><p>1441 km</p></td>
+<td class="text-right"><p>2.3 ms</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>So <code class="docutils literal notranslate"><span class="pre">clamp_uncovered_keyword</span></code> moves such a keyword to the edge of the good time intervals
+instead — the first GTI <code class="docutils literal notranslate"><span class="pre">START</span></code> for <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>, the last <code class="docutils literal notranslate"><span class="pre">STOP</span></code> for <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> — warns loudly,
+and corrects that. Where the file has no GTIs the event times stand in, which is the same
+intent. Only these two keywords are ever moved, and only when they miss by more than the
+tolerance; on the M82 file the events and GTIs come out bit-identical either way, and only
+<code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and the <code class="docutils literal notranslate"><span class="pre">DATE-OBS</span></code> derived from it change.</p>
+</section>
+</section>
+<section id="good-time-intervals-in-a-separate-file">
+<span id="gtis-in-a-separate-file"></span><h2>Good time intervals in a separate file<a class="headerlink" href="#good-time-intervals-in-a-separate-file" title="Link to this heading">#</a></h2>
+<p>Barycentring moves every <code class="docutils literal notranslate"><span class="pre">START</span></code>/<code class="docutils literal notranslate"><span class="pre">STOP</span></code> column it finds together with the events, so a
+<code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension inside the event file stays consistent with the events at no cost.
+Some missions do not put one there. SVOM/ECLAIRs ships its GTIs as a separate file with
+one extension per criterion (instrument status, South Atlantic Anomaly, Earth
+occultation, telemetry), and which criteria apply is the user’s choice.</p>
+<p><a class="reference download internal" download="" href="_downloads/3a0c0b9b473688ca4a0a695e9a402e8e/gti.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">gti.py</span></code></span></a> combines the chosen extensions and writes them into
+a copy of the event file as a single binary-table <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension, which then goes through
+barycentring like any other. It is mission-agnostic: extensions are named by the caller.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>barycenter-apply-gti<span class="w"> </span>events.fits<span class="w"> </span>gtis.fits<span class="w">             </span><span class="c1"># list the GTI extensions</span>
+barycenter-apply-gti<span class="w"> </span>events.fits<span class="w"> </span>gtis.fits<span class="w"> </span>-e<span class="w"> </span>GTICAL-STA,GTICAL-NSA,GTICAL-NEO<span class="w"> </span>--filter-events
+</pre></div>
+</div>
+<ul class="simple">
+<li><p><strong>Intersection by default.</strong> Independent quality criteria all have to hold, so the
+default keeps time that is good in every extension; <code class="docutils literal notranslate"><span class="pre">--union</span></code> keeps time good in any,
+as for per-CCD GTIs.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">A|B|C</span></code></strong> means the first of these extensions present in the file, for one
+criterion that different files store under different names (<code class="docutils literal notranslate"><span class="pre">GTI|STDGTI</span></code>). It is not
+a fallback between <em>different</em> criteria: SVOM’s <code class="docutils literal notranslate"><span class="pre">GTICAL-NEO</span></code>, <code class="docutils literal notranslate"><span class="pre">-PEO</span></code> and <code class="docutils literal notranslate"><span class="pre">-TEO</span></code> are
+no, partial and total Earth occultation, and falling back from one to the next would
+silently admit time when the source is behind the Earth.</p></li>
+<li><p><strong>A missing extension is an error</strong>, listing the ones present. A misspelt criterion
+that was silently skipped would widen the GTIs without anyone noticing.</p></li>
+<li><p><strong>The epoch is checked.</strong> The GTI extensions must count from the same <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code> +
+<code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code> as the events, to 1 us (SVOM writes <code class="docutils literal notranslate"><span class="pre">MJDREFF</span></code> with different rounding in the
+two files, 1e-13 s apart). The new extension gets the events’ <code class="docutils literal notranslate"><span class="pre">TIMESYS</span></code>, <code class="docutils literal notranslate"><span class="pre">TIMEREF</span></code>,
+<code class="docutils literal notranslate"><span class="pre">MJDREF*</span></code> and <code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code>, so it says which time scale it is on before and after
+barycentring.</p></li>
+<li><p><strong>An existing <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension is never replaced</strong>: applying the helper twice is refused.</p></li>
+<li><p><strong>Events are kept</strong> unless <code class="docutils literal notranslate"><span class="pre">--filter-events</span></code> is given; the <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension alone
+records which are good. Many timing tools read only the event list and never look at
+an extra <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension, so for them <code class="docutils literal notranslate"><span class="pre">--filter-events</span></code> is what makes the selection
+take effect.</p></li>
+</ul>
+</section>
+<section id="the-pint-engine">
+<span id="id4"></span><h2>The PINT engine<a class="headerlink" href="#the-pint-engine" title="Link to this heading">#</a></h2>
+<p>PINT’s <code class="docutils literal notranslate"><span class="pre">SatelliteObs</span></code> takes a <em>file name</em> and calls its own <code class="docutils literal notranslate"><span class="pre">load_orbit</span></code> on it. That is
+not usable here: we need SVOM, which PINT has no loader for, remote <code class="docutils literal notranslate"><span class="pre">https://</span></code> and
+<code class="docutils literal notranslate"><span class="pre">s3://</span></code> input, lists of orbit files, and the cleanup above on every mission.</p>
+<p>The package used to obtain all of that by <strong>monkey-patching</strong> PINT at import time,
+replacing <code class="docutils literal notranslate"><span class="pre">pint.observatory.satellite_obs.load_orbit</span></code> and
+<code class="docutils literal notranslate"><span class="pre">SatelliteObs._check_bounds</span></code>. That has been removed, for three reasons:</p>
+<ul class="simple">
+<li><p>It was global. Importing <code class="docutils literal notranslate"><span class="pre">barycenter</span></code> changed PINT’s behaviour for everything else in
+the interpreter — including silently disabling PINT’s own extrapolation guard.</p></li>
+<li><p>It had already drifted. PINT has since grown its own NuSTAR loader, so part of the
+patch was dead weight that nobody noticed.</p></li>
+<li><p>It made the two engines read the orbit file through different code, which makes a
+comparison between them uninterpretable.</p></li>
+</ul>
+<p><a class="reference download internal" download="" href="_downloads/87cdf5aa51d121cbc340ae63a8a8f29c/pintengine.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">pintengine.TableSatelliteObs</span></code></span></a> does the same job by
+subclassing: it takes an already-parsed table from <code class="docutils literal notranslate"><span class="pre">orbit.py</span></code>, calls
+<code class="docutils literal notranslate"><span class="pre">SpecialLocation.__init__</span></code> directly, builds the same six splines, and overrides
+<code class="docutils literal notranslate"><span class="pre">_check_bounds</span></code> to <em>warn</em> about a short extrapolation and <em>log an error</em> about one five
+times longer, rather than raising. Nothing outside the class is modified.</p>
+<p>Verified against PINT’s own NuSTAR loader: the spacecraft position agrees to 5 mm. That
+is not exact and cannot be — PINT indexes the orbit by absolute MJD in float64, whose
+step at MJD 57263 is 0.6 µs, and 0.6 µs at 7.6 km/s is 5 mm. It is 17 picoseconds of
+Roemer delay.</p>
+<p>The remaining coupling is to PINT’s internal attribute names (<code class="docutils literal notranslate"><span class="pre">FT2</span></code>, <code class="docutils literal notranslate"><span class="pre">X</span></code>…<code class="docutils literal notranslate"><span class="pre">Vz</span></code>,
+<code class="docutils literal notranslate"><span class="pre">_geocenter</span></code>, <code class="docutils literal notranslate"><span class="pre">_maxextrap</span></code>). That is narrower than a monkey patch, not absent: if PINT
+renames them this class breaks — but it breaks visibly, in one place, and only for the
+optional engine.</p>
+</section>
+<section id="choosing-an-engine">
+<h2>Choosing an engine<a class="headerlink" href="#choosing-an-engine" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">native</span></code> is the default. <code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">pint</span></code> computes the same thing through PINT’s
+pulsar timing model. Measured on the committed NuSTAR reference (937 events, DE440,
+ICRS, explicit coordinates, no clock correction):</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>engine</p></th>
+<th class="head"><p>platform</p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>max abs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>native</p></td>
+<td><p>arm64 <strong>and</strong> x86</p></td>
+<td><p><strong>+22.0 ns</strong></p></td>
+<td><p>19.5 ns</p></td>
+<td><p><strong>59.6 ns</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>pint</p></td>
+<td><p>x86 (80-bit longdouble)</p></td>
+<td><p>+117.2 ns</p></td>
+<td><p>19.6 ns</p></td>
+<td><p>149.0 ns</p></td>
+</tr>
+<tr class="row-even"><td><p>pint</p></td>
+<td><p>arm64 (no extended precision)</p></td>
+<td><p>+129.7 ns</p></td>
+<td><p>256.0 ns</p></td>
+<td><p>774.9 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The native engine is the same to the last bit on both platforms, because every term it
+computes is a small number of seconds. The PINT engine’s constant offset is the Shapiro
+convention and its arm64 spread is the <code class="docutils literal notranslate"><span class="pre">longdouble</span></code> MJD subtraction; both are explained
+below. Keep <code class="docutils literal notranslate"><span class="pre">--engine</span> <span class="pre">pint</span></code> for a second opinion, and for a <code class="docutils literal notranslate"><span class="pre">.par</span></code> file whose proper
+motion or parallax actually matters — the native engine uses only <code class="docutils literal notranslate"><span class="pre">RAJ</span></code>/<code class="docutils literal notranslate"><span class="pre">DECJ</span></code>.</p>
+</section>
+<section id="the-native-engine">
+<h2>The native engine<a class="headerlink" href="#the-native-engine" title="Link to this heading">#</a></h2>
+<p><a class="reference download internal" download="" href="_downloads/ea6a4ea64f3fea87c7a5101ac31598c4/native.py"><span class="xref download myst"><code class="docutils literal notranslate"><span class="pre">native.py</span></code></span></a> computes the correction directly from
+astropy, ERFA and a JPL ephemeris, without PINT. It writes out four terms explicitly:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Term</p></th>
+<th class="head"><p>What it is</p></th>
+<th class="head"><p>Size (NuSTAR test file)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Einstein</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">(TDB</span> <span class="pre">−</span> <span class="pre">TT)</span></code> at the geocentre, ERFA’s <code class="docutils literal notranslate"><span class="pre">dtdb</span></code></p></td>
+<td><p>±1.7 ms</p></td>
+</tr>
+<tr class="row-odd"><td><p>topocentric Einstein</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">r_sc</span> <span class="pre">·</span> <span class="pre">v_earth</span> <span class="pre">/</span> <span class="pre">c²</span></code>, the observer’s offset from the geocentre</p></td>
+<td><p>−0.7 µs, varying by 4.2 µs per orbit</p></td>
+</tr>
+<tr class="row-even"><td><p>Roemer</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">r_obs</span> <span class="pre">·</span> <span class="pre">n̂</span> <span class="pre">/</span> <span class="pre">c</span></code>, light travel time to the barycentre</p></td>
+<td><p>±500 s</p></td>
+</tr>
+<tr class="row-odd"><td><p>Shapiro</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">2·T☉·ln(1</span> <span class="pre">+</span> <span class="pre">cos</span> <span class="pre">θ)</span></code>, the Sun’s gravity</p></td>
+<td><p>+4.7 µs</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>plus a parallax term if a source distance is given, which the official tools omit.</p>
+<p>Each of these is a <em>small</em> number of seconds, computed in float64 (~1e-13 s). Nothing
+is ever obtained by subtracting two absolute epochs, which is the whole reason the
+PINT engine needs an 80-bit <code class="docutils literal notranslate"><span class="pre">longdouble</span></code> and this one does not.</p>
+<section id="two-things-it-gets-right-that-are-easy-to-get-wrong">
+<h3>Two things it gets right that are easy to get wrong<a class="headerlink" href="#two-things-it-gets-right-that-are-easy-to-get-wrong" title="Link to this heading">#</a></h3>
+<p><strong>The Shapiro delay is only defined up to a constant</strong>, because it is the logarithm of
+a distance ratio and you must pick a reference distance. <code class="docutils literal notranslate"><span class="pre">axBary</span></code> normalises by the
+observer’s distance from the Sun, PINT by the astronomical unit. The two differ by
+<code class="docutils literal notranslate"><span class="pre">2·T☉·ln(r☉/AU)</span></code>, an annual term of about 170 ns amplitude and 96 ns on the test file —
+which is the entire disagreement between the PINT engine and <code class="docutils literal notranslate"><span class="pre">barycorr</span></code>. The native
+engine writes it the <code class="docutils literal notranslate"><span class="pre">axBary</span></code> way by default; <code class="docutils literal notranslate"><span class="pre">shapiro=&quot;pint&quot;</span></code> reproduces PINT’s.</p>
+<p><strong>The source direction must be in the ephemeris’s own frame.</strong> Reading a JPL kernel
+applies no rotation, whatever frame astropy labels the result with: DE200 is referred
+to the FK5 dynamical equinox of J2000, and DE405 onwards to the ICRF. So DE200 paired
+with FK5 coordinates, or DE440 with ICRS coordinates, needs no rotation — and pairing
+them the wrong way round costs <strong>45 µs</strong>. That is what HEASOFT’s <code class="docutils literal notranslate"><span class="pre">refframe</span></code> parameter
+is really selecting. <code class="docutils literal notranslate"><span class="pre">ephemeris_frame()</span></code> encodes the rule and
+<code class="docutils literal notranslate"><span class="pre">source_unit_vector()</span></code> applies it.</p>
+</section>
+<section id="measured-against-barycorr">
+<h3>Measured against <code class="docutils literal notranslate"><span class="pre">barycorr</span></code><a class="headerlink" href="#measured-against-barycorr" title="Link to this heading">#</a></h3>
+<p>On the committed NuSTAR file (937 events, DE440, ICRS, no clock correction):</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>engine</p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>peak-to-peak</p></th>
+<th class="head"><p>max abs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>native</strong>, <code class="docutils literal notranslate"><span class="pre">axBary</span></code> Shapiro</p></td>
+<td><p><strong>+22.0 ns</strong></p></td>
+<td><p>19.5 ns</p></td>
+<td><p>59.6 ns</p></td>
+<td><p><strong>59.6 ns</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>native, PINT Shapiro</p></td>
+<td><p>+117.3 ns</p></td>
+<td><p>19.6 ns</p></td>
+<td><p>59.6 ns</p></td>
+<td><p>149.0 ns</p></td>
+</tr>
+<tr class="row-even"><td><p>native, no Shapiro</p></td>
+<td><p>−4671.5 ns</p></td>
+<td><p>13.9 ns</p></td>
+<td><p>59.6 ns</p></td>
+<td><p>4708.8 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>PINT engine (<code class="docutils literal notranslate"><span class="pre">py313-x64</span></code>)</p></td>
+<td><p>+117.2 ns</p></td>
+<td><p>19.6 ns</p></td>
+<td><p>59.6 ns</p></td>
+<td><p>149.0 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>There is nothing left to chase in that 59.6 ns. The reference times are around
+1.8e8 s, where one float64 step is <strong>29.802 ns</strong>, and the residual takes exactly three
+values — 0, 1 and 2 of those steps. The reference file cannot express a finer
+difference, so the true disagreement is under one step and most likely the +22 ns mean.
+<code class="docutils literal notranslate"><span class="pre">test_residual_is_only_rounding_of_the_stored_times</span></code> asserts precisely this.</p>
+<p>Native and PINT, with the Shapiro convention matched, agree to <strong>mean −95.7 ns,
+std 0.63 ns</strong> — i.e. two independent implementations of the same physics agree to
+sub-nanosecond, and the offset is the convention and nothing else.</p>
+</section>
+<section id="an-independent-cross-check">
+<h3>An independent cross-check<a class="headerlink" href="#an-independent-cross-check" title="Link to this heading">#</a></h3>
+<p>A NICER observation of the Crab barycentred with <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> 2.17 using <strong>DE200 and FK5</strong>
+— a different mission, a different orbit file format (<code class="docutils literal notranslate"><span class="pre">ORBIT</span></code> extension, scalar <code class="docutils literal notranslate"><span class="pre">X</span></code>/<code class="docutils literal notranslate"><span class="pre">Y</span></code>/<code class="docutils literal notranslate"><span class="pre">Z</span></code>
+in metres at 10 s sampling), a different ephemeris and a different frame:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>peak-to-peak</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>native, coordinates read as FK5 (correct)</p></td>
+<td><p>+52.7 ns</p></td>
+<td><p>7.4 ns</p></td>
+<td><p>14.9 ns = 1 ulp</p></td>
+</tr>
+<tr class="row-odd"><td><p>native, coordinates read as ICRS (wrong frame)</p></td>
+<td><p>−45049.8 ns</p></td>
+<td><p>18.8 ns</p></td>
+<td><p>44.7 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Two incidental findings from that comparison:</p>
+<p>On NICER that is 20 ns; on a mission with a coarser <code class="docutils literal notranslate"><span class="pre">TIMEDEL</span></code> it would matter much
+more.</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">barycorr</span></code> <strong>does</strong> apply <code class="docutils literal notranslate"><span class="pre">TIMEZERO</span></code> (−1 s here), and so must we.</p></li>
+</ul>
+</section>
+<section id="speed">
+<h3>Speed<a class="headerlink" href="#speed" title="Link to this heading">#</a></h3>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>per event</p></th>
+<th class="head"><p>1e6 events</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>native (arm64)</p></td>
+<td><p>6.5 µs</p></td>
+<td><p>6.5 s</p></td>
+</tr>
+<tr class="row-odd"><td><p>native (x86 under emulation)</p></td>
+<td><p>13.6 µs</p></td>
+<td><p>13.6 s</p></td>
+</tr>
+<tr class="row-even"><td><p>PINT, at the event times</p></td>
+<td><p>581 µs</p></td>
+<td><p>~10 min</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>and the correction is smooth enough that it need not be evaluated per event at all.
+Sampling it on a grid and interpolating with a cubic spline costs:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>grid step</p></th>
+<th class="head"><p>max error</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1 s</p></td>
+<td><p>0.5 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>5 s</p></td>
+<td><p>1.2 ns</p></td>
+</tr>
+<tr class="row-even"><td><p>20 s</p></td>
+<td><p>1.3 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>60 s</p></td>
+<td><p>2.6 µs</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>So the 5-second grid is a good choice, and it is what the package now uses above
+<code class="docutils literal notranslate"><span class="pre">core.AUTO_GRID_EVENTS</span></code> events.</p>
+<section id="when-the-grid-is-used-and-what-it-costs">
+<h4>When the grid is used, and what it costs<a class="headerlink" href="#when-the-grid-is-used-and-what-it-costs" title="Link to this heading">#</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">apply_barycenter_correction</span></code> decides from the file’s size, in <code class="docutils literal notranslate"><span class="pre">core.grid_spacing_for</span></code>:
+below 100 000 events the correction is evaluated at <strong>every event</strong>, which is exact and
+already costs well under a second; above it, a 5 s grid is used. <code class="docutils literal notranslate"><span class="pre">--dt</span></code> overrides the
+decision either way, and <code class="docutils literal notranslate"><span class="pre">--dt</span> <span class="pre">0</span></code> forces the exact path whatever the size. The threshold
+means every reference comparison in the test suite runs on the unapproximated code, since
+the committed test files all hold a few hundred events.</p>
+<p>Measured end to end, on <code class="docutils literal notranslate"><span class="pre">dummy_evt.evt</span></code> blown up to 3 000 000 events (858 MB), with
+identical code:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>wall</p></th>
+<th class="head"><p>peak RSS</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">--dt</span> <span class="pre">0</span></code>, exact per event</p></td>
+<td><p>23.0 s</p></td>
+<td><p>3.76 GB</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">--dt</span> <span class="pre">5</span></code></p></td>
+<td><p><strong>2.3 s</strong></p></td>
+<td><p><strong>1.98 GB</strong></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>and the two answers, on those three million events:</p>
+<ul class="simple">
+<li><p><strong>99.03 % of the stored times are bit-identical</strong></p></li>
+<li><p>the largest difference is 29.802 ns, which is <strong>exactly one float64 step</strong> at this MET</p></li>
+<li><p>mean +0.005 ns, std 2.9 ns — and that std is the storage quantisation, not
+interpolation error, which is 1.6 ns at most</p></li>
+</ul>
+<p>So at the precision a FITS <code class="docutils literal notranslate"><span class="pre">D</span></code> column can hold, the grid is indistinguishable from the
+exact path. The peak memory nearly halves as well, because the exact path runs
+<code class="docutils literal notranslate"><span class="pre">barycentric_correction</span></code> over every event at once and a grid asks it for 16 560 points
+instead of three million. Which phase holds that memory — 865 MB of the 905 MB total is
+astropy’s JPL ephemeris evaluation — is tabulated under
+<a class="reference internal" href="known_issues.html#performance"><span class="std std-ref">Performance</span></a>.</p>
+</section>
+<section id="the-grid-has-to-be-padded-by-two-steps-not-one">
+<h4>The grid has to be padded by two steps, not one<a class="headerlink" href="#the-grid-has-to-be-padded-by-two-steps-not-one" title="Link to this heading">#</a></h4>
+<p>When the grid is clipped to the events — which is what makes it cheap on a multi-day
+orbit file — the events must sit clear of the interpolant’s <strong>end conditions</strong>. A spline’s
+first and last intervals are not the same function as its interior, so a grid padded by
+one step puts those intervals exactly where the events are. Clipped against unclipped,
+inside the span:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>margin</p></th>
+<th class="head"><p>PINT (<code class="docutils literal notranslate"><span class="pre">Akima1DInterpolator</span></code>)</p></th>
+<th class="head"><p>native (<code class="docutils literal notranslate"><span class="pre">CubicSpline</span></code>)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>1 step</p></td>
+<td><p><strong>46.2 ns</strong></p></td>
+<td><p>0.045 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>2 steps</p></td>
+<td><p>0.000 ns</p></td>
+<td><p>0.013 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The whole difference lives at the end of the span, confirming it is the boundary and not
+interpolation error. PINT’s is 1000× worse because <code class="docutils literal notranslate"><span class="pre">Akima1DInterpolator</span></code> builds the slopes
+at its boundary knots from <em>extrapolated</em> points, and because its knots carry PINT’s own
+noise for that construction to amplify, while the native engine’s knots hold exact values.
+Both engines now pad by <code class="docutils literal notranslate"><span class="pre">2</span> <span class="pre">*</span> <span class="pre">dt</span></code>, and <code class="docutils literal notranslate"><span class="pre">tests/test_native.py::TestGridClipping</span></code> and
+<code class="docutils literal notranslate"><span class="pre">tests/test_pintengine.py::test_clipping_the_grid_does_not_move_the_answer</span></code> assert that
+clipping is free.</p>
+<p>The range itself comes from <code class="docutils literal notranslate"><span class="pre">core.met_range_for_file</span></code>: the widest <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>/<code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> over
+every extension, padded by <code class="docutils literal notranslate"><span class="pre">MET_RANGE_PAD_S</span></code> (1000 s), and then <strong>shifted by the clock and
+leap-second terms</strong>, because the barycentric correction is evaluated at the clock-corrected
+time and not the raw one. On Swift that shift is nearly 20 s, so a grid clipped to the raw
+span would leave every event outside it. The range is taken from the headers rather than
+from the data because reading a strided time column out of a memory-mapped table pages in
+the whole file; all five committed reference files keep their times inside their own
+<code class="docutils literal notranslate"><span class="pre">TSTART</span></code>/<code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> (the widest slack being Chandra’s 823 s), and a file that does not is
+caught by a coverage check that logs a warning naming how far outside it went.</p>
+</section>
+</section>
+</section>
+<section id="accuracy">
+<h2>Accuracy<a class="headerlink" href="#accuracy" title="Link to this heading">#</a></h2>
+<p>The target is <strong>100 ns</strong> against the mission’s own tool.</p>
+<p>The tracked reference <code class="docutils literal notranslate"><span class="pre">tests/data/dummy_evt_bary_DE440_noclk.evt.gz</span></code> was produced by
+HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> 2.19 on the committed NuSTAR test file with every input pinned:
+DE440, ICRS, <code class="docutils literal notranslate"><span class="pre">ra=294.9107</span> <span class="pre">dec=21.58308</span></code>, and <code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code>.
+<code class="docutils literal notranslate"><span class="pre">tools/make_test_data.py</span></code> records the exact call and can regenerate it.</p>
+<p>Measured agreement of the current (PINT) engine against that reference, on 937 events:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Environment</p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>peak-to-peak</p></th>
+<th class="head"><p>max abs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">py313-x64</span></code> (80-bit <code class="docutils literal notranslate"><span class="pre">longdouble</span></code>)</p></td>
+<td><p>+116.3 ns</p></td>
+<td><p>19.2 ns</p></td>
+<td><p>59.6 ns</p></td>
+<td><p>149.0 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">py313</span></code> (arm64, 64-bit <code class="docutils literal notranslate"><span class="pre">longdouble</span></code>)</p></td>
+<td><p>+118.4 ns</p></td>
+<td><p>254.6 ns</p></td>
+<td><p>1341.1 ns</p></td>
+<td><p>804.7 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Two separate effects are visible there.</p>
+<p><strong>The +116 ns offset</strong> is PINT’s solar-system Shapiro delay. PINT’s formulation carries
+an extra <code class="docutils literal notranslate"><span class="pre">2·T☉·ln(r/AU)</span></code> term (with <code class="docutils literal notranslate"><span class="pre">T☉</span> <span class="pre">=</span> <span class="pre">GM☉/c³</span> <span class="pre">=</span> <span class="pre">4.9255</span> <span class="pre">µs</span></code>) that <code class="docutils literal notranslate"><span class="pre">axBary</span></code> omits. The
+term is an annual modulation of about 100 ns; subtracting it brings the mean residual to
+<strong>+21.5 ns</strong>, comfortably inside target. Neither convention is wrong — they differ by a
+constant-plus-annual term that is absorbed into a pulsar’s spin parameters — but it must
+be accounted for when comparing tools.</p>
+<p><strong>The 1.3 µs scatter on arm64</strong> is a precision floor, not a physics difference. PINT
+represents absolute times as <code class="docutils literal notranslate"><span class="pre">numpy.longdouble</span></code> MJDs. On x86 that is the 80-bit
+extended format, whose 64-bit mantissa gives ~0.54 ns at MJD 57263; on Apple Silicon and
+Windows <code class="docutils literal notranslate"><span class="pre">numpy.longdouble</span></code> is just <code class="docutils literal notranslate"><span class="pre">float64</span></code>, whose 53-bit mantissa gives ~1.1 µs at the
+same epoch. Subtracting two large MJDs to get a small correction therefore loses the
+answer. This is a property of representing an absolute epoch, and disappears if the
+correction terms — all of them small numbers of seconds — are computed directly rather
+than as a difference of two big ones.</p>
+<p>The test suite reflects this: it asserts 200 ns where extended precision is available
+and 2 µs where it is not.</p>
+<section id="the-reference-file-s-own-granularity">
+<h3>The reference file’s own granularity<a class="headerlink" href="#the-reference-file-s-own-granularity" title="Link to this heading">#</a></h3>
+<p>A reference file stores times as float64 seconds since <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code>, so it cannot record a
+difference finer than one unit in the last place: <strong>29.8 ns</strong> at NuSTAR’s 1.8e8 s and
+<strong>119.2 ns</strong> at RXTE’s 5.4e8 s. Asserting a flat 100 ns on RXTE would be asserting
+something the file is physically unable to express, so <code class="docutils literal notranslate"><span class="pre">assert_times_agree</span></code> in the test
+suite adds that step to the tolerance, and reports the mean — which averages the
+quantisation away — when it fails.</p>
+<p>It also means a difference of tens of nanoseconds between two <em>derived</em> quantities can be
+invisible. The RXTE clock correction is 17.4 µs on a 5.4e8 s timestamp, and the difference
+between two such timestamps can only come out as a multiple of 119 ns, so the test that
+pins down <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> compares the correction function against the constant HEASOFT froze,
+not the output files.</p>
+</section>
+<section id="id5">
+<h3>RXTE<a class="headerlink" href="#id5" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tests/data/dummy_xte_bary_DE440_{noclk,clk}.evt.gz</span></code> are the same thing for RXTE PCA,
+made from a decimated PSR B1509-58 observation with DE440, ICRS and explicit coordinates.
+Measured on 404 events, native engine:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>reference</p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>max abs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code></p></td>
+<td><p>+25.4 ns</p></td>
+<td><p>48.8 ns</p></td>
+<td><p>119.2 ns (1 ulp)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> applied</p></td>
+<td><p>+24.8 ns</p></td>
+<td><p>48.4 ns</p></td>
+<td><p>119.2 ns (1 ulp)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The two agreeing to 0.6 ns is the point: the clock correction is reproduced well enough
+to leave the solar-system residual untouched.</p>
+</section>
+<section id="xmm-newton">
+<h3>XMM-Newton<a class="headerlink" href="#xmm-newton" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tests/data/dummy_xmm_bary_DE430.evt.gz</span></code> is an SAS 22.1 <code class="docutils literal notranslate"><span class="pre">barycen</span></code> reference, made with
+DE430 and explicit coordinates on 401 EPIC-pn events spanning 7.6 h of observation
+0112290201. Measured with the native engine:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>quantity</p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>max abs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TIME</span></code> column</p></td>
+<td><p><strong>−42.3 ns</strong></p></td>
+<td><p>6.9 ns</p></td>
+<td><p>59.6 ns (4 ulp)</p></td>
+</tr>
+<tr class="row-odd"><td><p>GTI <code class="docutils literal notranslate"><span class="pre">START</span></code>/<code class="docutils literal notranslate"><span class="pre">STOP</span></code></p></td>
+<td><p>−40 ns</p></td>
+<td><p>—</p></td>
+<td><p>44.7 ns (3 ulp)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TSTART</span></code>, <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> keywords</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>373 ns, −179 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The residual on the events is a <strong>constant</strong>: it sits on −3 units in the last place of the
+reference’s float64 times (14.9 ns each at XMM’s 1.06e8 s), with no drift, no annual term
+and no correlation with the spacecraft’s geocentric distance. The 6.9 ns “scatter” is
+entirely that quantisation. So the disagreement with <code class="docutils literal notranslate"><span class="pre">barycen</span></code> is an offset of about
+−40 ns, which is below the 100 ns target and, being constant, affects no measured period
+or pulse phase at all.</p>
+<p>The two keywords are a different matter, and not our doing: SAS writes a floating-point
+keyword with <strong>15 significant digits</strong>, which at 1.06e8 s leaves six decimals, so the
+reference’s <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> is quantised at 1 µs — a hundred times coarser than the binary <code class="docutils literal notranslate"><span class="pre">TIME</span></code>
+column beside it. Both keywords come out inside half a step, which is as close as the file
+can record.</p>
+<p>Ephemeris sensitivity on this dataset, which is also how DE430 was confirmed as the
+reference’s own choice (<code class="docutils literal notranslate"><span class="pre">barycen</span></code>’s default is DE200, so it has to be asked for):</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>against the DE430 reference</p></th>
+<th class="head"><p>offset</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>DE430</p></td>
+<td><p>−42 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE405</p></td>
+<td><p>+1.7 µs</p></td>
+</tr>
+<tr class="row-even"><td><p>DE440</p></td>
+<td><p>+95 µs</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE200</p></td>
+<td><p>+1.8 ms</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="chandra">
+<h3>Chandra<a class="headerlink" href="#chandra" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tests/data/dummy_chandra_bary_{DE405,DE200}.evt.gz</span></code> are CIAO <code class="docutils literal notranslate"><span class="pre">axbary</span></code> references made on
+401 ACIS-S events spanning the 5.6 h of observation 10026, with explicit coordinates.
+There are two of them because <code class="docutils literal notranslate"><span class="pre">axbary</span></code> chooses the ephemeris from the reference frame and
+can reach only these two combinations — <code class="docutils literal notranslate"><span class="pre">refframe=ICRS</span></code> reads <code class="docutils literal notranslate"><span class="pre">JPLEPH.405</span></code> and
+<code class="docutils literal notranslate"><span class="pre">refframe=FK5</span></code> reads <code class="docutils literal notranslate"><span class="pre">JPLEPH.200</span></code>. Measured with the native engine:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>reference</p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>max abs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>DE405, ICRS</p></td>
+<td><p><strong>+47.0 ns</strong></p></td>
+<td><p>24.4 ns</p></td>
+<td><p>59.6 ns (1 ulp)</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE200, FK5</p></td>
+<td><p><strong>+44.0 ns</strong></p></td>
+<td><p>26.2 ns</p></td>
+<td><p>59.6 ns (1 ulp)</p></td>
+</tr>
+<tr class="row-even"><td><p>GTI <code class="docutils literal notranslate"><span class="pre">START</span></code>/<code class="docutils literal notranslate"><span class="pre">STOP</span></code></p></td>
+<td><p>+59.6 ns</p></td>
+<td><p>—</p></td>
+<td><p>59.6 ns (1 ulp)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>One unit in the last place is 59.6 ns at Chandra’s 3.57e8 s, so the scatter is again the
+reference file’s own granularity rather than ours.</p>
+<p>Having both is what makes the <strong>ephemeris/frame pairing</strong> testable against a real tool
+instead of against ourselves. DE200 is referred to FK5 and DE405 onwards to ICRS; the code
+pairs them in <code class="docutils literal notranslate"><span class="pre">native.ephemeris_frame</span></code>, and pairing them wrongly on this dataset costs
++11.2 µs (DE405 read in FK5) or −11.1 µs (DE200 read in ICRS) — a hundred times the
+target, from a mistake no file will ever warn about. Every other official tool here was
+run in one frame only, so no other reference can catch it.</p>
+<p>Ephemeris sensitivity, measured against the DE405 reference:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>ephemeris</p></th>
+<th class="head"><p>offset</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>DE405</p></td>
+<td><p>+47 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE421</p></td>
+<td><p>−1.2 µs</p></td>
+</tr>
+<tr class="row-even"><td><p>DE430</p></td>
+<td><p>−1.5 µs</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE440</p></td>
+<td><p><strong>+79.4 µs</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>DE200</p></td>
+<td><p>+1.8 ms</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The DE440 figure is the one to note, because it is much larger than the ~10 µs DE430→DE440
+costs on the NuSTAR dataset, and it is not a Chandra effect: it is where the source is. The
+difference between DE405 and DE440 is dominated by the position of the solar-system
+barycentre, which moved when Jupiter’s and Saturn’s masses were revised, and 2009 is over a
+decade past the data DE405 was fitted to. Projected on M82’s direction that comes to 79 µs
+— about 24 km — and it varies by less than one ulp across the exposure, so it is an
+offset, not noise. <strong>DE440 is the package default</strong>, so a comparison against an <code class="docutils literal notranslate"><span class="pre">axbary</span></code> product has to
+ask for DE405 explicitly; the tests do.</p>
+</section>
+<section id="id6">
+<h3>Swift<a class="headerlink" href="#id6" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">tests/data/dummy_swift_bary_DE440_{noclk,clk}.evt.gz</span></code> are HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> references
+made on 492 XRT events spanning the 6.4 ks of observation 00037258040, with explicit
+coordinates. There are two of them because Swift is the only mission here where the clock
+correction and the leap-second term can be separated: <code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code> switches the UTCF
+off and leaves the +4 s of leap seconds in place. Measured with the native engine:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>reference</p></th>
+<th class="head"><p>mean</p></th>
+<th class="head"><p>std</p></th>
+<th class="head"><p>max abs</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>no clock file, <code class="docutils literal notranslate"><span class="pre">TIME</span></code></p></td>
+<td><p><strong>+36.6 ns</strong></p></td>
+<td><p>29.0 ns</p></td>
+<td><p>59.6 ns (1 ulp)</p></td>
+</tr>
+<tr class="row-odd"><td><p>with the UTCF, <code class="docutils literal notranslate"><span class="pre">TIME</span></code></p></td>
+<td><p><strong>+37.4 ns</strong></p></td>
+<td><p>28.8 ns</p></td>
+<td><p>59.6 ns (1 ulp)</p></td>
+</tr>
+<tr class="row-even"><td><p>GTI <code class="docutils literal notranslate"><span class="pre">START</span></code>/<code class="docutils literal notranslate"><span class="pre">STOP</span></code></p></td>
+<td><p>+29.8 to +59.6 ns</p></td>
+<td><p>—</p></td>
+<td><p>59.6 ns (1 ulp)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TSTART</span></code>, <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> keywords</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p>59.6 ns (1 ulp)</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>One unit in the last place is 59.6 ns at Swift’s 4.7e8 s, so again the scatter is the
+reference file’s granularity and not ours, and the residual drifts by 0.9 ns per ks across
+the exposure — nothing.</p>
+<p>The two references agreeing to the same 37 ns is the useful part: it says the UTCF is
+reproduced well enough to leave the solar-system residual untouched, even though it is a
+15.56 s correction and drifts 342 µs across the observation.</p>
+<p>Getting to those numbers took one non-obvious fix, recorded here because it will bite
+anyone who writes this kind of term again. The leap-second count has to be read out of
+ERFA’s table as an integer, never computed as <code class="docutils literal notranslate"><span class="pre">(epoch.tai.mjd</span> <span class="pre">-</span> <span class="pre">epoch.utc.mjd)</span> <span class="pre">*</span> <span class="pre">86400</span></code>:
+two MJDs of order 5e4 cannot express 32 s to better than 0.6 µs, so that expression gives
+31.999999937, and the resulting <strong>+63 ns</strong> bias on every Swift time is two thirds of the
+budget. It showed up as an unexplained 96 ns disagreement with <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> where a prototype
+had measured 37 ns.</p>
+<p>Ephemeris sensitivity, measured against the DE440 reference:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>ephemeris</p></th>
+<th class="head"><p>offset</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>DE440</p></td>
+<td><p>+37 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE430</p></td>
+<td><p>−274.2 µs</p></td>
+</tr>
+<tr class="row-even"><td><p>DE421</p></td>
+<td><p>−273.9 µs</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE405</p></td>
+<td><p>−274.3 µs</p></td>
+</tr>
+<tr class="row-even"><td><p>DE200</p></td>
+<td><p>+2.16 ms</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The three middle rows sitting on top of each other, 274 µs from DE440, is the same
+solar-system-barycentre revision that costs 79 µs on the Chandra dataset, and it checks
+out exactly: DE440 puts the Earth 116.5 km from where DE405 puts it at this epoch, and
+82.2 km of that is along the direction of Mrk 421, which is 274.3 µs of light travel time.
+The measurement and the geometry agree to 0.1 µs, so this is the ephemerides differing and
+not the code.</p>
+</section>
+<section id="the-coordinate-keyword-order-is-deliberately-not-heasoft-s">
+<span id="the-coordinate-keyword-order"></span><h3>The coordinate keyword order is deliberately not HEASOFT’s<a class="headerlink" href="#the-coordinate-keyword-order-is-deliberately-not-heasoft-s" title="Link to this heading">#</a></h3>
+<p>When the position is not given explicitly, we read it from the header in the order
+<code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code> → <code class="docutils literal notranslate"><span class="pre">RA_TARG</span></code> → <code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code> → <code class="docutils literal notranslate"><span class="pre">RA_PNT</span></code> → <code class="docutils literal notranslate"><span class="pre">RA</span></code>. HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> uses
+<code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code> → <code class="docutils literal notranslate"><span class="pre">RA_PNT</span></code> → <code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code> → <code class="docutils literal notranslate"><span class="pre">RA</span></code> (its own <code class="docutils literal notranslate"><span class="pre">kwfallback</span></code> call, <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> 2.19
+line 278). Both orders live in <code class="docutils literal notranslate"><span class="pre">barycenter.core</span></code> as <code class="docutils literal notranslate"><span class="pre">COORDINATE_KEYWORDS</span></code> and
+<code class="docutils literal notranslate"><span class="pre">HEASOFT_COORDINATE_KEYWORDS</span></code>.</p>
+<p>We start from <code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code> on purpose. <code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_OBJ</span></code> is the position of the object the
+observation was aimed at — for a known pulsar, its catalogue position. <code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_NOM</span></code>
+and <code class="docutils literal notranslate"><span class="pre">RA_PNT</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_PNT</span></code> describe where the spacecraft was pointing, which is the same
+direction only to within the pointing accuracy and is often written out rounded. The
+barycentric correction refers arrival times to the source, so the source position is the
+right input; the pointing is a proxy for it that a mission-planning tool happened to
+record.</p>
+<p><code class="docutils literal notranslate"><span class="pre">RA_TARG</span></code>/<code class="docutils literal notranslate"><span class="pre">DEC_TARG</span></code> sits second because it is the same thing as <code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code> under another
+name, and is what Chandra uses: a Chandra event file carries no <code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code> at all. Leaving
+it out would fall straight through to the pointing, and on the ACIS test file <code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code> is
+324 arcsec from the target — 0.8 s of Roemer delay, not a rounding error.</p>
+<p>The two are not interchangeable: on the NuSTAR test file <code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code> and <code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code> differ by
+0.1 arcsec, which is 172 µs of Roemer delay — a thousand times the accuracy target.
+So when the header carries both and they differ by enough to matter (more than a
+nanosecond of implied delay), <code class="docutils literal notranslate"><span class="pre">get_coordinates_from_fits_header</span></code> logs a warning naming
+the keyword HEASOFT would have used and the size of the difference in microseconds.</p>
+<p><strong>Comparisons against an official tool must therefore pass <code class="docutils literal notranslate"><span class="pre">--ra</span></code> and <code class="docutils literal notranslate"><span class="pre">--dec</span></code>
+explicitly</strong>, matched to whatever the reference was made with. Every reference-agreement
+test in <code class="docutils literal notranslate"><span class="pre">tests/</span></code> does exactly that, which is why the difference in default order costs
+nothing in validation while keeping the more accurate position in everyday use.</p>
+</section>
+<section id="the-keywords-derived-from-tstart-and-tstop">
+<h3>The keywords derived from <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code><a class="headerlink" href="#the-keywords-derived-from-tstart-and-tstop" title="Link to this heading">#</a></h3>
+<p>Correcting the times leaves a handful of keywords that are not times themselves but are
+computed from them, and which are therefore wrong the moment <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> move.
+<code class="docutils literal notranslate"><span class="pre">barycenter.core.DERIVED_KEYWORDS</span></code> lists them and <code class="docutils literal notranslate"><span class="pre">update_derived_keywords</span></code> rewrites
+them, per extension, after that extension’s times have been corrected. Each is written
+only where the input already had it: adding a <code class="docutils literal notranslate"><span class="pre">DATE-END</span></code> to a file that never carried
+one would be inventing metadata.</p>
+<p>No official tool rewrites all of them, and each rewrites a different subset. Read off the
+five committed reference pairs:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>keyword</p></th>
+<th class="head"><p>HEASOFT <code class="docutils literal notranslate"><span class="pre">barycorr</span></code></p></th>
+<th class="head"><p>SAS <code class="docutils literal notranslate"><span class="pre">barycen</span></code></p></th>
+<th class="head"><p>CIAO <code class="docutils literal notranslate"><span class="pre">axbary</span></code></p></th>
+<th class="head"><p>here</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TSTART</span></code>, <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code></p></td>
+<td><p>updated</p></td>
+<td><p>updated</p></td>
+<td><p>updated</p></td>
+<td><p>updated</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">TELAPSE</span></code></p></td>
+<td><p><strong>left stale</strong></p></td>
+<td><p>updated</p></td>
+<td><p>(absent)</p></td>
+<td><p>updated</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DATE-OBS</span></code>, <code class="docutils literal notranslate"><span class="pre">DATE-END</span></code></p></td>
+<td><p>recomputed</p></td>
+<td><p>string shifted</p></td>
+<td><p>recomputed</p></td>
+<td><p>recomputed</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">MJD-OBS</span></code></p></td>
+<td><p><strong>left stale</strong></p></td>
+<td><p>(absent)</p></td>
+<td><p>recomputed</p></td>
+<td><p>recomputed</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ONTIME</span></code>, <code class="docutils literal notranslate"><span class="pre">LIVETIME</span></code>, <code class="docutils literal notranslate"><span class="pre">EXPOSURE</span></code></p></td>
+<td><p>left</p></td>
+<td><p>left</p></td>
+<td><p>left</p></td>
+<td><p>left</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">TELAPSE</span></code> is <code class="docutils literal notranslate"><span class="pre">TSTOP</span> <span class="pre">−</span> <span class="pre">TSTART</span></code>, and it moves by however much the corrections at the two
+ends differ: 3.4 s over the NuSTAR test observation, 1.6 s over the 7.6 h XMM one.
+<code class="docutils literal notranslate"><span class="pre">barycorr</span></code> moves <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> by 309.5 s and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> by 306.1 s and leaves <code class="docutils literal notranslate"><span class="pre">TELAPSE</span></code> at
+81973.50000756979 — the value it had on the way in. That is a bug, not a convention, and
+<code class="docutils literal notranslate"><span class="pre">barycen</span></code> shows what the right answer looks like. <code class="docutils literal notranslate"><span class="pre">tests/test_barycenter.py</span></code> asserts the
+staleness of the reference explicitly, so the reason for not copying <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> here is
+recorded in a test rather than only in prose.</p>
+<p><code class="docutils literal notranslate"><span class="pre">DATE-OBS</span></code>, <code class="docutils literal notranslate"><span class="pre">DATE-END</span></code> and <code class="docutils literal notranslate"><span class="pre">MJD-OBS</span></code> are <strong>recomputed</strong> from <code class="docutils literal notranslate"><span class="pre">MJDREF</span> <span class="pre">+</span> <span class="pre">TSTART/86400</span></code>,
+not shifted by however far <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> moved. Both <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> and <code class="docutils literal notranslate"><span class="pre">axbary</span></code> recompute, and
+recomputing is the self-consistent answer: the output header says <code class="docutils literal notranslate"><span class="pre">TIMESYS</span> <span class="pre">=</span> <span class="pre">TDB</span></code>, so the
+date should be the date of the time the file now records.</p>
+<p>The two rules are not equivalent, because several missions write <code class="docutils literal notranslate"><span class="pre">DATE-OBS</span></code> in UTC while
+counting their MET in TT seconds since <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code>, so the file’s date string and its own
+<code class="docutils literal notranslate"><span class="pre">TSTART</span></code> disagree before anything is corrected:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>reference file</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">DATE-OBS</span></code> − date of <code class="docutils literal notranslate"><span class="pre">TSTART</span></code>, as delivered</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Chandra ACIS</p></td>
+<td><p>−0.005 s (consistent)</p></td>
+</tr>
+<tr class="row-odd"><td><p>RXTE PCA</p></td>
+<td><p>+3.816 s</p></td>
+</tr>
+<tr class="row-even"><td><p>XMM EPIC-pn</p></td>
+<td><p>−62.708 s</p></td>
+</tr>
+<tr class="row-odd"><td><p>Swift XRT</p></td>
+<td><p>−68.207 s</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">barycen</span></code> shifts the string and so carries that inconsistency through; recomputing
+replaces it. On XMM our <code class="docutils literal notranslate"><span class="pre">DATE-OBS</span></code> therefore differs from <code class="docutils literal notranslate"><span class="pre">barycen</span></code>’s by exactly the
+63 s above and by nothing else, which is what
+<code class="docutils literal notranslate"><span class="pre">test_xmm_dates_differ_from_barycen_by_xmms_own_utc_offset</span></code> pins down. Both <code class="docutils literal notranslate"><span class="pre">barycorr</span></code>
+and <code class="docutils literal notranslate"><span class="pre">axbary</span></code> truncate the string to whole seconds; we keep the milliseconds, since a
+package aiming at 100 ns has no business rounding a timestamp to the nearest second, and
+the tests compare against our string cut back the same way.</p>
+<p>A keyword can also describe a correction the output has now <em>absorbed</em>, in which case
+there is nothing left for it to describe and it is removed rather than rewritten;
+<code class="docutils literal notranslate"><span class="pre">barycenter.core.ABSORBED_KEYWORDS</span></code> lists those. <code class="docutils literal notranslate"><span class="pre">UTCFINIT</span></code> is the one that exists today.
+It means “the UTC correction factor at TSTART”, and after barycentring TSTART has moved,
+<code class="docutils literal notranslate"><span class="pre">TIMESYS</span></code> is TDB, and the factor has been folded into every time – so applying it again
+would move a Swift event a further 15.56 s. <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> deletes it from every extension,
+with or without a clock file, and both committed Swift references have it gone.</p>
+<p><code class="docutils literal notranslate"><span class="pre">ONTIME</span></code>, <code class="docutils literal notranslate"><span class="pre">LIVETIME</span></code> and <code class="docutils literal notranslate"><span class="pre">EXPOSURE</span></code> are deliberately left alone, as all three tools
+leave them. They are sums of good-time interval lengths rather than differences between
+the file’s ends, and the corrections at the two edges of one interval differ by
+microseconds — far below the precision those keywords are used at.</p>
+</section>
+<section id="tierabso-how-well-the-clock-is-known">
+<h3><code class="docutils literal notranslate"><span class="pre">TIERABSO</span></code>, how well the clock is known<a class="headerlink" href="#tierabso-how-well-the-clock-is-known" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">TIERABSO</span></code> is “the absolute accuracy of the time, in seconds”. Unlike everything above it
+cannot be derived from the times in the file: it is a property of the clock correction
+that was applied, so it is written only on a run that applies one, and each mission’s
+number needs its own justification. <code class="docutils literal notranslate"><span class="pre">barycenter.clock</span></code> supplies it alongside the
+correction itself — every mission’s clock-function builder now returns a triple of
+<code class="docutils literal notranslate"><span class="pre">(correction,</span> <span class="pre">filename,</span> <span class="pre">accuracy)</span></code>, where <code class="docutils literal notranslate"><span class="pre">accuracy(met_start,</span> <span class="pre">met_stop)</span></code> is a callable
+so that a mission whose accuracy varies with time can say so. <code class="docutils literal notranslate"><span class="pre">core</span></code> calls it once per
+file, with the uncorrected <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code>, and writes the result into every
+extension, as <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code> does.</p>
+<p>Two of the three are constants, held in <code class="docutils literal notranslate"><span class="pre">clock.CLOCK_ACCURACY_S</span></code>:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>mission</p></th>
+<th class="head"><p>value</p></th>
+<th class="head"><p>where it comes from</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Swift</p></td>
+<td><p>10 µs</p></td>
+<td><p>constant, once the UTCF is applied</p></td>
+</tr>
+<tr class="row-odd"><td><p>RXTE</p></td>
+<td><p>5 µs</p></td>
+<td><p>constant, once <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> is applied</p></td>
+</tr>
+<tr class="row-even"><td><p>NuSTAR</p></td>
+<td><p>~132 µs</p></td>
+<td><p>the clock file’s own <code class="docutils literal notranslate"><span class="pre">CLOCK_ERR_CORR</span></code> column</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The two constants are read off the committed references and match <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code> exactly.
+They are read off rather than derived because the recipe lives in <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code>’s C source,
+which is in <code class="docutils literal notranslate"><span class="pre">heasarc</span></code> — a component the distributed HEASOFT source tarballs do not
+include — so the reference files are the only evidence for them that exists here.</p>
+<p>NuSTAR’s is measured rather than constant. <code class="docutils literal notranslate"><span class="pre">nustar_clock_accuracy_fun</span></code> reads
+<code class="docutils literal notranslate"><span class="pre">CLOCK_ERR_CORR</span></code> from the fine clock file and returns the <strong>largest</strong> value anywhere in
+the observation, including the two interpolated endpoints. On the test observation that
+is 131.8 µs, where <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code> writes 122.9 µs — the value of the column near <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code>.
+Both are the same quantity read two different ways and they differ by 7 %; we take the
+maximum because <code class="docutils literal notranslate"><span class="pre">TIERABSO</span></code> is one number describing the whole file, and the worst case
+over the file is the honest reading of that. The exact recipe <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code> uses could not
+be reproduced to its seven significant figures — neither linear nor spline interpolation
+at the raw or corrected <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code>, at the last event, nor the span’s mean, minimum or
+maximum lands on it — so the test asserts that ours is inside the column’s range, is no
+smaller than HEASOFT’s, and is within 10 % of it, rather than that it is equal.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">--clockfile</span> <span class="pre">none</span></code> nothing is written and any existing value is left untouched.
+HEASOFT does the same for NuSTAR, but for Swift it writes <code class="docutils literal notranslate"><span class="pre">TIERABSO</span> <span class="pre">=</span> <span class="pre">100</span></code> even when
+told to apply no clock file. We deliberately do not copy that: our Swift times still
+carry the leap-second term (see <a class="reference internal" href="#missions-whose-met-counts-utc-seconds">Missions whose MET counts UTC
+seconds</a>), so the figure that would honestly
+describe them is the size of the UTCF we were told not to read — 15.56 s on the test
+file, not 100 s — and that is precisely the thing such a run cannot know.</p>
+<p>Two related HEASOFT behaviours are knowingly not reproduced. <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> also writes
+<code class="docutils literal notranslate"><span class="pre">TIERRELA</span></code> (the <em>relative</em> accuracy, 1e-9 for NuSTAR) and writes it even with
+<code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code>; and it sets <code class="docutils literal notranslate"><span class="pre">CLOCKAPP</span> <span class="pre">=</span> <span class="pre">T</span></code> for Swift with <code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code>, where we
+write <code class="docutils literal notranslate"><span class="pre">F</span></code> because no clock file was applied. Both are recorded in the known issues.</p>
+</section>
+<section id="things-that-will-move-the-answer-by-more-than-100-ns">
+<h3>Things that will move the answer by more than 100 ns<a class="headerlink" href="#things-that-will-move-the-answer-by-more-than-100-ns" title="Link to this heading">#</a></h3>
+<p>When a comparison disagrees, check these before looking for a bug:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Difference</p></th>
+<th class="head"><p>Size (NuSTAR test file)</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">RA_OBJ</span></code> vs <code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code> (0.1 arcsec) — <a class="reference internal" href="#the-coordinate-keyword-order">our default differs from HEASOFT’s</a></p></td>
+<td><p>172 µs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RA_TARG</span></code> vs <code class="docutils literal notranslate"><span class="pre">RA_NOM</span></code> (324 arcsec, Chandra ACIS)</p></td>
+<td><p>0.8 s</p></td>
+</tr>
+<tr class="row-even"><td><p>DE430 vs DE440 ephemeris</p></td>
+<td><p>~10 µs</p></td>
+</tr>
+<tr class="row-odd"><td><p>DE405 vs DE430</p></td>
+<td><p>0.38 µs</p></td>
+</tr>
+<tr class="row-even"><td><p>Clock correction applied before vs after</p></td>
+<td><p>1.1 µs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">(0.5</span> <span class="pre">−</span> <span class="pre">TIMEPIXR)</span> <span class="pre">·</span> <span class="pre">TIMEDEL</span></code> half-bin shift (RXTE PCA)</p></td>
+<td><p>477 ns</p></td>
+</tr>
+<tr class="row-even"><td><p>RXTE PCA 16 µs detector delay</p></td>
+<td><p>16 µs</p></td>
+</tr>
+<tr class="row-odd"><td><p>PINT’s extra Shapiro <code class="docutils literal notranslate"><span class="pre">2T·ln(r/AU)</span></code> term</p></td>
+<td><p>~100 ns</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">numpy.longdouble</span></code> being float64 (arm64, Windows)</p></td>
+<td><p>up to 1.1 µs of scatter</p></td>
+</tr>
+<tr class="row-odd"><td><p>GPS→UTC correction on/off</p></td>
+<td><p>~0.1 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</section>
+<section id="supported-missions">
+<h2>Supported missions<a class="headerlink" href="#supported-missions" title="Link to this heading">#</a></h2>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>Mission</p></th>
+<th class="head"><p>Orbit file</p></th>
+<th class="head"><p>Clock correction</p></th>
+<th class="head"><p>Status</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>NuSTAR</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">nu&lt;obsid&gt;A.attorb</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">nuCclock*.fits</span></code>, <code class="docutils literal notranslate"><span class="pre">NU_FINE_CLOCK</span></code> extension</p></td>
+<td><p>validated to 100 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>NICER</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ni&lt;obsid&gt;.orb</span></code></p></td>
+<td><p>none needed</p></td>
+<td><p>works</p></td>
+</tr>
+<tr class="row-even"><td><p>RXTE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">orbit/FPorbit_*</span></code></p></td>
+<td><p>HEASOFT <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code>, bundled with the package</p></td>
+<td><p>validated to 100 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>IXPE</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">FPorbit</span></code>-style</p></td>
+<td><p>none needed</p></td>
+<td><p>works</p></td>
+</tr>
+<tr class="row-even"><td><p>Fermi LAT</p></td>
+<td><p>FT2 <code class="docutils literal notranslate"><span class="pre">SC_DATA</span></code>, <code class="docutils literal notranslate"><span class="pre">SC_POSITION</span></code> in m, timed by <code class="docutils literal notranslate"><span class="pre">START</span></code></p></td>
+<td><p>none needed</p></td>
+<td><p>validated to 100 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fermi GBM</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">glg_poshist_all_*.fit</span></code>, <code class="docutils literal notranslate"><span class="pre">GLAST</span> <span class="pre">POS</span> <span class="pre">HIST</span></code>, <code class="docutils literal notranslate"><span class="pre">POS_*</span></code> in m, timed by <code class="docutils literal notranslate"><span class="pre">SCLK_UTC</span></code></p></td>
+<td><p>none needed</p></td>
+<td><p>identical to the LAT route given the same positions; no official tool accepts GBM files, see <a class="reference internal" href="missions.html#fermi-gbm"><span class="std std-ref">Missions</span></a></p></td>
+</tr>
+<tr class="row-even"><td><p>SVOM</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">SVOM_SVO-ORB-CNV_*.fits</span></code>, <code class="docutils literal notranslate"><span class="pre">SVO-ORB-CNV</span></code>, <code class="docutils literal notranslate"><span class="pre">POSITION</span></code>/<code class="docutils literal notranslate"><span class="pre">VELOCITY</span></code> in m; GTIs in a separate file, see <a class="reference internal" href="#good-time-intervals-in-a-separate-file">GTIs in a separate file</a></p></td>
+<td><p>none needed (<code class="docutils literal notranslate"><span class="pre">CLOCKCOR</span> <span class="pre">=</span> <span class="pre">T</span></code>)</p></td>
+<td><p>no official tool; 1 ulp from <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> on synthetic SVOM-format data relabelled as NICER, see <a class="reference internal" href="missions.html#id1"><span class="std std-ref">Missions</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>XMM-Newton</p></td>
+<td><p>PPS <code class="docutils literal notranslate"><span class="pre">P*OBX000ORBTSR*.FTZ</span></code>, <code class="docutils literal notranslate"><span class="pre">GEI_*</span></code> in km</p></td>
+<td><p>none needed</p></td>
+<td><p>validated to 100 ns — <strong>the only route, see below</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Chandra</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">primary/orbitf*_eph1.fits</span></code>, <code class="docutils literal notranslate"><span class="pre">ORBITEPHEM</span></code> in m</p></td>
+<td><p>none needed</p></td>
+<td><p>validated to 100 ns — <strong>the only route, see below</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Swift</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">auxil/sw&lt;obsid&gt;sao.fits</span></code>, <code class="docutils literal notranslate"><span class="pre">PREFILTER</span></code> in km</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">swclockcor*.fits</span></code>, <code class="docutils literal notranslate"><span class="pre">CLOCK_CORRECT</span></code> extension (the UTCF)</p></td>
+<td><p>validated to 100 ns</p></td>
+</tr>
+<tr class="row-even"><td><p>ASCA</p></td>
+<td><p>—</p></td>
+<td><p>—</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">--apply-official</span></code> only, DE200 only</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="test-data">
+<h2>Test data<a class="headerlink" href="#test-data" title="Link to this heading">#</a></h2>
+<p>Everything in <code class="docutils literal notranslate"><span class="pre">tests/data/</span></code> is small on purpose, so that CI can check us against the
+official tools without installing HEASOFT, SAS or CIAO.</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_evt.evt</span></code></p></td>
+<td><p>937 NuSTAR FPMA events, MJDREF 55197.00076601852</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_orb.fits.gz</span></code></p></td>
+<td><p>the matching orbit file, 82800 rows at 1 s</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_fine_clk.fits</span></code></p></td>
+<td><p>92 rows of <code class="docutils literal notranslate"><span class="pre">NU_FINE_CLOCK</span></code>, trimmed from CALDB <code class="docutils literal notranslate"><span class="pre">nuCclock20100101v230.fits.gz</span></code> (12 MB) to the span of the events plus 5000 s</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_clk.fits</span></code></p></td>
+<td><p>a NuSTAR clock file with the <em>old</em> <code class="docutils literal notranslate"><span class="pre">CLOCK_CORRECT</span></code> extension, kept so the test suite can prove it is refused</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_par.par</span></code></p></td>
+<td><p>a minimal timing model for the same position (<code class="docutils literal notranslate"><span class="pre">EPHEM</span> <span class="pre">DE436</span></code>)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_evt_bary_DE440_noclk.evt.gz</span></code></p></td>
+<td><p>the <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> reference described above, clock correction off</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_evt_bary_DE440_clk.evt.gz</span></code></p></td>
+<td><p>the same with <code class="docutils literal notranslate"><span class="pre">clockfile=dummy_fine_clk.fits</span></code>, which is what pins down the order the two corrections are applied in</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_xte_evt.evt</span></code></p></td>
+<td><p>404 events, every 64th row of PINT’s <code class="docutils literal notranslate"><span class="pre">B1509_RXTE_short.fits</span></code> (public RXTE PCA data), so the sample spans the whole hour</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_xte_orb.fits.gz</span></code></p></td>
+<td><p>78 rows of the matching <code class="docutils literal notranslate"><span class="pre">FPorbit_Day6223</span></code>, the observation plus 600 s either side</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_xte_bary_DE440_noclk.evt.gz</span></code></p></td>
+<td><p>the <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> reference for those events, <code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_xte_bary_DE440_clk.evt.gz</span></code></p></td>
+<td><p>the same with <code class="docutils literal notranslate"><span class="pre">tdc.dat</span></code> applied, which barycorr does whatever <code class="docutils literal notranslate"><span class="pre">clockfile</span></code> says</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_xmm_evt.evt</span></code></p></td>
+<td><p>401 EPIC-pn events, every 839th row of observation 0112290201, so the sample spans the whole 7.6 h, plus one <code class="docutils literal notranslate"><span class="pre">STDGTI</span></code> extension</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_xmm_orb.fits.gz</span></code></p></td>
+<td><p>2832 rows of the matching PPS <code class="docutils literal notranslate"><span class="pre">ORBTSR</span></code> file, every 10th second over the events plus 600 s, with <strong>all ten</strong> columns kept</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_xmm_bary_DE430.evt.gz</span></code></p></td>
+<td><p>the SAS 22.1 <code class="docutils literal notranslate"><span class="pre">barycen</span></code> reference for those events, DE430, GTIs corrected too</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_chandra_evt.evt</span></code></p></td>
+<td><p>401 ACIS-S events, every 164th row of observation 10026, so the sample spans the whole 5.6 h, plus its <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_chandra_orb.fits.gz</span></code></p></td>
+<td><p>71 rows of the matching <code class="docutils literal notranslate"><span class="pre">orbitf*_eph1.fits</span></code>, the file’s own 300 s sampling over the events plus 1200 s</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_chandra_bary_DE405.evt.gz</span></code></p></td>
+<td><p>the CIAO <code class="docutils literal notranslate"><span class="pre">axbary</span></code> reference for those events, <code class="docutils literal notranslate"><span class="pre">refframe=ICRS</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_chandra_bary_DE200.evt.gz</span></code></p></td>
+<td><p>the same with <code class="docutils literal notranslate"><span class="pre">refframe=FK5</span></code>, which is how the ephemeris/frame pairing gets checked against a real tool</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_swift_evt.evt</span></code></p></td>
+<td><p>492 XRT photon-counting events, every 3rd row of observation 00037258040, so the sample spans the whole 6.4 ks, plus its <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_swift_orb.fits.gz</span></code></p></td>
+<td><p>3271 rows of the matching <code class="docutils literal notranslate"><span class="pre">sw*sao.fits</span></code> prefilter, every 2nd second over the events plus 600 s, cut to <code class="docutils literal notranslate"><span class="pre">TIME</span></code>, <code class="docutils literal notranslate"><span class="pre">POSITION</span></code>, <code class="docutils literal notranslate"><span class="pre">VELOCITY</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_swift_clk.fits</span></code></p></td>
+<td><p>15 intervals of CALDB <code class="docutils literal notranslate"><span class="pre">swclockcor20041120v174.fits</span></code>, spanning the 2015-07-01 leap second as well as the observation</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_swift_bary_DE440_noclk.evt.gz</span></code></p></td>
+<td><p>the <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> reference for those events, <code class="docutils literal notranslate"><span class="pre">clockfile=NONE</span></code> — which still carries the +4 s of leap seconds</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_swift_bary_DE440_clk.evt.gz</span></code></p></td>
+<td><p>the same with the UTCF applied, 15.56 s away from its twin</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_fermi_evt.evt</span></code></p></td>
+<td><p>413 simulated LAT events, every 10th row of the ScienceTools tutorial’s <code class="docutils literal notranslate"><span class="pre">fakepulsar_event.fits</span></code>, so the sample spans the whole week, plus all 70 of its <code class="docutils literal notranslate"><span class="pre">GTI</span></code> rows</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_fermi_orb.fits.gz</span></code></p></td>
+<td><p>20199 rows of the matching <code class="docutils literal notranslate"><span class="pre">simscdata_1week.fits</span></code> FT2 file, at its native 30 s over the events and GTIs plus 600 s, cut to <code class="docutils literal notranslate"><span class="pre">START</span></code>, <code class="docutils literal notranslate"><span class="pre">STOP</span></code>, <code class="docutils literal notranslate"><span class="pre">SC_POSITION</span></code> — <strong>not</strong> decimated, see below</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_fermi_bary_DE405.evt.gz</span></code></p></td>
+<td><p>the Fermi <code class="docutils literal notranslate"><span class="pre">gtbary</span></code> reference for those events, <code class="docutils literal notranslate"><span class="pre">solareph=&quot;JPL</span> <span class="pre">DE405&quot;</span></code>, GTIs corrected too</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_gbm_evt.evt</span></code></p></td>
+<td><p>401 real GBM events, every 6652nd row of NaI 0’s <code class="docutils literal notranslate"><span class="pre">glg_tte_n0_240315_12z_v00.fit.gz</span></code>, so the sample spans the hour, with its <code class="docutils literal notranslate"><span class="pre">EBOUNDS</span></code> and <code class="docutils literal notranslate"><span class="pre">GTI</span></code> extensions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_gbm_poshist.fits.gz</span></code></p></td>
+<td><p>2922 rows of that day’s <code class="docutils literal notranslate"><span class="pre">glg_poshist_all_240315_v00.fit</span></code>, every column at the native 1 s over the events plus 60 s. No reference file: <code class="docutils literal notranslate"><span class="pre">gtbary</span></code> refuses GBM, and the test compares against the same positions in LAT layout instead</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_svom_evt.evt</span></code></p></td>
+<td><p>400 <strong>synthetic</strong> ECLAIRs events in SVOM’s <code class="docutils literal notranslate"><span class="pre">ECL-EVT-CAL</span></code> layout over 1.5 ks, 20 of them listed out of time order by 1–12 µs as in real ECLAIRs lists</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_svom_orb.fits.gz</span></code></p></td>
+<td><p>a synthetic circular 625 km orbit in SVOM’s <code class="docutils literal notranslate"><span class="pre">SVO-ORB-CNV</span></code> layout: 1501 rows at 1 s, float32 <code class="docutils literal notranslate"><span class="pre">POSITION</span></code>/<code class="docutils literal notranslate"><span class="pre">VELOCITY</span></code> in m, <code class="docutils literal notranslate"><span class="pre">POSITION_SPHERICAL</span></code> computed from them in ITRS</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_svom_gti.fits</span></code></p></td>
+<td><p>a synthetic SVOM GTI file: a group table and four criteria (<code class="docutils literal notranslate"><span class="pre">GTICAL-NSA</span></code>, <code class="docutils literal notranslate"><span class="pre">-STA</span></code>, <code class="docutils literal notranslate"><span class="pre">-TLM</span></code>, <code class="docutils literal notranslate"><span class="pre">-NEO</span></code>), with <code class="docutils literal notranslate"><span class="pre">MJDREFF</span></code> rounded the way the real GTI files round it</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">dummy_svom_bary_DE440.evt.gz</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">barycorr</span></code> on those events, with <code class="docutils literal notranslate"><span class="pre">STA</span></code>∩<code class="docutils literal notranslate"><span class="pre">NSA</span></code>∩<code class="docutils literal notranslate"><span class="pre">NEO</span></code> merged in, after relabelling events and orbit as NICER’s — see below</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The XMM orbit file keeps its <code class="docutils literal notranslate"><span class="pre">GSE_*</span></code> columns on purpose. The file offers two position
+triples of identical length — <code class="docutils literal notranslate"><span class="pre">GEI_*</span></code> is geocentric equatorial and is the one the
+ephemeris is referred to, <code class="docutils literal notranslate"><span class="pre">GSE_*</span></code> is the same vector rotated into the Earth-Sun frame —
+and reading the wrong one is a 160 ms error that nothing in the units or the column
+comments would give away. A committed file that still offers the wrong choice is a
+sharper test than a hand-built one.</p>
+<p>The Swift prefilter is decimated to 2 s rather than something coarser for a reason worth
+recording, since it costs 90 kB: <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code> refuses to read a prefilter sampled more
+coarsely than about 10 s — 15 s and up fail with “no bracketing sample found” on a file
+that brackets the time comfortably — and while 5 s and 10 s are read, they move the
+reference times by a full float64 ulp (59.6 ns at Swift’s MET, most of the budget) against
+the native 1 s sampling. 2 s is the coarsest step that is bit-identical to 1 s.</p>
+<p>The clock file is trimmed to 15 intervals rather than the one that contains the
+observation, so that the tests can check the two things that only show up at an interval
+boundary: that the row containing a time is the one used, and that the tabulated correction
+steps by exactly one second at a leap second. The boundaries are found in the file itself,
+by evaluating each interval’s polynomial at its own end and at the next interval’s start —
+ordinary boundaries agree to a few microseconds, a leap second shows up as a one-second
+jump — rather than by looking the leap seconds up and trusting them to line up.</p>
+<p>The Chandra files keep their column names exactly as Chandra writes them, for the same
+reason: <code class="docutils literal notranslate"><span class="pre">time</span></code> in the events, <code class="docutils literal notranslate"><span class="pre">Time</span></code> in the orbit file, <code class="docutils literal notranslate"><span class="pre">START</span></code>/<code class="docutils literal notranslate"><span class="pre">STOP</span></code> in capitals in the
+<code class="docutils literal notranslate"><span class="pre">GTI</span></code> extension beside them. That mixture is the only committed example of the
+case-insensitivity the FITS standard grants and most missions never use, and the failure
+it guards against is silent — a case-sensitive lookup corrects the GTIs and leaves the
+events alone.</p>
+<p>The SVOM files are synthetic rather than trimmed from an observation. Their layout is
+the real one, column formats, extension names and keywords included, and that is what the
+reader and the GTI merging are tested on; the orbit itself only needs to be a plausible
+low-Earth orbit. With no tool that barycentres SVOM, the reference is <code class="docutils literal notranslate"><span class="pre">barycorr</span></code> run on
+the same events and positions relabelled as a NICER observation (<code class="docutils literal notranslate"><span class="pre">svom_as_nicer</span></code>): the
+NICER orbit layout holds the same metre and m/s numbers as scalar columns, and <code class="docutils literal notranslate"><span class="pre">MJDREF</span></code>
+and <code class="docutils literal notranslate"><span class="pre">TIMESYS</span></code> are kept, so <code class="docutils literal notranslate"><span class="pre">barycorr</span></code>’s answer is the one it would give for SVOM. We
+agree with it to one float64 ulp (29.8 ns), events and GTIs alike.</p>
+<p><code class="docutils literal notranslate"><span class="pre">tools/make_test_data.py</span></code> regenerates all of them, including the trimming, and it now
+allocates its own pseudo-terminal: HEASOFT tasks open <code class="docutils literal notranslate"><span class="pre">/dev/tty</span></code> for their prompts and
+abort with <code class="docutils literal notranslate"><span class="pre">ERROR:</span> <span class="pre">Device</span> <span class="pre">not</span> <span class="pre">configured</span></code> without one, and the old <code class="docutils literal notranslate"><span class="pre">script</span> <span class="pre">-q</span> <span class="pre">/dev/null</span></code>
+wrapper only worked when it already had a terminal to start from.</p>
+<section id="why-the-fermi-orbit-file-is-not-decimated">
+<h3>Why the Fermi orbit file is not decimated<a class="headerlink" href="#why-the-fermi-orbit-file-is-not-decimated" title="Link to this heading">#</a></h3>
+<p>Every other orbit file here is thinned — XMM to every 10th second, Swift to every 2nd.
+The Fermi one is not, and that is measured rather than cautious. <code class="docutils literal notranslate"><span class="pre">simscdata_1week.fits</span></code>
+carries <code class="docutils literal notranslate"><span class="pre">SC_POSITION</span></code> but no <code class="docutils literal notranslate"><span class="pre">SC_VELOCITY</span></code> column, which older FT2 files routinely do
+not, so the velocity has to come from differentiating the position — and a coarser grid
+makes a worse derivative. Regenerating the <code class="docutils literal notranslate"><span class="pre">gtbary</span></code> reference at each step and comparing:</p>
+<div class="pst-scrollable-table-container"><table class="table">
+<thead>
+<tr class="row-odd"><th class="head text-right"><p>spacecraft sampling</p></th>
+<th class="head text-right"><p>agreement with <code class="docutils literal notranslate"><span class="pre">gtbary</span></code></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td class="text-right"><p>30 s (native)</p></td>
+<td class="text-right"><p><strong>29.8 ns</strong> (one ulp)</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>60 s</p></td>
+<td class="text-right"><p>119.2 ns</p></td>
+</tr>
+<tr class="row-even"><td class="text-right"><p>120 s</p></td>
+<td class="text-right"><p>327.8 ns</p></td>
+</tr>
+<tr class="row-odd"><td class="text-right"><p>240 s</p></td>
+<td class="text-right"><p>4440 ns</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The tolerance is 129.8 ns, so 60 s would pass — at 92 % of it, with nothing left for a
+platform whose longdouble differs. 30 s is exact and costs 305 KB gzipped, so that is
+what is committed. Note that this is a property of <em>this</em> file rather than of Fermi:
+a current FT2 file with an <code class="docutils literal notranslate"><span class="pre">SC_VELOCITY</span></code> column would take a Hermite spline instead and
+thin far better.</p>
+</section>
+<section id="driving-sas-barycen-for-the-xmm-reference">
+<h3>Driving SAS <code class="docutils literal notranslate"><span class="pre">barycen</span></code> for the XMM reference<a class="headerlink" href="#driving-sas-barycen-for-the-xmm-reference" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">barycen</span></code> is harder to drive than <code class="docutils literal notranslate"><span class="pre">barycorr</span></code>, and the reasons are worth writing down:</p>
+<ul class="simple">
+<li><p><strong>It has no output parameter.</strong> It edits the table it is given, irreversibly — its own
+documentation says so. <code class="docutils literal notranslate"><span class="pre">run_barycen</span></code> therefore copies the input into a private temporary
+directory, runs there, and moves the result out. Neither the committed input nor the
+source observation is ever written to.</p></li>
+<li><p><strong>It will not take an orbit file on the command line.</strong> The spacecraft position comes
+through SAS’s observation access layer, which means an <em>ingested</em> ODF. An ingested ODF’s
+summary (<code class="docutils literal notranslate"><span class="pre">*SUM.SAS</span></code>) records <strong>absolute</strong> paths, so a summary made elsewhere fails with
+<code class="docutils literal notranslate"><span class="pre">OrbitFileOpenError</span></code> naming a directory that no longer exists. A copy of the ODF is
+re-ingested inside the working directory; that is the only reason <code class="docutils literal notranslate"><span class="pre">odfingest</span></code> appears in
+the script. The orbit it then reads is the ODF’s <code class="docutils literal notranslate"><span class="pre">ROS.ASC</span></code>, <em>not</em> the PPS <code class="docutils literal notranslate"><span class="pre">ORBTSR</span></code> file
+we read — so the XMM test quietly checks that those two describe the same orbit.</p></li>
+<li><p><strong>No CCF is needed.</strong> Checked by running with <code class="docutils literal notranslate"><span class="pre">SAS_CCF</span></code> and <code class="docutils literal notranslate"><span class="pre">SAS_CCFPATH</span></code> unset and
+comparing the output bit for bit. <code class="docutils literal notranslate"><span class="pre">setsas.sh</span></code> prints a reminder to set them anyway.</p></li>
+<li><p><strong><code class="docutils literal notranslate"><span class="pre">setsas.sh</span></code> needs HEASOFT initialised first</strong>, exports nothing unless <code class="docutils literal notranslate"><span class="pre">SAS_DIR</span></code> is
+already set, clears the positional parameters of the script that sourced it, and tries to
+raise the stack limit — which fails harmlessly in a sandbox. So it must not be sourced
+under <code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">-e</span></code>, and anything the caller passed has to be saved before sourcing it.</p></li>
+<li><p>Unlike HEASOFT, SAS tasks need <strong>no controlling terminal</strong>.</p></li>
+</ul>
+<p>Regenerating the reference also needs the observation itself, which is not committed:
+<code class="docutils literal notranslate"><span class="pre">XMM_OBS</span></code> in the script names where it lives on the machine that made it, in the same way
+<code class="docutils literal notranslate"><span class="pre">RXTE_EVENTS</span></code> points at PINT’s test data and <code class="docutils literal notranslate"><span class="pre">CALDB_CLOCK</span></code> at a local CALDB.</p>
+</section>
+<section id="driving-ciao-axbary-for-the-chandra-references">
+<h3>Driving CIAO <code class="docutils literal notranslate"><span class="pre">axbary</span></code> for the Chandra references<a class="headerlink" href="#driving-ciao-axbary-for-the-chandra-references" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">axbary</span></code> is easier than <code class="docutils literal notranslate"><span class="pre">barycen</span></code> — it writes a new file rather than editing in place, and
+needs no controlling terminal — but it has one trap and one limit:</p>
+<ul class="simple">
+<li><p><strong>It fails silently without its calibration data.</strong> It looks for <code class="docutils literal notranslate"><span class="pre">tai-utc.dat</span></code> and
+<code class="docutils literal notranslate"><span class="pre">JPLEPH.*</span></code> under <code class="docutils literal notranslate"><span class="pre">$TIMING_DIR</span></code> or <code class="docutils literal notranslate"><span class="pre">$ASCDS_CALIB</span></code>. With neither set it prints
+<code class="docutils literal notranslate"><span class="pre">Could</span> <span class="pre">not</span> <span class="pre">initialize</span> <span class="pre">bary</span> <span class="pre">stuff</span></code>, <strong>exits 0</strong>, and writes the times out unchanged — so
+the output is a perfectly valid file that is bit-for-bit the input. <code class="docutils literal notranslate"><span class="pre">run_axbary</span></code> sets
+<code class="docutils literal notranslate"><span class="pre">ASCDS_CALIB</span></code> and then checks that the times actually moved.</p></li>
+<li><p><strong>It is a shell wrapper around <code class="docutils literal notranslate"><span class="pre">pset</span></code>/<code class="docutils literal notranslate"><span class="pre">pget</span></code></strong>, so CIAO’s <code class="docutils literal notranslate"><span class="pre">bin</span></code> has to be on <code class="docutils literal notranslate"><span class="pre">PATH</span></code>, not
+merely be where the executable came from. Without it the wrapper reads no parameters and
+does nothing, again exiting 0.</p></li>
+<li><p><strong>It can only reach DE200 and DE405</strong>, chosen through <code class="docutils literal notranslate"><span class="pre">refframe=FK5</span></code> and <code class="docutils literal notranslate"><span class="pre">refframe=ICRS</span></code>
+respectively — there is no ephemeris parameter. That is the main reason to prefer the
+native engine on Chandra: DE405 is 79 µs from DE440 on this dataset.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">barycorr</span></code> is <strong>not</strong> an option for Chandra, despite the mission appearing in its
+documentation. On a Chandra orbit file it reports <code class="docutils literal notranslate"><span class="pre">no</span> <span class="pre">bracketing</span> <span class="pre">sample</span> <span class="pre">found</span> <span class="pre">for</span> <span class="pre">time</span> <span class="pre">357377056.00505000</span></code> followed by <code class="docutils literal notranslate"><span class="pre">Invalid</span> <span class="pre">Observatory/Spacecraft</span> <span class="pre">position</span> <span class="pre">vector</span></code>, on a file
+that brackets that time comfortably — reproduced with both the trimmed and the full,
+uncompressed file. <code class="docutils literal notranslate"><span class="pre">strings</span></code> on <code class="docutils literal notranslate"><span class="pre">hdaxbary</span></code> shows readers for <code class="docutils literal notranslate"><span class="pre">xtescorbit</span></code>, <code class="docutils literal notranslate"><span class="pre">nicerscorbit</span></code>,
+<code class="docutils literal notranslate"><span class="pre">swiftscorbit</span></code> and NuSTAR, and nothing for Chandra. So <code class="docutils literal notranslate"><span class="pre">MISSIONS[&quot;chandra&quot;].official</span></code> is
+<code class="docutils literal notranslate"><span class="pre">None</span></code>, not <code class="docutils literal notranslate"><span class="pre">&quot;barycorr&quot;</span></code>.</p>
+</section>
+</section>
+<section id="documentation-hosting">
+<h2>Documentation hosting<a class="headerlink" href="#documentation-hosting" title="Link to this heading">#</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">.github/workflows/docs.yml</span></code> runs <code class="docutils literal notranslate"><span class="pre">hatch</span> <span class="pre">run</span> <span class="pre">docs:build</span></code> on every push to <code class="docutils literal notranslate"><span class="pre">main</span></code> (so, on every merged pull request) and can also be started by hand from the Actions tab. The warnings-as-errors build output in <code class="docutils literal notranslate"><span class="pre">docs/_build</span></code> is published to the <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code> branch with <code class="docutils literal notranslate"><span class="pre">peaceiris/actions-gh-pages</span></code>, which writes <code class="docutils literal notranslate"><span class="pre">.nojekyll</span></code> itself. The branch is recreated from scratch each time (<code class="docutils literal notranslate"><span class="pre">force_orphan</span></code>), so it holds no history. In the repository settings, Pages must be set to “Deploy from a branch”, <code class="docutils literal notranslate"><span class="pre">gh-pages</span></code>, root. The site is at <a class="reference external" href="https://matteobachetti.github.io/barycenter/">https://matteobachetti.github.io/barycenter/</a>.</p>
+</section>
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="adding_a_mission.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">Adding a mission</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="known_issues.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Known issues</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#what-the-tool-is-for">What the tool is for</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-two-workflows">The two workflows</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-pure-python-workflow-the-default">1. The pure-Python workflow (the default)</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nustar">NuSTAR</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#rxte">RXTE</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#swift">Swift</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#missions-whose-met-counts-utc-seconds">Missions whose MET counts UTC seconds</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-apply-official-workflow">2. The <code class="docutils literal notranslate"><span class="pre">--apply-official</span></code> workflow</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-map">Module map</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-mission-registry">The mission registry</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#adding-a-mission">Adding a mission</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-orbit-reader">The orbit reader</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#where-the-orbit-file-stops">Where the orbit file stops</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#what-happens-to-a-time-that-is-not-covered">What happens to a time that is not covered</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-error-budget-of-a-position-and-what-a-gap-costs">The error budget of a position, and what a gap costs</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tstart-and-tstop-are-a-separate-case"><code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code> are a separate case</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#good-time-intervals-in-a-separate-file">Good time intervals in a separate file</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-pint-engine">The PINT engine</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#choosing-an-engine">Choosing an engine</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#the-native-engine">The native engine</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#two-things-it-gets-right-that-are-easy-to-get-wrong">Two things it gets right that are easy to get wrong</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#measured-against-barycorr">Measured against <code class="docutils literal notranslate"><span class="pre">barycorr</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#an-independent-cross-check">An independent cross-check</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#speed">Speed</a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#when-the-grid-is-used-and-what-it-costs">When the grid is used, and what it costs</a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#the-grid-has-to-be-padded-by-two-steps-not-one">The grid has to be padded by two steps, not one</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#accuracy">Accuracy</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-reference-file-s-own-granularity">The reference file’s own granularity</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id5">RXTE</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#xmm-newton">XMM-Newton</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#chandra">Chandra</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#id6">Swift</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-coordinate-keyword-order-is-deliberately-not-heasoft-s">The coordinate keyword order is deliberately not HEASOFT’s</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#the-keywords-derived-from-tstart-and-tstop">The keywords derived from <code class="docutils literal notranslate"><span class="pre">TSTART</span></code> and <code class="docutils literal notranslate"><span class="pre">TSTOP</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#tierabso-how-well-the-clock-is-known"><code class="docutils literal notranslate"><span class="pre">TIERABSO</span></code>, how well the clock is known</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#things-that-will-move-the-answer-by-more-than-100-ns">Things that will move the answer by more than 100 ns</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#supported-missions">Supported missions</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#test-data">Test data</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#why-the-fermi-orbit-file-is-not-decimated">Why the Fermi orbit file is not decimated</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#driving-sas-barycen-for-the-xmm-reference">Driving SAS <code class="docutils literal notranslate"><span class="pre">barycen</span></code> for the XMM reference</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#driving-ciao-axbary-for-the-chandra-references">Driving CIAO <code class="docutils literal notranslate"><span class="pre">axbary</span></code> for the Chandra references</a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#documentation-hosting">Documentation hosting</a></li>
+</ul>
+  </nav></div>
+
+  <div class="sidebar-secondary-item">
+
+  <div class="tocsection sourcelink">
+    <a href="_sources/technical_details.md.txt">
+      <i class="fa-solid fa-file-lines"></i> Show Source
+    </a>
+  </div>
+</div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="_static/scripts/bootstrap.js?digest=a95f357e85573c9b56d5"></script>
+<script defer src="_static/scripts/pydata-sphinx-theme.js?digest=a95f357e85573c9b56d5"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item">
+
+  <p class="copyright">
+    
+      © Copyright Copyright © 2025 Matteo Bachetti.
+      <br/>
+    
+  </p>
+</div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item">
+<p class="theme-version">
+  <!-- # L10n: Setting the PST URL as an argument as this does not need to be localized -->
+  Built with the <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a> 0.19.0.
+</p></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>
