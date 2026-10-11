@@ -169,7 +169,7 @@ XMM_REFERENCE = {
 SWIFT_RA, SWIFT_DEC = "182.635833", "39.405833"
 
 #: The XRISM dataset the HEASOFT ``barycen`` reference is made with: the Resolve cleaned
-#: event list of observation 101002010, a Crab observation pointed 50 arcsec south-east
+#: event list of observation 101002010, a Crab observation pointed 65 arcsec south-east
 #: of the pulsar, and the orbit file beside it.  Public HEASARC data.
 XRISM_OBS = os.path.expanduser("~/tmp/xrism_crab/101002010")
 XRISM_EVENTS = os.path.join(XRISM_OBS, "resolve", "event_cl", "xa101002010rsl_p0px1000_cl.evt.gz")
@@ -177,13 +177,14 @@ XRISM_ORBIT = os.path.join(XRISM_OBS, "auxil", "xa101002010.orb.gz")
 
 #: How the XRISM reference is made.  The position is the Crab pulsar's, which matches
 #: neither ``RA_OBJ`` nor ``RA_NOM`` (the pointing is offset), so a bug where the code
-#: reads a keyword instead of the coordinates it was handed is a 0.2 ms error.  ``barycen``
-#: has no ephemeris parameter: ``refframe=ICRS`` means DE440.  The orbit settings are
-#: the task's defaults, pinned: Keplerian elements, ``WEIGHTED`` interpolation.  That is
-#: also the most accurate of its modes on a 60 s orbit.  Measured against our engine on
-#: these 401 events, the Keplerian mode agrees to +41 ns mean, 89 ns worst, while the same
-#: file's Cartesian columns give 1.0 us worst with ``TAYLOR`` and 12 us with ``WEIGHTED``,
-#: which interpolates position linearly.  See docs/known_issues.md.
+#: reads a keyword instead of the coordinates it was handed is an error of up to 0.16 s.
+#: ``barycen`` has no ephemeris parameter: ``refframe=ICRS`` means DE440.  The orbit
+#: settings are the task's defaults, pinned: Keplerian elements, ``WEIGHTED``
+#: interpolation.  That is also the most accurate of its modes on a 60 s orbit.  Measured
+#: against our engine on these 401 events, the Keplerian mode agrees to +41 ns mean,
+#: 89 ns worst, while the same file's Cartesian columns give 1.0 us worst with ``TAYLOR``
+#: and 12 us with ``WEIGHTED``, which interpolates position linearly.  See
+#: "XRISM against barycen" in docs/technical_details.md.
 XRISM_REFERENCE = {
     "outfile": "dummy_xrism_bary_DE440.evt.gz",
     "infile": "dummy_xrism_evt.evt",

@@ -86,7 +86,7 @@ def official_barycen(fname, orbfile, ra=None, dec=None, ephem="DE440", outfile="
     XRISM's: Keplerian elements from the ``ORBIT`` extension, ``WEIGHTED`` interpolation.
     They are pinned here all the same. On XRISM's 60 s orbit that is also the most
     accurate of its modes: the same file's Cartesian columns are interpolated linearly,
-    a microsecond-level error; see docs/known_issues.md.
+    a microsecond-level error; see "XRISM against barycen" in docs/technical_details.md.
 
     Parameters
     ----------

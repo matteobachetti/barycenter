@@ -240,6 +240,58 @@ IXPE has a registry entry and its orbit file is read, but **it has never been co
 against an official tool**, so treat the output as unverified. It uses the same
 `ORBIT`-extension dialect as NICER.
 
+(xrism)=
+## XRISM
+
+| | |
+|---|---|
+| Event file | `xa<obsid><inst>_*_cl.evt`, e.g. `resolve/event_cl/xa101002010rsl_p0px1000_cl.evt.gz` |
+| Orbit file | `auxil/xa<obsid>.orb`, extension `ORBIT` |
+| Clock file | none needed: the pipeline has already applied the time correction (`CLOCKAPP = T`) |
+| Reference | agrees with HEASOFT `barycen` to **+41 ns** mean, 89 ns worst |
+
+```bash
+barycenter xa101002010rsl_p0px1000_cl.evt.gz xa101002010.orb.gz \
+    --ra 83.6331221 --dec 22.0144819
+```
+
+`--apply-official` hands the file to HEASOFT `barycen`. That is HEASOFT's
+mission-independent task, not SAS's tool of the same name, and its defaults are set for
+XRISM. It has no ephemeris parameter, only a reference frame, so with
+`--apply-official` the ephemeris must be DE440 (the default) or DE200. The native engine
+has no such limit.
+
+### Things worth knowing
+
+- **Give the pulsar's position, not the pointing.** The header's `RA_OBJ` and `RA_NOM`
+  are where the telescope pointed. For the Crab observation used in the tests that is
+  65 arcsec from the pulsar, an error of up to 0.16 s.
+- **The orbit file has two tables.** The first, `ORBITELEM`, holds only Keplerian
+  elements (the six numbers that describe an orbit's shape and phase). Positions and
+  velocities are in the second, `ORBIT`, in kilometres, every 60 s. The registry names
+  `ORBIT` explicitly.
+- **If you run `barycen` by hand, keep its default orbit settings.** It can also read the
+  `X`..`VZ` columns of the same table (`orbform=COMPONENTS`), but on a 60 s orbit its
+  interpolation of those is off by up to 12 µs with `orbinterp=WEIGHTED` and 1 µs with
+  `TAYLOR`. Its default Keplerian mode is the one that agrees with us; see
+  [Technical details](technical_details.md#xrism-against-barycen).
+- **The time scale.** `TIME` counts TT seconds from `MJDREF = 58484.000800740741`, which
+  is 2019-01-01T00:00:00 UTC written in TT. As with SVOM, that is after the most recent
+  leap second, so whether XRISM's elapsed time would count UTC seconds across a future
+  one cannot be told yet.
+- **A rough check against the Crab.** Barycentring the whole Resolve file of observation
+  101002010 (939 483 events) at the pulsar position with DE200, and folding it with the
+  Jodrell Bank monthly ephemeris in TOAExtractor, gives a clean profile whose peaks
+  stay put over the 4 h and an X-ray main peak 401 ± 19 µs ahead of the radio one,
+  where the X-ray peak is expected to lead by a few hundred µs. A NICER observation
+  processed the same way gave 296 ± 6 µs. A constant difference of that size is not
+  something barycentring produces (it would take a 30 km error in the orbit, against
+  the 89 ns agreement with `barycen`), so it belongs to instrument timing or the radio
+  ephemeris, and was not pursued.
+- **`barycen` leaves `DATE-OBS`, `DATE-END` and `TELAPSE` as they were.** We update them
+  from the corrected `TSTART` and `TSTOP`, so those keywords will differ from a `barycen`
+  output by the size of the correction.
+
 (svom)=
 ## SVOM
 
