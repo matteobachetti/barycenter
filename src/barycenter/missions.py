@@ -195,6 +195,10 @@ MISSIONS = {
         # MET counts TT seconds from 2019-01-01T00:00:00 UTC (MJDREFF is 69.184 s, TT-UTC
         # then), after the last leap second so far, so like SVOM a UTC count would not
         # yet show.
+        # HEASOFT `barycen`, the mission-independent task whose defaults are XRISM's. It
+        # reads the Keplerian elements from ORBIT rather than the X..VZ columns we use,
+        # and still agrees with us to 89 ns.
+        official="barycen",
     ),
     "xmm": Mission(
         name="xmm",

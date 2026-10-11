@@ -165,3 +165,44 @@ class TestRunningTimeconv:
         assert "/" not in log.read_text()
         with fits.open(out) as hdul:
             assert hdul[1].header["TIMESYS"] == "TDB"
+
+
+DATADIR = os.path.join(os.path.dirname(__file__), os.pardir, "data")
+
+
+class TestRunningBarycen:
+    """XRISM's ``--apply-official`` goes through HEASOFT ``barycen``."""
+
+    def test_an_ephemeris_barycen_cannot_reach_is_refused(self, tmp_path):
+        """barycen offers only DE200 (FK5) and DE440 (ICRS); anything else must not run."""
+        infile = write_event_file(tmp_path / "xrism.evt", "XRISM")
+        with pytest.raises(ValueError, match="DE200 or DE440"):
+            apply_mission_specific_barycenter_correction(
+                infile,
+                orbfile="unused.orb",
+                outfile=str(tmp_path / "bary.evt"),
+                ra=10.0,
+                dec=20.0,
+                ephem="DE430",
+            )
+        assert not (tmp_path / "bary.evt").exists()
+
+    def test_reproduces_the_committed_reference(self, tmp_path):
+        """With HEASOFT installed, the wrapper gives the reference bit for bit.
+
+        The reference was made by tools/make_test_data.py with the same task and settings,
+        so any difference means the wrapper passes barycen something else.
+        """
+        pytest.importorskip("heasoftpy")
+        out = apply_mission_specific_barycenter_correction(
+            os.path.join(DATADIR, "dummy_xrism_evt.evt"),
+            os.path.join(DATADIR, "dummy_xrism_orb.fits.gz"),
+            outfile=str(tmp_path / "bary.evt"),
+            ra=83.6331221,
+            dec=22.0144819,
+            ephem="DE440",
+        )
+        reference = os.path.join(DATADIR, "dummy_xrism_bary_DE440.evt.gz")
+        with fits.open(out) as hdul, fits.open(reference) as ref:
+            assert np.array_equal(hdul["EVENTS"].data["TIME"], ref["EVENTS"].data["TIME"])
+            assert np.array_equal(hdul["GTI"].data["START"], ref["GTI"].data["START"])

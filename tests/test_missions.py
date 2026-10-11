@@ -54,7 +54,7 @@ class TestConsistency:
     def test_official_tools_are_ones_we_wrap(self):
         """``official`` names a branch in official.py; anything else raises at run time."""
         for mission in MISSIONS.values():
-            assert mission.official in (None, "barycorr", "timeconv")
+            assert mission.official in (None, "barycorr", "barycen", "timeconv")
             if mission.official_ephem is not None:
                 assert mission.official is not None
 

@@ -1,8 +1,8 @@
 """Shelling out to the missions' own barycentring tools.
 
 This path exists for cross-checking, and for missions we do not yet correct natively.
-It needs the mission's software installed -- HEASOFT for ``barycorr`` and ``timeconv``
--- so it is never exercised in CI.
+It needs the mission's software installed -- HEASOFT for ``barycorr``, ``barycen`` and
+``timeconv`` -- so it is never exercised in CI.
 """
 
 import logging as logger
@@ -19,7 +19,11 @@ from .missions import mission_for
 from .remote import cached_download, download_locally
 from .utils import fits_open_including_remote, slim_down_hdu_list
 
-__all__ = ["official_barycorr", "apply_mission_specific_barycenter_correction"]
+__all__ = [
+    "official_barycorr",
+    "official_barycen",
+    "apply_mission_specific_barycenter_correction",
+]
 
 
 def official_barycorr(
@@ -67,6 +71,61 @@ def official_barycorr(
     if not os.path.exists(outfile):
         raise RuntimeError(f"heasoft barycorr failed to produce output file {outfile}")
 
+    return outfile
+
+
+#: The two ephemerides HEASOFT ``barycen`` can reach, and the ``refframe`` that selects
+#: each. It has no ephemeris parameter of its own.
+BARYCEN_REFFRAMES = {"DE200": "FK5", "DE440": "ICRS"}
+
+
+def official_barycen(fname, orbfile, ra=None, dec=None, ephem="DE440", outfile="bary.evt"):
+    """Apply HEASOFT ``barycen`` to a FITS event file.
+
+    ``barycen`` is HEASOFT's mission-independent task, and its orbit settings default to
+    XRISM's: Keplerian elements from the ``ORBIT`` extension, ``WEIGHTED`` interpolation.
+    They are pinned here all the same. On XRISM's 60 s orbit that is also the most
+    accurate of its modes: the same file's Cartesian columns are interpolated linearly,
+    a microsecond-level error; see docs/known_issues.md.
+
+    Parameters
+    ----------
+    fname : str
+        Input FITS event file.
+    orbfile : str
+        Orbit file. ``barycen`` takes exactly one.
+    ra, dec : float, optional
+        Source position in degrees. If not given, ``barycen`` reads it from the header.
+    ephem : str, optional
+        ``"DE440"`` or ``"DE200"``, the only two ``barycen`` can reach.
+    """
+    if ephem not in BARYCEN_REFFRAMES:
+        raise ValueError(
+            f"barycen can only use DE200 or DE440, not {ephem}. The native engine has no "
+            "such limit: drop --apply-official."
+        )
+    if not isinstance(orbfile, str):
+        raise ValueError("barycen takes a single orbit file.")
+    import heasoftpy as hsp
+
+    logger.info("Applying official barycen...")
+    hsp.barycen(
+        infile=fname,
+        outfile=outfile,
+        orbfile=orbfile,
+        # Out of range means "read the header", as the task documents.
+        ra=-999.0 if ra is None else ra,
+        dec=-999.0 if dec is None else dec,
+        refframe=BARYCEN_REFFRAMES[ephem],
+        orbext="ORBIT",
+        orbform="KEPLERIAN",
+        orbcol="A,E,I,AN,AP,MA",
+        orbinterp="WEIGHTED",
+        clobber="yes",
+        logfile="NONE",
+    )
+    if not os.path.exists(outfile):
+        raise RuntimeError(f"heasoft barycen failed to produce output file {outfile}")
     return outfile
 
 
@@ -227,6 +286,8 @@ def apply_mission_specific_barycenter_correction(
             ephem=ephem,
             refframe=radecsys,
         )
+    elif mission.official == "barycen":
+        official_barycen(fname, orbfile, outfile=temp_outfile, ra=ra, dec=dec, ephem=ephem)
     elif mission.official == "timeconv":
         fname = download_locally(fname, outdir=os.path.dirname(outfile))
         geofile, frforbit = _asca_reference_files()
