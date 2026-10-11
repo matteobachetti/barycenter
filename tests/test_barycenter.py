@@ -574,6 +574,61 @@ class TestXMM:
             assert hdul["EVENTS"].header["CLOCKAPP"] is False
 
 
+class TestXRISM:
+    """XRISM, against HEASOFT ``barycen``, the mission-independent task tuned for it.
+
+    The orbit file's first extension, ``ORBITELEM``, holds Keplerian elements only; the
+    positions are in ``ORBIT``, as Cartesian columns in kilometres, every 60 s, which is
+    what we read. The reference is ``barycen`` with its default Keplerian elements from
+    the same extension, its most accurate mode here; see ``tools/make_test_data.py``.
+
+    The dataset is Resolve observation 101002010 (Crab, pointed off the pulsar),
+    decimated to 401 events spanning the whole exposure.
+    """
+
+    @classmethod
+    def setup_class(cls):
+        cls.evfile = os.path.join(datadir, "dummy_xrism_evt.evt")
+        cls.orbfile = os.path.join(datadir, "dummy_xrism_orb.fits.gz")
+        cls.reference = os.path.join(datadir, "dummy_xrism_bary_DE440.evt.gz")
+        # The Crab pulsar; the file's RA_OBJ and RA_NOM are the offset pointing.
+        cls.ra, cls.dec = "83.6331221", "22.0144819"
+
+    def run(self, outfile, *extra):
+        return main_barycenter(
+            [
+                self.evfile,
+                self.orbfile,
+                "-o",
+                outfile,
+                "--ra",
+                self.ra,
+                "--dec",
+                self.dec,
+                "--ephem",
+                "DE440",
+                *extra,
+            ]
+        )
+
+    def test_agrees_with_barycen(self, tmp_path):
+        """Our barycentred times match HEASOFT barycen to better than 100 ns on XRISM."""
+        outfile = str(tmp_path / "xrism.evt")
+        assert self.run(outfile) == outfile
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            assert_times_agree(hdul["EVENTS"].data["TIME"], ref["EVENTS"].data["TIME"])
+            assert hdul["EVENTS"].header["TIMESYS"] == "TDB"
+            assert hdul["EVENTS"].header["TIMEREF"] == "SOLARSYSTEM"
+
+    def test_gtis_agree_with_barycen(self, tmp_path):
+        """The GTI boundaries match too: barycen corrects them, so there is a reference."""
+        outfile = str(tmp_path / "xrism.evt")
+        self.run(outfile)
+        with fits.open(outfile) as hdul, fits.open(self.reference) as ref:
+            for column in ("START", "STOP"):
+                assert_times_agree(hdul["GTI"].data[column], ref["GTI"].data[column])
+
+
 class TestChandra:
     """Chandra, the other mission HEASOFT cannot do, and the only one with two references.
 
@@ -935,6 +990,16 @@ DERIVED_CASES = [
         "148.96267",
         "69.67931",
         "DE430",
+        (),
+    ),
+    (
+        "xrism",
+        "dummy_xrism_evt.evt",
+        "dummy_xrism_orb.fits.gz",
+        "dummy_xrism_bary_DE440.evt.gz",
+        "83.6331221",
+        "22.0144819",
+        "DE440",
         (),
     ),
 ]
