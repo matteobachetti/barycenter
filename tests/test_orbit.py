@@ -23,6 +23,7 @@ SWIFT_ORBIT = os.path.join(datadir, "dummy_swift_orb.fits.gz")
 FERMI_ORBIT = os.path.join(datadir, "dummy_fermi_orb.fits.gz")
 GBM_ORBIT = os.path.join(datadir, "dummy_gbm_poshist.fits.gz")
 SVOM_ORBIT = os.path.join(datadir, "dummy_svom_orb.fits.gz")
+XRISM_ORBIT = os.path.join(datadir, "dummy_xrism_orb.fits.gz")
 
 
 def write_fporbit(path, met, pos, vel=None, telescope="NICER", extname="ORBIT"):
@@ -170,6 +171,24 @@ class TestRealFile:
             assert np.array_equal(table["Vz"].value, orbit["VELOCITY"][:, 2])
         radius = np.hypot(np.hypot(table["X"].value, table["Y"].value), table["Z"].value)
         assert np.all((radius > 6.95e6) & (radius < 7.05e6))
+
+    def test_xrisms_positions_come_from_its_second_extension_in_km(self, caplog):
+        """XRISM's orbit file leads with ``ORBITELEM``, Keplerian elements and no positions.
+
+        The positions are in ``ORBIT``, in kilometres, so the reader must go there and
+        convert, without differentiating anything or warning about the extension.
+        """
+        with caplog.at_level("WARNING"):
+            table = read_orbit(XRISM_ORBIT)
+        assert not caplog.records
+        with fits.open(XRISM_ORBIT) as hdul:
+            assert hdul[1].name == "ORBITELEM"
+            orbit = hdul["ORBIT"].data
+            assert np.array_equal(table["MET"].value, orbit["TIME"])
+            assert np.allclose(table["X"].value, orbit["X"] * 1e3, rtol=1e-15)
+            assert np.allclose(table["Vz"].value, orbit["VZ"] * 1e3, rtol=1e-15)
+        radius = np.hypot(np.hypot(table["X"].value, table["Y"].value), table["Z"].value)
+        assert np.all((radius > 6.9e6) & (radius < 6.95e6))
 
     def test_the_lat_spacecraft_file_is_still_read_from_sc_data(self):
         """Adding GBM's layout must not change which one a LAT file is read with."""

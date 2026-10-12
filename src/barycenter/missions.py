@@ -176,6 +176,30 @@ MISSIONS = {
         # No official tool: `barycorr` refuses TELESCOP=SVOM. The test reference is
         # `barycorr` run on the same numbers relabelled as NICER; see tools/make_test_data.py.
     ),
+    "xrism": Mission(
+        name="xrism",
+        telescop=("xrism",),
+        # `auxil/xa<obsid>.orb`. Its *first* extension, ORBITELEM, holds Keplerian elements
+        # only; the positions are in ORBIT, as scalar X..VZ columns in kilometres (the
+        # Keplerian elements again beside them), every 60 s, in the FK5/J2000 frame.
+        # Upper-case `VX`, unlike NICER's `Vx`: the lookup is case-insensitive anyway.
+        orbit=OrbitSpec(
+            pos=("X", "Y", "Z"),
+            vel=("VX", "VY", "VZ"),
+            pos_unit=u.km,
+            vel_unit=u.km / u.s,
+            hdu="ORBIT",
+            expected_extnames=("ORBIT",),
+        ),
+        # CLOCKAPP=T: the pipeline applies the time correction from the `.tim` file.
+        # MET counts TT seconds from 2019-01-01T00:00:00 UTC (MJDREFF is 69.184 s, TT-UTC
+        # then), after the last leap second so far, so like SVOM a UTC count would not
+        # yet show.
+        # HEASOFT `barycen`, the mission-independent task whose defaults are XRISM's. It
+        # reads the Keplerian elements from ORBIT rather than the X..VZ columns we use,
+        # and still agrees with us to 89 ns.
+        official="barycen",
+    ),
     "xmm": Mission(
         name="xmm",
         # The PPS `P*OBX000ORBTSR0000.FTZ` file offers two position triples: GEI is

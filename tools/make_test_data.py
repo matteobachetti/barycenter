@@ -168,6 +168,38 @@ XMM_REFERENCE = {
 #: 116 arcsec away, and barycorr prefers RA_NOM.
 SWIFT_RA, SWIFT_DEC = "182.635833", "39.405833"
 
+#: The XRISM dataset the HEASOFT ``barycen`` reference is made with: the Resolve cleaned
+#: event list of observation 101002010, a Crab observation pointed 65 arcsec south-east
+#: of the pulsar, and the orbit file beside it.  Public HEASARC data.
+XRISM_OBS = os.path.expanduser("~/tmp/xrism_crab/101002010")
+XRISM_EVENTS = os.path.join(XRISM_OBS, "resolve", "event_cl", "xa101002010rsl_p0px1000_cl.evt.gz")
+XRISM_ORBIT = os.path.join(XRISM_OBS, "auxil", "xa101002010.orb.gz")
+
+#: How the XRISM reference is made.  The position is the Crab pulsar's, which matches
+#: neither ``RA_OBJ`` nor ``RA_NOM`` (the pointing is offset), so a bug where the code
+#: reads a keyword instead of the coordinates it was handed is an error of up to 0.16 s.
+#: ``barycen`` has no ephemeris parameter: ``refframe=ICRS`` means DE440.  The orbit
+#: settings are the task's defaults, pinned: Keplerian elements, ``WEIGHTED``
+#: interpolation.  That is also the most accurate of its modes on a 60 s orbit.  Measured
+#: against our engine on these 401 events, the Keplerian mode agrees to +41 ns mean,
+#: 89 ns worst, while the same file's Cartesian columns give 1.0 us worst with ``TAYLOR``
+#: and 12 us with ``WEIGHTED``, which interpolates position linearly.  See
+#: "XRISM against barycen" in docs/technical_details.md.
+XRISM_REFERENCE = {
+    "outfile": "dummy_xrism_bary_DE440.evt.gz",
+    "infile": "dummy_xrism_evt.evt",
+    "orbitfile": "dummy_xrism_orb.fits.gz",
+    "args": {
+        "ra": "83.6331221",
+        "dec": "22.0144819",
+        "refframe": "ICRS",
+        "orbext": "ORBIT",
+        "orbform": "KEPLERIAN",
+        "orbcol": "A,E,I,AN,AP,MA",
+        "orbinterp": "WEIGHTED",
+    },
+}
+
 #: One entry per reference file.  ``args`` are passed to ``barycorr`` verbatim.
 REFERENCES = {
     # NuSTAR, no clock correction.  The clock correction is left out on purpose:
@@ -863,6 +895,59 @@ def make_svom_reference():
 SVOM_GTI_EXTENSIONS = ["GTICAL-STA", "GTICAL-NSA", "GTICAL-NEO"]
 
 
+def trim_xrism_inputs(nevents=400, margin=600.0):
+    """Cut the XRISM event and orbit files down to something committable.
+
+    The event list keeps ``TIME`` and ``PI`` only, decimated across the whole exposure,
+    plus the ``GTI`` extension, which ``barycen`` corrects and so gives a reference for the
+    GTIs as well.
+
+    The orbit file keeps *both* of its extensions and every column, at the file's own
+    60 s sampling over the span of the events.  ``ORBITELEM`` comes first and holds only
+    Keplerian elements, so a reader that takes the first extension finds no positions;
+    keeping it is what makes the test check that ``ORBIT`` is the one read.  ``ORBIT``
+    holds Cartesian positions and the Keplerian elements side by side, and both are kept
+    so that ``barycen``'s default Keplerian mode can still be run on the trimmed file.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    evt_out = os.path.join(DATA, "dummy_xrism_evt.evt")
+    orb_out = os.path.join(DATA, "dummy_xrism_orb.fits")
+
+    with fits.open(XRISM_EVENTS) as hdul:
+        events = hdul["EVENTS"]
+        nrows = len(events.data)
+        step = max(1, nrows // nevents)
+        rows = slice(None, None, step)
+        trimmed = subset_table(events, rows, columns=("TIME", "PI"))
+        trimmed.header.add_history(
+            f"Every {step}th row of {os.path.basename(XRISM_EVENTS)}, by tools/make_test_data.py"
+        )
+        # Materialised, not a view: it is used after the file is closed.
+        times = np.array(events.data["TIME"][rows])
+        fits.HDUList([hdul[0].copy(), trimmed, hdul["GTI"].copy()]).writeto(evt_out, overwrite=True)
+    print(f"    wrote {evt_out} ({len(times)} of {nrows} rows)")
+
+    with fits.open(XRISM_ORBIT) as hdul:
+        orbit = hdul["ORBIT"]
+        t = orbit.data["TIME"]
+        keep = np.flatnonzero((t > times.min() - margin) & (t < times.max() + margin))
+        trimmed = subset_table(orbit, keep)
+        trimmed.header["TSTART"] = float(t[keep].min())
+        trimmed.header["TSTOP"] = float(t[keep].max())
+        trimmed.header.add_history(
+            f"Rows {keep[0]}-{keep[-1]} of {os.path.basename(XRISM_ORBIT)}, the span of "
+            f"{os.path.basename(evt_out)}, by tools/make_test_data.py"
+        )
+        fits.HDUList([hdul[0].copy(), hdul["ORBITELEM"].copy(), trimmed]).writeto(
+            orb_out, overwrite=True
+        )
+    print(f"    wrote {orb_out} ({len(keep)} of {len(t)} rows)")
+    subprocess.run(["gzip", "-9", "-f", orb_out], check=True)
+    return evt_out, orb_out + ".gz"
+
+
 def trim_chandra_inputs(nevents=400, margin=1200.0):
     """Cut the Chandra event and orbit files down to something committable.
 
@@ -1118,6 +1203,34 @@ def run_barycorr(infile, orbitfiles, outfile, args, extra_inputs=()):
         shutil.rmtree(workdir, ignore_errors=True)
 
 
+def run_heasoft_barycen(infile, orbitfile, outfile, args):
+    """Run HEASOFT ``barycen`` on ``infile``, writing an uncompressed ``outfile``.
+
+    Not SAS ``barycen`` (:func:`run_barycen`), despite the name: this is HEASOFT's
+    mission-independent task, whose defaults are XRISM's: the orbit read as Keplerian
+    elements from the ``ORBIT`` extension.
+    """
+    workdir = tempfile.mkdtemp(prefix="hbarycen_")
+    try:
+        local_in = os.path.join(workdir, os.path.basename(infile))
+        shutil.copy(infile, local_in)
+        shutil.copy(orbitfile, workdir)
+        pfiles = os.path.join(workdir, "pfiles")
+        os.makedirs(pfiles)
+        cmd = [
+            "barycen",
+            f"infile={os.path.basename(local_in)}",
+            f"outfile={os.path.basename(outfile)}",
+            f"orbfile={os.path.basename(orbitfile)}",
+            "logfile=NONE",
+        ]
+        cmd += [f"{k}={v}" for k, v in args.items()]
+        run_heasoft(cmd, workdir, pfiles)
+        shutil.move(os.path.join(workdir, os.path.basename(outfile)), outfile)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+
 def run_heasoft(cmd, cwd, pfiles):
     """Run a HEASOFT task, giving it the controlling terminal it insists on.
 
@@ -1189,6 +1302,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_svom_evt.evt")):
         print("--- dummy_svom_evt.evt, dummy_svom_orb.fits.gz, dummy_svom_gti.fits")
         make_svom_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_xrism_evt.evt")):
+        print("--- dummy_xrism_evt.evt, dummy_xrism_orb.fits.gz")
+        trim_xrism_inputs()
     for name, spec in REFERENCES.items():
         target = os.path.join(DATA, name)
         raw = target[: -len(".gz")] if target.endswith(".gz") else target
@@ -1236,6 +1352,18 @@ def main():
     raw = target[: -len(".gz")]
     print(f"--- {XMM_REFERENCE['outfile']}")
     run_barycen(os.path.join(DATA, XMM_REFERENCE["infile"]), raw, XMM_REFERENCE["args"])
+    subprocess.run(["gzip", "-9", "-f", raw], check=True)
+    print(f"    wrote {target}")
+
+    target = os.path.join(DATA, XRISM_REFERENCE["outfile"])
+    raw = target[: -len(".gz")]
+    print(f"--- {XRISM_REFERENCE['outfile']}")
+    run_heasoft_barycen(
+        os.path.join(DATA, XRISM_REFERENCE["infile"]),
+        os.path.join(DATA, XRISM_REFERENCE["orbitfile"]),
+        raw,
+        XRISM_REFERENCE["args"],
+    )
     subprocess.run(["gzip", "-9", "-f", raw], check=True)
     print(f"    wrote {target}")
 

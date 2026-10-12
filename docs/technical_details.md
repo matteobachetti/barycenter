@@ -300,6 +300,12 @@ instead of computing anything:
   reference files never change (ASCA stopped operating in 2001), so they are fetched once
   per machine into astropy's download cache by `cached_download`, which also repairs the
   broken cache entries that older versions of this package left for exactly these files.
+- XRISM goes through `official_barycen`, which calls `heasoftpy.barycen`: HEASOFT's
+  mission-independent task, not SAS's of the same name. It has no ephemeris parameter,
+  only `refframe`, so `--ephem` must be DE440 (`ICRS`) or DE200 (`FK5`) and anything
+  else is refused before HEASOFT is touched. Its orbit settings are pinned to its own
+  defaults, Keplerian elements with `WEIGHTED` interpolation, which on XRISM's 60 s orbit
+  are also its most accurate; see [XRISM](#xrism-against-barycen) below.
 
 This path exists for cross-checking and for missions we do not yet implement natively.
 It requires a working HEASOFT installation and is not exercised in CI.
@@ -383,6 +389,7 @@ mission's [registry entry](#the-mission-registry):
 | XMM-Newton | `ORBIT` | scalar `GEI_X`,`GEI_Y`,`GEI_Z` | scalar `VX`,`VY`,`VZ` | **km** |
 | Chandra | `ORBITEPHEM` | scalar `X`,`Y`,`Z` | scalar `Vx`,`Vy`,`Vz` | m |
 | Swift | `PREFILTER` | `POSITION` | `VELOCITY` | **km** |
+| XRISM | `ORBIT` (the **second** extension) | scalar `X`,`Y`,`Z` | scalar `VX`,`VY`,`VZ` | **km** |
 
 The units are declared in the spec, not read from `TUNITn`, because orbit files are
 unreliable about that keyword and getting the factor of 1000 wrong is a 20 ms error.
@@ -961,6 +968,32 @@ out exactly: DE440 puts the Earth 116.5 km from where DE405 puts it at this epoc
 The measurement and the geometry agree to 0.1 µs, so this is the ephemerides differing and
 not the code.
 
+### XRISM against barycen
+
+The reference is HEASOFT `barycen` with its default orbit settings: Keplerian elements
+from the `ORBIT` extension, `WEIGHTED` interpolation, `refframe=ICRS` (DE440). Over the
+401 committed Resolve events of observation 101002010:
+
+| `barycen` orbit mode | mean | std | max abs |
+|---|---|---|---|
+| Keplerian elements, `WEIGHTED` (the default, committed) | **+41.4 ns** | **16.3 ns** | **89.4 ns** |
+| Cartesian `X`..`VZ`, `TAYLOR` | +43.0 ns | 312 ns | 1043 ns |
+| Cartesian `X`..`VZ`, `WEIGHTED` | +4013 ns | 4172 ns | 12338 ns |
+
+We read the Cartesian columns ourselves, and the disagreement in the two lower rows
+is `barycen`'s, not ours. Thinning the orbit from 60 s to 120 s moves our answer by
+at most 29.8 ns, one float64 step, while those rows are off by microseconds. XRISM
+accelerates at about 9 m/s² in its 550 km orbit, and over 60 s a straight line between
+samples, which is what `WEIGHTED` does to positions, misses the curve by kilometres.
+`TAYLOR`, a second-order expansion around a sample, is worse *next to* a sample than
+between two, which no smooth interpolation error does, so something else is going on
+inside it. It was not chased further. The Keplerian mode interpolates elements that
+barely change over a minute, apart from the mean anomaly, which advances steadily. It
+lands on the +40 ns offset we see against every other mission's tool.
+
+So `--apply-official` keeps the defaults, and anyone running `barycen` by hand should
+too.
+
 (the-coordinate-keyword-order)=
 ### The coordinate keyword order is deliberately not HEASOFT's
 
@@ -1140,6 +1173,7 @@ When a comparison disagrees, check these before looking for a bug:
 | XMM-Newton | PPS `P*OBX000ORBTSR*.FTZ`, `GEI_*` in km | none needed | validated to 100 ns — **the only route, see below** |
 | Chandra | `primary/orbitf*_eph1.fits`, `ORBITEPHEM` in m | none needed | validated to 100 ns — **the only route, see below** |
 | Swift | `auxil/sw<obsid>sao.fits`, `PREFILTER` in km | `swclockcor*.fits`, `CLOCK_CORRECT` extension (the UTCF) | validated to 100 ns |
+| XRISM | `auxil/xa<obsid>.orb`, `ORBIT` (second extension), `X`..`VZ` in km | none needed (`CLOCKAPP = T`) | validated to 100 ns against HEASOFT `barycen`, see [XRISM](#xrism-against-barycen) |
 | ASCA | — | — | `--apply-official` only, DE200 only |
 
 ## Test data
@@ -1180,6 +1214,9 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_svom_evt.evt` | 400 **synthetic** ECLAIRs events in SVOM's `ECL-EVT-CAL` layout over 1.5 ks, 20 of them listed out of time order by 1–12 µs as in real ECLAIRs lists |
 | `dummy_svom_orb.fits.gz` | a synthetic circular 625 km orbit in SVOM's `SVO-ORB-CNV` layout: 1501 rows at 1 s, float32 `POSITION`/`VELOCITY` in m, `POSITION_SPHERICAL` computed from them in ITRS |
 | `dummy_svom_gti.fits` | a synthetic SVOM GTI file: a group table and four criteria (`GTICAL-NSA`, `-STA`, `-TLM`, `-NEO`), with `MJDREFF` rounded the way the real GTI files round it |
+| `dummy_xrism_evt.evt` | 401 Resolve events, every 2348th row of `xa101002010rsl_p0px1000_cl.evt` (Crab, pointed 65 arcsec off the pulsar), so the sample spans the whole 4.1 h, plus its `GTI` extension |
+| `dummy_xrism_orb.fits.gz` | 269 rows of the matching `xa101002010.orb` `ORBIT` extension, every column at the native 60 s over the events plus 600 s, with the 2-row `ORBITELEM` extension kept in front |
+| `dummy_xrism_bary_DE440.evt.gz` | the HEASOFT `barycen` reference for those events at the pulsar position, default Keplerian orbit mode, `refframe=ICRS`, GTIs corrected too |
 | `dummy_svom_bary_DE440.evt.gz` | `barycorr` on those events, with `STA`∩`NSA`∩`NEO` merged in, after relabelling events and orbit as NICER's — see below |
 
 The XMM orbit file keeps its `GSE_*` columns on purpose. The file offers two position
@@ -1224,6 +1261,12 @@ agree with it to one float64 ulp (29.8 ns), events and GTIs alike.
 allocates its own pseudo-terminal: HEASOFT tasks open `/dev/tty` for their prompts and
 abort with `ERROR: Device not configured` without one, and the old `script -q /dev/null`
 wrapper only worked when it already had a terminal to start from.
+
+The XRISM orbit file keeps its `ORBITELEM` extension, which holds only Keplerian
+elements, in front of `ORBIT`, as the real file does. A reader that takes the first
+extension finds no positions there, so the committed file keeps that trap under test.
+`ORBIT` keeps its Keplerian columns too, so `barycen`'s default mode, which reads them,
+can be rerun on the trimmed file.
 
 ### Why the Fermi orbit file is not decimated
 
