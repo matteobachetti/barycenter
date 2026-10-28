@@ -10,6 +10,11 @@ This module does that combining, and writes the result into a copy of the event 
 an ordinary ``GTI`` extension, so that barycentring then moves the GTIs together with the
 events. It knows nothing about any mission: extensions are named by the caller.
 
+An event file may hold several event tables (SVOM/GRM has one per detector) and a
+``GTI`` of its own that only spans the file; filtering reaches every table, and
+``existing_gti`` says whether the file's own ``GTI`` is intersected, replaced or kept
+(by refusing).
+
 The command line is ``barycenter-apply-gti``; without ``-e`` it lists the GTI extensions
 a file offers::
 
@@ -181,11 +186,12 @@ def _epoch_s(header):
     return mjdref * 86400 + header.get("TIMEZERO", 0.0)
 
 
-def _event_hdu(hdul):
-    for hdu in hdul[1:]:
-        if column_named(getattr(hdu, "data", None), "TIME") is not None:
-            return hdu
-    raise ValueError("No extension with a TIME column: this is not an event file.")
+def _event_hdus(hdul):
+    """Every extension with a ``TIME`` column: SVOM/GRM has one per detector."""
+    hdus = [hdu for hdu in hdul[1:] if column_named(getattr(hdu, "data", None), "TIME") is not None]
+    if not hdus:
+        raise ValueError("No extension with a TIME column: this is not an event file.")
+    return hdus
 
 
 def _check_same_epoch(event_header, gti_file, extensions):
@@ -218,6 +224,7 @@ def add_gti_extension(
     combine="intersect",
     filter_events=False,
     overwrite=False,
+    existing_gti="refuse",
 ):
     """Write a copy of an event file with the chosen GTIs merged into a ``GTI`` extension.
 
@@ -235,9 +242,17 @@ def add_gti_extension(
         what a set of independent quality criteria means. ``"union"`` keeps time good in
         any of them, as for per-CCD GTIs.
     filter_events : bool
-        Also drop events outside the merged GTIs. By default they are kept, and only the
-        ``GTI`` extension records which are good.
+        Also drop events outside the merged GTIs, from every extension with a ``TIME``
+        column. By default they are kept, and only the ``GTI`` extension records which
+        are good.
     overwrite : bool
+    existing_gti : ``"refuse"``, ``"intersect"`` or ``"replace"``
+        What to do if the event file already has a ``GTI`` extension. ``"refuse"`` (the
+        default) stops, so that applying twice cannot silently replace good times.
+        ``"intersect"`` keeps only the time good in both the file's GTI and the merged
+        one; ``"replace"`` discards the file's GTI. Either way the result is a single
+        ``GTI`` extension, where the old one was. SVOM/GRM files carry a ``GTI`` that
+        just spans the file.
 
     Returns
     -------
@@ -247,11 +262,16 @@ def add_gti_extension(
     Raises
     ------
     ValueError
-        If the event file already has a ``GTI`` extension, or if a GTI extension counts
-        time from a different reference epoch than the events.
+        If the event file already has a ``GTI`` extension and ``existing_gti`` is
+        ``"refuse"``, or if a GTI extension counts time from a different reference epoch
+        than the events.
     """
     if combine not in ("intersect", "union"):
         raise ValueError(f"combine must be 'intersect' or 'union', not {combine!r}")
+    if existing_gti not in ("refuse", "intersect", "replace"):
+        raise ValueError(
+            f"existing_gti must be 'refuse', 'intersect' or 'replace', not {existing_gti!r}"
+        )
     if outfile is None:
         path, fname = os.path.split(event_file)
         root, extension = splitext_improved(fname)
@@ -261,20 +281,33 @@ def add_gti_extension(
     merged = intersect_gtis(gtis) if combine == "intersect" else union_gtis(gtis)
 
     with fits.open(event_file) as hdul:
-        if any(hdu.name.upper() == "GTI" for hdu in hdul):
+        old = [i for i, hdu in enumerate(hdul) if hdu.name.upper() == "GTI"]
+        if old and existing_gti == "refuse":
             raise ValueError(
-                f"{event_file} already has a GTI extension; refusing to add a second one."
+                f"{event_file} already has a GTI extension; refusing to add a second one "
+                "(see existing_gti)."
             )
-        events = _event_hdu(hdul)
-        _check_same_epoch(events.header, gti_file, extensions)
+        if old and existing_gti == "intersect":
+            merged = intersect_gtis([merged] + [_intervals_of(hdul[i]) for i in old])
+        history = f"{combine} of {', '.join(extensions)} from {os.path.basename(gti_file)}"
+        if old:
+            history += f"; the file's own GTI {existing_gti}d"
+
+        all_events = _event_hdus(hdul)
+        for events in all_events:
+            _check_same_epoch(events.header, gti_file, extensions)
 
         if filter_events:
-            times = events.data[column_named(events.data, "TIME")]
-            keep = np.zeros(len(times), dtype=bool)
-            for start, stop in merged:
-                keep |= (times >= start) & (times <= stop)
-            logger.info(f"Keeping {keep.sum()} of {keep.size} events inside the GTIs")
-            events.data = events.data[keep]
+            for events in all_events:
+                times = events.data[column_named(events.data, "TIME")]
+                keep = np.zeros(len(times), dtype=bool)
+                for start, stop in merged:
+                    keep |= (times >= start) & (times <= stop)
+                logger.info(
+                    f"{events.name}: keeping {keep.sum()} of {keep.size} events inside the GTIs"
+                )
+                events.data = events.data[keep]
+        events = all_events[0]
 
         gti = fits.BinTableHDU.from_columns(
             [
@@ -290,10 +323,13 @@ def add_gti_extension(
         gti.header["HDUCLAS1"] = "GTI"
         gti.header["HDUCLAS2"] = "STANDARD"
         gti.header["ONTIME"] = (float(np.sum(merged[:, 1] - merged[:, 0])), "[s] Sum of GTIs")
-        gti.header.add_history(
-            f"{combine} of {', '.join(extensions)} from {os.path.basename(gti_file)}"
-        )
-        hdul.append(gti)
+        gti.header.add_history(history)
+        if old:
+            for i in old[::-1]:
+                del hdul[i]
+            hdul.insert(old[0], gti)
+        else:
+            hdul.append(gti)
         hdul.writeto(outfile, overwrite=overwrite)
     return outfile
 
@@ -335,6 +371,15 @@ def main_apply_gti(args=None):
             "only the event list and ignore the GTI extension"
         ),
     )
+    parser.add_argument(
+        "--existing-gti",
+        choices=["refuse", "intersect", "replace"],
+        default="refuse",
+        help=(
+            "If FILE already has a GTI extension: stop (default), keep only the time "
+            "good in both, or discard it"
+        ),
+    )
     parser.add_argument("-o", "--outfile", default=None, help="Default: gti_<file>")
     parser.add_argument("--overwrite", action="store_true", default=False)
     args = parser.parse_args(args)
@@ -355,6 +400,7 @@ def main_apply_gti(args=None):
         combine="union" if args.union else "intersect",
         filter_events=args.filter_events,
         overwrite=args.overwrite,
+        existing_gti=args.existing_gti,
     )
 
 

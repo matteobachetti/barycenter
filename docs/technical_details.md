@@ -562,11 +562,17 @@ barycenter-apply-gti events.fits gtis.fits -e GTICAL-STA,GTICAL-NSA,GTICAL-NEO -
   two files, 1e-13 s apart). The new extension gets the events' `TIMESYS`, `TIMEREF`,
   `MJDREF*` and `TIMEZERO`, so it says which time scale it is on before and after
   barycentring.
-- **An existing `GTI` extension is never replaced**: applying the helper twice is refused.
+- **An existing `GTI` extension is not replaced by default**: applying the helper twice
+  is refused. `--existing-gti intersect` keeps only the time good in both the file's
+  `GTI` and the merged one, and `--existing-gti replace` discards the file's; either way
+  the file ends up with one `GTI` extension, where the old one was. SVOM/GRM files need
+  this: they come with a `GTI` that only spans the file, and every real cut has to be
+  added.
 - **Events are kept** unless `--filter-events` is given; the `GTI` extension alone
   records which are good. Many timing tools read only the event list and never look at
   an extra `GTI` extension, so for them `--filter-events` is what makes the selection
-  take effect.
+  take effect. It filters **every** extension with a `TIME` column, the same set that
+  barycentring corrects: SVOM/GRM has one event table per detector, `EVENTS01..03`.
 
 (the-pint-engine)=
 ## The PINT engine
