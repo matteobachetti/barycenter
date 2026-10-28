@@ -1220,6 +1220,7 @@ official tools without installing HEASOFT, SAS or CIAO.
 | `dummy_svom_evt.evt` | 400 **synthetic** ECLAIRs events in SVOM's `ECL-EVT-CAL` layout over 1.5 ks, 20 of them listed out of time order by 1–12 µs as in real ECLAIRs lists |
 | `dummy_svom_orb.fits.gz` | a synthetic circular 625 km orbit in SVOM's `SVO-ORB-CNV` layout: 1501 rows at 1 s, float32 `POSITION`/`VELOCITY` in m, `POSITION_SPHERICAL` computed from them in ITRS |
 | `dummy_svom_gti.fits` | a synthetic SVOM GTI file: a group table and four criteria (`GTICAL-NSA`, `-STA`, `-TLM`, `-NEO`), with `MJDREFF` rounded the way the real GTI files round it |
+| `dummy_grm_evt.evt` | 3 × 150 **synthetic** GRM events in SVOM's `GRM-EVT` layout, on the same orbit dummy: `EBOUNDS`, a one-row `GTI` spanning the file, and one event table per detector (`EVENTS01..03`). No reference file: the test checks that each table gets the correction it would get alone in a file, which is the ECLAIRs case checked against `barycorr` |
 | `dummy_xrism_evt.evt` | 401 Resolve events, every 2348th row of `xa101002010rsl_p0px1000_cl.evt` (Crab, pointed 65 arcsec off the pulsar), so the sample spans the whole 4.1 h, plus its `GTI` extension |
 | `dummy_xrism_orb.fits.gz` | 269 rows of the matching `xa101002010.orb` `ORBIT` extension, every column at the native 60 s over the events plus 600 s, with the 2-row `ORBITELEM` extension kept in front |
 | `dummy_xrism_bary_DE440.evt.gz` | the HEASOFT `barycen` reference for those events at the pulsar position, default Keplerian orbit mode, `refframe=ICRS`, GTIs corrected too |

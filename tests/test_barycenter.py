@@ -1625,3 +1625,40 @@ class TestSVOM:
             assert ours[1].header["TIMESYS"] == "TDB"
             assert ours["GTI"].header["TIMEREF"] == "SOLARSYSTEM"
             assert np.any(np.diff(ours[1].data["TIME"]) < 0)
+
+
+class TestSVOMGRM:
+    """SVOM/GRM: one event table per detector, on the same orbit file as ECLAIRs.
+
+    ``dummy_grm_evt.evt`` (``make_grm_inputs`` in ``tools/make_test_data.py``) has the real
+    ``GRM-EVT`` layout: ``EVENTS01..03`` and a ``GTI`` that only spans the file.
+    """
+
+    ARGS = ["--ra", "270.0", "--dec", "-25.0", "--ephem", "DE440"]
+
+    def test_each_detector_gets_the_correction_of_a_single_table_file(self, tmp_path):
+        """GTIs cut every detector table, and each table is barycentred exactly as it
+        would be alone in a file, the layout already checked against barycorr."""
+        from barycenter.gti import add_gti_extension
+
+        evfile = os.path.join(datadir, "dummy_grm_evt.evt")
+        orbfile = os.path.join(datadir, "dummy_svom_orb.fits.gz")
+        with_gti = add_gti_extension(
+            evfile,
+            os.path.join(datadir, "dummy_svom_gti.fits"),
+            ["GTICAL-NEO"],
+            outfile=str(tmp_path / "gti.evt"),
+            filter_events=True,
+            existing_gti="intersect",
+        )
+        ours = main_barycenter([with_gti, orbfile, "-o", str(tmp_path / "bary.evt")] + self.ARGS)
+        with fits.open(with_gti) as raw, fits.open(ours) as bary:
+            assert all(len(raw[f"EVENTS0{i}"].data) < 150 for i in (1, 2, 3))
+            for i in (1, 2, 3):
+                name = f"EVENTS0{i}"
+                single = str(tmp_path / f"single{i}.evt")
+                fits.HDUList([raw[0].copy(), raw[name].copy(), raw["GTI"].copy()]).writeto(single)
+                alone = main_barycenter([single, orbfile, "-o", single + ".bary"] + self.ARGS)
+                with fits.open(alone) as ref:
+                    assert np.array_equal(bary[name].data["TIME"], ref[name].data["TIME"])
+                assert bary[name].header["TIMESYS"] == "TDB"
