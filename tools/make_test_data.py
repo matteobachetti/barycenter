@@ -684,10 +684,11 @@ SVOM_REFERENCE = {
 
 def _svom_header(hdu, card, creator):
     """The timing keywords every SVOM file carries, as the mission writes them."""
+    instrument = card.split("-")[0] if card.startswith(("ECL", "GRM")) else "INS"
     for key, value, comment in [
         ("ORIGIN", "FSC", "Science Center"),
         ("TELESCOP", "SVOM", "Official acronym for the mission"),
-        ("INSTRUME", "ECL" if card.startswith("ECL") else "INS", "Instrument acronym"),
+        ("INSTRUME", instrument, "Instrument acronym"),
         ("CREATOR", creator, "Pipeline that created or modified this file"),
         ("CARD", card, "Product card"),
         ("TIMEREF", "LOCAL", "Time reference frame"),
@@ -696,7 +697,7 @@ def _svom_header(hdu, card, creator):
         ("MJDREFI", SVOM_MJDREFI, "integer portion in MJD for reference time"),
         ("MJDREFF", SVOM_MJDREFF, "fractional portion of MJD for reference time"),
         ("DATEREF", "2017-01-01T00:00:00.0", "Reference UTC time in ISO-8601"),
-        ("CLOCKCOR", card.startswith("ECL"), "Time corrected for any spacecraft clock drift"),
+        ("CLOCKCOR", instrument != "INS", "Time corrected for any spacecraft clock drift"),
         ("RADESYS", "ICRS", "Celestial coordinate system"),
     ]:
         hdu.header[key] = (value, comment)
@@ -827,6 +828,63 @@ def make_svom_inputs(nevents=400, seed=20261008):
     _svom_header(primary, "ECL-EVT-CAL", "ECLAIR-PIPELINE")
     fits.HDUList([primary, events]).writeto(evt_out, overwrite=True)
     print(f"    wrote {evt_out} ({nevents} events)")
+
+
+def make_grm_inputs(nevents=150, seed=20261028):
+    """Write a synthetic SVOM/GRM event file, on the orbit of :func:`make_svom_inputs`.
+
+    In the real ``GRM-EVT`` layout: an ``EBOUNDS`` table (259 channels, 5 keV to 20 MeV),
+    a ``GTI`` with a single row spanning the file, and one event table per detector,
+    ``EVENTS01..03`` (``DETNAM = GRD_0n``), each with ``TIME``, ``PI``, ``GAIN_TYPE``,
+    ``DEAD_TIME`` (us), ``EVT_TYPE``, ``ANTI_COIN`` and ``FLAG``. GRM files have no
+    separate GTI file, and the orbit is the same ``SVO-ORB-CNV`` file ECLAIRs uses, so
+    the SVOM orbit dummy serves both.
+    """
+    import numpy as np
+    from astropy.io import fits
+
+    rng = np.random.default_rng(seed)
+    evt_out = os.path.join(DATA, "dummy_grm_evt.evt")
+    start, stop = SVOM_T0 + 60.0, SVOM_T0 + SVOM_SPAN - 60.0
+
+    edges = np.geomspace(5.0, 20000.0, 260)
+    ebounds = fits.BinTableHDU.from_columns(
+        [
+            fits.Column(name="CHANNEL", format="I", unit="chan", array=np.arange(259)),
+            fits.Column(name="E_MIN", format="E", unit="keV", array=edges[:-1]),
+            fits.Column(name="E_MAX", format="E", unit="keV", array=edges[1:]),
+        ],
+        name="EBOUNDS",
+    )
+    gti = fits.BinTableHDU.from_columns(
+        [
+            fits.Column(name="START", format="D", unit="s", array=[start]),
+            fits.Column(name="STOP", format="D", unit="s", array=[stop]),
+        ],
+        name="GTI",
+    )
+    hdus = [fits.PrimaryHDU(), ebounds, gti]
+    for detector in (1, 2, 3):
+        times = np.sort(rng.uniform(start, stop, nevents))
+        events = fits.BinTableHDU.from_columns(
+            [
+                fits.Column(name="TIME", format="D", unit="s", array=times),
+                fits.Column(name="PI", format="I", array=rng.integers(0, 259, nevents)),
+                fits.Column(name="GAIN_TYPE", format="B", array=rng.integers(0, 2, nevents)),
+                fits.Column(name="DEAD_TIME", format="E", unit="us", array=np.full(nevents, 4.167)),
+                fits.Column(name="EVT_TYPE", format="B", array=np.zeros(nevents)),
+                fits.Column(name="ANTI_COIN", format="B", array=np.zeros(nevents)),
+                fits.Column(name="FLAG", format="B", array=np.zeros(nevents)),
+            ],
+            name=f"EVENTS0{detector}",
+        )
+        events.header["DETNAM"] = f"GRD_0{detector}"
+        hdus.append(events)
+    for hdu in hdus:
+        _svom_header(hdu, "GRM-EVT", "DailyData")
+        hdu.header["TSTART"], hdu.header["TSTOP"] = start, stop
+    fits.HDUList(hdus).writeto(evt_out, overwrite=True)
+    print(f"    wrote {evt_out} (3 x {nevents} events)")
 
 
 def svom_as_nicer(evt, orb, workdir):
@@ -1302,6 +1360,9 @@ def main():
     if not os.path.exists(os.path.join(DATA, "dummy_svom_evt.evt")):
         print("--- dummy_svom_evt.evt, dummy_svom_orb.fits.gz, dummy_svom_gti.fits")
         make_svom_inputs()
+    if not os.path.exists(os.path.join(DATA, "dummy_grm_evt.evt")):
+        print("--- dummy_grm_evt.evt (on the SVOM orbit dummy)")
+        make_grm_inputs()
     if not os.path.exists(os.path.join(DATA, "dummy_xrism_evt.evt")):
         print("--- dummy_xrism_evt.evt, dummy_xrism_orb.fits.gz")
         trim_xrism_inputs()
