@@ -70,6 +70,25 @@ def event_file(tmp_path):
     return str(path)
 
 
+@pytest.fixture
+def multi_table_file(tmp_path):
+    """An event file in the SVOM/GRM layout: one event table per detector, and a GTI
+    extension of its own that spans the whole file."""
+    hdus = [fits.PrimaryHDU()]
+    for detector, times in enumerate([[10.0, 60.0, 150.0], [90.0, 210.0], [240.0, 290.0]]):
+        events = fits.BinTableHDU.from_columns(
+            [fits.Column(name="TIME", format="D", array=np.array(times))],
+            name=f"EVENTS0{detector + 1}",
+        )
+        events.header["MJDREFI"], events.header["MJDREFF"] = MJDREFI, MJDREFF
+        events.header["TIMESYS"] = "TT"
+        hdus.append(events)
+    hdus.append(gti_hdu("GTI", [[0, 260]]))
+    path = tmp_path / "grm.fits"
+    fits.HDUList(hdus).writeto(path)
+    return str(path)
+
+
 class TestSetOperations:
     def test_intersection_keeps_only_time_good_in_every_list(self):
         """Overlaps survive, everything outside any one list is cut, edges are exact."""
@@ -144,6 +163,41 @@ class TestAddingToEvents:
         add_gti_extension(event_file, gti_file, ["GTICAL-STA"], outfile=out)
         with pytest.raises(ValueError, match="already has"):
             add_gti_extension(out, gti_file, ["GTICAL-NSA"], outfile=str(tmp_path / "again.fits"))
+
+    def test_filtering_reaches_every_event_table(self, multi_table_file, gti_file, tmp_path):
+        """With one table per detector, events outside the GTIs go from all of them."""
+        out = str(tmp_path / "out.fits")
+        add_gti_extension(
+            multi_table_file,
+            gti_file,
+            ["GTICAL-STA", "GTICAL-NSA"],
+            outfile=out,
+            filter_events=True,
+            existing_gti="replace",
+        )
+        with fits.open(out) as hdul:
+            kept = [list(hdul[f"EVENTS0{i}"].data["TIME"]) for i in (1, 2, 3)]
+        assert kept == [[60.0], [90.0, 210.0], [240.0]]
+
+    def test_an_existing_gti_can_be_intersected(self, multi_table_file, gti_file, tmp_path):
+        """``--existing-gti intersect`` keeps only time good in both, in one GTI extension."""
+        out = str(tmp_path / "out.fits")
+        args = [multi_table_file, gti_file, "-e", "GTICAL-STA,GTICAL-NSA", "-o", out]
+        main_apply_gti(args + ["--existing-gti", "intersect"])
+        with fits.open(out) as hdul:
+            assert [hdu.name for hdu in hdul].count("GTI") == 1
+            assert np.array_equal(hdul["GTI"].data["START"], [50, 200])
+            assert np.array_equal(hdul["GTI"].data["STOP"], [100, 250])
+
+    def test_an_existing_gti_can_be_replaced(self, multi_table_file, gti_file, tmp_path):
+        """``existing_gti="replace"`` discards the file's own GTI for the merged one."""
+        out = str(tmp_path / "out.fits")
+        add_gti_extension(
+            multi_table_file, gti_file, ["GTICAL-PEO"], outfile=out, existing_gti="replace"
+        )
+        with fits.open(out) as hdul:
+            assert [hdu.name for hdu in hdul].count("GTI") == 1
+            assert np.array_equal(hdul["GTI"].data["STOP"], [80, 300])
 
     def test_command_line(self, event_file, gti_file, tmp_path):
         """The command intersects the listed extensions and returns the output name."""
