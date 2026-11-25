@@ -18,6 +18,7 @@ run the first one.
 | `bench_numpy_horner.py` | does avoiding numpy temporaries close the gap? |
 | `bench_pipeline.py` | where the time goes: native engine, `dt` spline, clock interp |
 | `bench_metrange.py` | what clipping the PINT TOA grid is worth |
+| `bench_clock_extrapolation.py` | how wrong a NuSTAR clock correction gets past the end of its table (reads the newest cached clock file, not `tests/data`) |
 | `bench_margin.py` | how much grid margin a clipped spline needs |
 | `bench_edge.py` | is the clipping error an edge effect? |
 | `bench_split.py` | how much of the per-event cost a numba kernel could reach |
