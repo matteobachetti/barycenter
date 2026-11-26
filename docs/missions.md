@@ -409,6 +409,27 @@ for events in glob.glob("SVOM_ECL-EVT-CAL_*.fits"):
     )
 ```
 
+### GRM
+
+The Gamma-Ray Monitor's `GRM-EVT` files (`INSTRUME = GRM`) use the same orbit files and
+the same time scale as ECLAIRs, but are laid out differently:
+
+- one file per observation (ObsID), not per pass;
+- **one event table per detector**, `EVENTS01`, `EVENTS02`, `EVENTS03` (`DETNAM = GRD_0n`),
+  with `TIME`, `PI`, `GAIN_TYPE`, `DEAD_TIME` (µs), `EVT_TYPE`, `ANTI_COIN` and `FLAG`;
+- an `EBOUNDS` table and a **`GTI` that only spans the file**: there is no GTI file,
+  so any real selection (Earth occultation of the source, the SAA, off-axis angle) has
+  to be computed elsewhere and merged in.
+
+Barycentring corrects all three tables. To merge GTIs into a file that already has its
+own, say what to do with that one: `--existing-gti intersect` keeps the time good in
+both, `replace` drops it. `--filter-events` filters all three tables:
+
+```bash
+barycenter-apply-gti SVOM_GRM-EVT_<...>.fits my_gtis.fits -e MYGTI \
+    --existing-gti intersect --filter-events -o gti_grm.fits
+```
+
 ### Things worth knowing
 
 - **The time scale.** `TIME` counts TT seconds from `MJDREF = 57754.000800740741`,
