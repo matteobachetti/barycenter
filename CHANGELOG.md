@@ -10,6 +10,30 @@ hand.
 
 <!-- towncrier release notes start -->
 
+## [1.2.0](https://github.com/matteobachetti/barycenter/tree/v0.1.5.dev48+g2bb5256f9) - 2026-11-26
+
+### Backwards-incompatible changes
+
+- Python 3.12 or newer is now required. Dropping 3.10 and 3.11 also avoids a clash between pytest 9.2 and the pytest-remotedata release that still installs on them. ([#7](https://github.com/matteobachetti/barycenter/pull/7))
+
+### New features
+
+- New `--fill-orbit-gaps` option: fit a Kepler+J2 orbit across long gaps in the orbit file (e.g. the Fermi LAT's South Atlantic Anomaly passages) instead of refusing the events that fall in them. The position there is good to about 100 m (0.4 us of light time); the gaps used are recorded in the output header. Native engine only. ([#3](https://github.com/matteobachetti/barycenter/pull/3))
+- Read the Fermi GBM daily position history (`glg_poshist_all_*.fit`), so GBM event files can be barycentred through the South Atlantic Anomaly gaps of the LAT spacecraft file. ([#3](https://github.com/matteobachetti/barycenter/pull/3))
+- New `barycenter-apply-gti` command and `barycenter.gti` module: combine good time intervals from separate extensions or a separate file (as SVOM/ECLAIRs ships them) into one `GTI` extension of the event file, so they are barycentred together with the events. ([#4](https://github.com/matteobachetti/barycenter/pull/4))
+- XRISM support: the orbit file's `ORBIT` extension is read natively (agreeing with HEASOFT `barycen` to 41 ns), and `--apply-official` runs HEASOFT `barycen` for XRISM files. ([#5](https://github.com/matteobachetti/barycenter/pull/5))
+- `barycenter-apply-gti` now filters every event table of a file (SVOM/GRM has one per detector), and `--existing-gti intersect|replace` (`existing_gti=` in `add_gti_extension`) handles a file that already has a `GTI` extension. ([#6](https://github.com/matteobachetti/barycenter/pull/6))
+- SVOM/GRM: synthetic `GRM-EVT` test file (three detector tables on the SVOM orbit dummy), a test that each table gets the single-table correction, and a GRM section in the SVOM docs. ([#7](https://github.com/matteobachetti/barycenter/pull/7))
+
+### Bug fixes
+
+- A NuSTAR time more than 1000 s past either end of the clock file now raises an error, telling you to fetch a newer clock file or pass `--clockfile none`. Before, it got a cubic extrapolation that came out at about -1000 s for events a week past the file. Within 1000 s the correction now continues along the last tabulated slope, and times inside the file are unchanged. ([#6](https://github.com/matteobachetti/barycenter/pull/6))
+
+### Documentation
+
+- New SVOM section in the mission guide: which files go together, merging the separate GTI file, the time scale and orbit units, and the file quirks, and what the NEO/PEO/TEO Earth-occultation GTIs mean for timing. The guide to adding a mission now explains how to build a reference for a mission without an official tool. ([#4](https://github.com/matteobachetti/barycenter/pull/4))
+
+
 ## [1.0.0](https://github.com/matteobachetti/barycenter/tree/v1.0.0) - 2026-10-01
 
 ### Backwards-incompatible changes
