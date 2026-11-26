@@ -282,7 +282,16 @@ def cubic_interpolation(x, xtab, ytab, yptab):
     return kernel(x, xtab[0], xtab[1], ytab[0], ytab[1], yptab[0], yptab[1])
 
 
-def interpolate_clock_function(clock_table, mets):
+#: How far past either end of a clock table, in seconds, a time may fall and still get a
+#: correction. One NuSTAR table step. Measured by cutting the v236 table at 300 epochs and
+#: extrapolating past each cut: 1000 s past it, a straight line along the edge slope is off
+#: by 48 us at the 95th percentile, comparable to the table's own 60-130 us error column;
+#: 5000 s past it, 580 us; a day past it, 26 ms, which is no better than no correction at
+#: all. See ``docs/technical_details.md``.
+CLOCK_EXTRAPOLATION_LIMIT_S = 1000.0
+
+
+def interpolate_clock_function(clock_table, mets, max_extrapolation=CLOCK_EXTRAPOLATION_LIMIT_S):
     """The clock offset correction at arbitrary mission elapsed times.
 
     The table gives an offset and its time derivative on a coarse grid (1000 s for
@@ -295,33 +304,63 @@ def interpolate_clock_function(clock_table, mets):
         Columns ``TIME``, ``CLOCK_OFF_CORR``, ``CLOCK_FREQ_CORR``.
     mets : array-like
         Times to evaluate at, in seconds.
+    max_extrapolation : float, optional
+        How far before the first or after the last tabulated time, in seconds, a time may
+        be and still get a correction. Defaults to :data:`CLOCK_EXTRAPOLATION_LIMIT_S`.
 
     Returns
     -------
     clock_off_corr : ndarray
         Seconds to add, one per requested time.
 
+    Raises
+    ------
+    ValueError
+        If any time is more than ``max_extrapolation`` outside the table.
+
     Notes
     -----
-    Times outside the tabulated range are extrapolated from the nearest interval, with a
-    warning. The previous version returned a validity mask alongside a *shortened* array
-    of corrections; its only caller discarded the mask and then built a spline from a
-    full-length abscissa and a short ordinate, which raised a length mismatch for any
-    event outside the clock file's span.
+    Inside the table this is exactly HEASOFT's interpolation. A time outside it, but
+    within ``max_extrapolation``, gets the edge offset plus the edge ``CLOCK_FREQ_CORR``
+    times the distance, with a warning. The edge interval's cubic is **not** continued out
+    there, although that is what HEASOFT does up to 5000 s: its error grows as the cube of
+    the distance. It is what this function used to do with no limit at all, and NuSTAR
+    events 0.75 Ms past the end of a clock file got a "correction" of -1000 s.
+
+    Beyond the limit HEASOFT applies no clock correction and warns once; this function
+    raises instead, so a correction that is 25 ms off on NuSTAR cannot pass for a
+    microsecond one. ``--clockfile none`` gives HEASOFT's behaviour on purpose.
     """
     tab_times = np.asarray(clock_table["TIME"], dtype=np.float64)
     mets = np.asarray(mets, dtype=np.float64)
+    first, last = tab_times.min(), tab_times.max()
 
-    outside = (mets < tab_times.min()) | (mets > tab_times.max())
-    if np.any(outside):
-        worst = max(tab_times.min() - mets.min(), mets.max() - tab_times.max())
-        logger.warning(
-            f"{np.count_nonzero(outside)} times fall outside the clock file, by up to "
-            f"{worst:.1f} s; extrapolating from the nearest interval."
+    early = first - mets
+    late = mets - last
+    too_far = (early > max_extrapolation) | (late > max_extrapolation)
+    if np.any(too_far):
+        side = "after the end" if np.max(late) > max_extrapolation else "before the start"
+        worst = max(np.max(early), np.max(late))
+        raise ValueError(
+            f"{np.count_nonzero(too_far)} times fall {side} of the clock file, by up to "
+            f"{worst:.1f} s; it covers {first:.1f} to {last:.1f}, and a clock correction "
+            f"is not extrapolated more than {max_extrapolation:.0f} s. Fresh data are often "
+            "newer than the newest clock file: wait for a newer one and pass it with "
+            "--clockfile, or pass --clockfile none to skip the clock correction (about "
+            "25 ms on NuSTAR)."
         )
 
-    # Clamped so that a time outside the table uses the edge interval's cubic rather
-    # than indexing past the end.
+    before = early > 0
+    after = late > 0
+    outside = before | after
+    if np.any(outside):
+        logger.warning(
+            f"{np.count_nonzero(outside)} times fall outside the clock file, by up to "
+            f"{max(np.max(early), np.max(late)):.1f} s; extrapolating along the edge slope."
+        )
+
+    # Clamped so that every time has an interval to index; the ones outside are then
+    # overwritten with the straight line.
     tab_idxs = np.clip(np.searchsorted(tab_times, mets, side="right") - 1, 0, len(tab_times) - 2)
 
     clock_off_corr = np.asarray(clock_table["CLOCK_OFF_CORR"], dtype=np.float64)
@@ -331,7 +370,12 @@ def interpolate_clock_function(clock_table, mets):
     ytab = [clock_off_corr[tab_idxs], clock_off_corr[tab_idxs + 1]]
     yptab = [clock_freq_corr[tab_idxs], clock_freq_corr[tab_idxs + 1]]
 
-    return cubic_interpolation(mets, xtab, ytab, yptab)
+    values = np.asarray(cubic_interpolation(mets, xtab, ytab, yptab), dtype=np.float64)
+    if np.any(outside):
+        ifirst, ilast = np.argmin(tab_times), np.argmax(tab_times)
+        values[before] = clock_off_corr[ifirst] - clock_freq_corr[ifirst] * early[before]
+        values[after] = clock_off_corr[ilast] + clock_freq_corr[ilast] * late[after]
+    return values
 
 
 def nustar_clock_correction_fun(clockfile):

@@ -11,6 +11,7 @@ import pytest
 from astropy.table import Table
 
 from barycenter.clock import (
+    CLOCK_EXTRAPOLATION_LIMIT_S,
     clock_cache_dir,
     cubic_interpolation,
     interpolate_clock_function,
@@ -62,16 +63,71 @@ class TestInterpolation:
         """
         times = np.arange(0.0, 5000.0, 1000.0)
         table = toy_table(times, 0.02 + 3e-7 * times, np.full_like(times, 3e-7))
-        asked = np.array([-500.0, 0.0, 2500.0, 4000.0, 9000.0])
+        asked = np.array([-500.0, 0.0, 2500.0, 4000.0, 4800.0])
 
         with caplog.at_level("WARNING"):
             got = interpolate_clock_function(table, asked)
         assert got.shape == asked.shape
         assert np.all(np.isfinite(got))
-        # Extrapolation continues the edge interval, so a linear table stays linear.
+        # Extrapolation follows the edge slope, so a linear table stays linear.
         assert np.allclose(got, 0.02 + 3e-7 * asked, atol=1e-15)
         # ... and going outside is reported, because an extrapolated clock is a guess.
         assert any("outside the clock file" in r.message for r in caplog.records)
+
+    def test_just_past_either_end_follows_the_edge_slope(self, caplog):
+        """Within the limit, a time past the table is the edge offset plus the edge slope.
+
+        The edge interval's cubic is not used out there: its error grows as the cube of
+        the distance, and on the real table it is 5 times worse than the straight line
+        already 5000 s past the end. Inside the table nothing changes.
+        """
+        times = np.arange(0.0, 5000.0, 1000.0)
+        # A curved table, with slopes that do not match it, so the cubic and the line
+        # disagree visibly outside.
+        offsets = 0.02 + 1e-9 * (times - 2000.0) ** 2
+        slopes = np.array([-4e-6, 1e-6, -1e-6, 3e-6, 5e-6])
+        table = toy_table(times, offsets, slopes)
+
+        inside = np.array([0.0, 700.0, 2500.0, 3999.0, 4000.0])
+        idx = np.clip(np.searchsorted(times, inside, side="right") - 1, 0, len(times) - 2)
+        direct = cubic_interpolation(
+            inside,
+            [times[idx], times[idx + 1]],
+            [offsets[idx], offsets[idx + 1]],
+            [slopes[idx], slopes[idx + 1]],
+        )
+        assert np.array_equal(interpolate_clock_function(table, inside), direct)
+
+        before, after = -CLOCK_EXTRAPOLATION_LIMIT_S, 4000.0 + CLOCK_EXTRAPOLATION_LIMIT_S
+        with caplog.at_level("WARNING"):
+            got = interpolate_clock_function(table, np.array([before, after]))
+        expected = [
+            offsets[0] + slopes[0] * before,
+            offsets[-1] + slopes[-1] * CLOCK_EXTRAPOLATION_LIMIT_S,
+        ]
+        assert np.allclose(got, expected, rtol=0, atol=1e-15)
+        assert any("outside the clock file" in r.message for r in caplog.records)
+
+    def test_far_past_the_end_is_refused(self):
+        """A time far past the table raises instead of returning a made-up correction.
+
+        Regression: NuSTAR events 0.75 Ms past the end of clock file v236 got a
+        "correction" of -1000 s from the edge cubic, whose small cubic term was
+        multiplied by 750 cubed. The limit can be widened on purpose.
+        """
+        times = np.arange(0.0, 5000.0, 1000.0)
+        offsets = 0.02 + 1e-9 * (times - 2000.0) ** 2
+        slopes = np.array([-4e-6, 1e-6, -1e-6, 3e-6, 5e-6])
+        table = toy_table(times, offsets, slopes)
+        far = np.array([2000.0, 4000.0 + 7.5e5])
+
+        with pytest.raises(ValueError, match="--clockfile none"):
+            interpolate_clock_function(table, far)
+        with pytest.raises(ValueError, match="before"):
+            interpolate_clock_function(table, np.array([-1.0 - CLOCK_EXTRAPOLATION_LIMIT_S]))
+
+        got = interpolate_clock_function(table, far, max_extrapolation=1e6)
+        assert np.isclose(got[1], offsets[-1] + slopes[-1] * 7.5e5, rtol=0, atol=1e-12)
 
     def test_cubic_interpolation_matches_heasoft_cubeterp(self):
         """The interpolation is the cubic through two points and their derivatives.

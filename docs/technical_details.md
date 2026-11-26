@@ -120,6 +120,42 @@ in turn uses `cubic_interpolation`, a numba port of the `cubeterp` routine from 
 derivatives is HEASOFT's own. On the test observation the correction is 20–29 ms, on a
 grid sampled every 1000 s.
 
+**Times past the end of the clock file.** Fresh data are often days or weeks newer than
+the newest CALDB clock file. Up to `CLOCK_EXTRAPOLATION_LIMIT_S` (1000 s, one table step)
+past either end, the correction is the edge offset plus the edge `CLOCK_FREQ_CORR` times
+the distance, with a warning. Further out, `interpolate_clock_function` **raises**, and
+the message offers the two ways forward: a newer clock file, or `--clockfile none`.
+
+Before this rule, the cubic of the last table interval was continued with no limit. Its
+error grows as the cube of the distance. For NuSTAR obsid 31302001002, whose events are
+0.75 Ms past the end of `nuCclock20100101v236`, it gave a "correction" of −910 to −1105 s.
+The real one is a few milliseconds. The only reason anyone noticed was that the shifted
+times then fell outside the orbit file.
+
+HEASOFT `barycorr` (`nustarFineClockCorr` in `clock.c`, through `seek_file_row` in
+`seekinterp.c`) continues the edge cubic up to 5000 s past the end. Beyond 5000 s it
+applies **no** clock correction and warns once. We use a straight line instead of the
+cubic, and we refuse instead of applying zero. Both choices come from this measurement: cut
+the v236 table at 300 random epochs in its last three years, extrapolate past each cut, and
+compare with what the table actually says there. These are 95th-percentile errors in
+microseconds:
+
+| time past the end         | 100 s  | 1000 s | 5000 s | 1 day     | 1 week    |
+|---------------------------|--------|--------|--------|-----------|-----------|
+| edge cubic (old; HEASOFT) | 4      | 36     | 3200   | 1.2×10⁷   | 4×10⁹     |
+| straight line, edge slope | 5      | 48     | 580    | 26 000    | 190 000   |
+| hold the edge value       | 29     | 290    | 1400   | 21 000    | 31 000    |
+| zero (`--clockfile none`) | 24 000 | 24 000 | 23 000 | 24 000    | 25 000    |
+
+The table's own error column, `CLOCK_ERR_CORR`, runs from 60 to 130 µs. The straight line
+stays near that up to about 1000 s. By 5000 s every method is off by a millisecond or
+more, and after a day none of them beats applying no correction at all. A correction that
+is 25 ms off should look like one, so the package refuses and lets the user pick
+`--clockfile none` knowingly (`tools/benchmarks/bench_clock_extrapolation.py`
+reproduces the table). Inside the table nothing changes, and the interpolation is
+still exactly HEASOFT's. Unlike HEASOFT, we do not check for gaps inside the table; no
+current clock file has a gap longer than 1000 s.
+
 Clock files from before 2019 carry a `CLOCK_CORRECT` extension instead — a per-interval
 C0/C1/C2 polynomial that HEASOFT documents as accurate only to the millisecond. Those are
 **refused**, with an error naming the extension found: a millisecond is four orders of
@@ -202,7 +238,7 @@ Three properties of the table are worth knowing, because the reader depends on a
   which steps +1 s because *its* destination is TT, and the two cancel.
 
 A time the table does not cover raises, rather than extrapolating a quadratic off the end
-of it — the same choice made for a NuSTAR observation predating its clock file. The message
+of it — the same choice made for NuSTAR times more than 1000 s outside its clock file. The message
 says which way out the time fell and offers the two ways forward: fetch a newer CALDB file,
 or run with `--clockfile none` and accept the 15 s.
 

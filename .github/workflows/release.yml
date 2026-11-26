@@ -25,7 +25,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           # You can modify what version of Python you want to use for your release
-          python-version: "3.11"
+          python-version: "3.13"
 
       # Security recommends we should pin deps. Should we pin the workflow version?
       - name: Install hatch
