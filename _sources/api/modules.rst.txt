@@ -1,0 +1,7 @@
+barycenter
+==========
+
+.. toctree::
+   :maxdepth: 4
+
+   barycenter

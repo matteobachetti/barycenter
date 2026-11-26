@@ -1,0 +1,109 @@
+barycenter package
+==================
+
+Submodules
+----------
+
+barycenter.cli module
+---------------------
+
+.. automodule:: barycenter.cli
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.clock module
+-----------------------
+
+.. automodule:: barycenter.clock
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.core module
+----------------------
+
+.. automodule:: barycenter.core
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.gapfill module
+-------------------------
+
+.. automodule:: barycenter.gapfill
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.gti module
+---------------------
+
+.. automodule:: barycenter.gti
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.missions module
+--------------------------
+
+.. automodule:: barycenter.missions
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.native module
+------------------------
+
+.. automodule:: barycenter.native
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.official module
+--------------------------
+
+.. automodule:: barycenter.official
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.orbit module
+-----------------------
+
+.. automodule:: barycenter.orbit
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.pintengine module
+----------------------------
+
+.. automodule:: barycenter.pintengine
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.remote module
+------------------------
+
+.. automodule:: barycenter.remote
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+barycenter.utils module
+-----------------------
+
+.. automodule:: barycenter.utils
+   :members:
+   :show-inheritance:
+   :undoc-members:
+
+Module contents
+---------------
+
+.. automodule:: barycenter
+   :members:
+   :show-inheritance:
+   :undoc-members:
