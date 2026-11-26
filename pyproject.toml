@@ -271,7 +271,7 @@ extra-dependencies = [
 ]
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.12", "3.13"]
+python = ["3.12", "3.13", "3.14"]
 
 [tool.hatch.envs.test.scripts]
 run = "pytest {args:--cov=barycenter --cov-report=term-missing}"
